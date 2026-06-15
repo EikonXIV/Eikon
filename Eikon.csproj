@@ -1,0 +1,44 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+
+  <!-- Eikon Dalamud plugin. The Dalamud.NET.Sdk wires the TFM, all Dalamud/ImGui references,
+       and the plugin manifest automatically (it finds the dev Dalamud under %AppData%\XIVLauncher). -->
+  <PropertyGroup>
+    <Version>0.1.6</Version>
+    <Description>Eikon: in-game, end-to-end-encrypted dating &amp; social for FFXIV.</Description>
+    <Authors>Rian M☆</Authors>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <IsPackable>false</IsPackable>
+    <!-- generated Contracts.cs (quicktype) emits standard nullable warnings; don't fail the build on them -->
+    <NoWarn>$(NoWarn);CS8602;CS8618;CS8601;CS8603</NoWarn>
+  </PropertyGroup>
+
+  <!-- The OtterGui submodule under external/ is consumed via ProjectReference only. Exclude its
+       sources from this plugin's own compilation so its types are not built twice. -->
+  <ItemGroup>
+    <Compile Remove="external\**" />
+    <EmbeddedResource Remove="external\**" />
+    <None Remove="external\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="external\OtterGui\OtterGui.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.2" />
+    <!-- Audited libsodium-backed primitives (X25519, Ed25519, XChaCha20-Poly1305, HKDF, Argon2id).
+         Native load in-game is the M0 crypto spike. -->
+    <PackageReference Include="NSec.Cryptography" Version="24.4.0" />
+    <!-- Windows DPAPI for OS-sealing the passphrase-wrapped key vault at rest. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- Managed image decode/crop/encode (incl. webp) so the profile-photo crop is baked into the
+         uploaded bytes rather than being a preview-only transform. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <!-- Managed WinMM audio output for the notification chime (WaveOutEvent + per-play volume). Plays
+         on its own device path, so it coexists with the game's audio. -->
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
+  </ItemGroup>
+
+  <!-- The notification chime, bundled into the assembly. Stripped to fmt+data only (no metadata). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\message-chime.wav" LogicalName="Eikon.message-chime.wav" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+{
+  "Name": "Eikon",
+  "Author": "Rian M☆",
+  "Punchline": "In-game, end-to-end-encrypted dating & social for FFXIV.",
+  "Description": "End-to-end-encrypted, in-game dating & social for FFXIV: onboarding, a discovery grid, and private E2E chat. Open it with /eikon.",
+  "ApplicableVersion": "any",
+  "Tags": [ "eikon", "dating" ]
+}
