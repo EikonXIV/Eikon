@@ -1,0 +1,2 @@
+# Generated C# contract types land here (Contracts.cs) from `pnpm --filter @eikon/contracts gen`.
+# Committed output; do not hand-edit. Kept in git so the plugin builds without running codegen first.
