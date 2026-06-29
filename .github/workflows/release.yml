@@ -1,0 +1,105 @@
+name: release
+
+# Cut a release by pushing a tag that matches the plugin version, e.g.
+#   git tag v0.1.7 && git push origin v0.1.7
+# (bump <Version> in Eikon.csproj first). Or run manually from the Actions tab.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.7). Defaults to v<built AssemblyVersion>.'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Provision Dalamud
+        shell: pwsh
+        run: |
+          $dev = "$env:AppData\XIVLauncher\addon\Hooks\dev"
+          New-Item -ItemType Directory -Force -Path $dev | Out-Null
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile dalamud.zip
+          Expand-Archive -Path dalamud.zip -DestinationPath $dev -Force
+
+      - name: Build
+        run: dotnet build Eikon.csproj -c Release --nologo
+
+      # Resolve the release tag and fail fast if it disagrees with the built AssemblyVersion,
+      # so a mistagged release can never ship the wrong binary.
+      - name: Resolve and verify version
+        id: ver
+        shell: pwsh
+        run: |
+          $manifest = Get-Content 'bin/Release/Eikon/Eikon.json' -Raw | ConvertFrom-Json
+          $assembly = $manifest.AssemblyVersion
+          $tag = if ('${{ github.event.inputs.tag }}') { '${{ github.event.inputs.tag }}' }
+                 elseif ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF -replace 'refs/tags/', '' }
+                 else { "v$assembly" }
+          $tagVer  = ([version]($tag.TrimStart('v'))).ToString(3)
+          $builtVer = ([version]$assembly).ToString(3)
+          if ($tagVer -ne $builtVer) {
+            Write-Error "Tag $tag (v$tagVer) does not match built AssemblyVersion $assembly. Bump <Version> in Eikon.csproj or retag."
+            exit 1
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Releasing $tag (AssemblyVersion $assembly)"
+
+      # Generate the Dalamud repo manifest from the freshly-built Eikon.json, so AssemblyVersion
+      # and DalamudApiLevel can never drift from the binary. Downloads point at the GitHub release;
+      # RepoUrl and IconUrl stay on eikon.chat.
+      - name: Generate repo.json
+        shell: pwsh
+        run: |
+          $m = Get-Content 'bin/Release/Eikon/Eikon.json' -Raw | ConvertFrom-Json
+          $zip = 'https://github.com/EikonXIV/Eikon/releases/latest/download/latest.zip'
+          $repo = @([ordered]@{
+            Author              = $m.Author
+            Name                = $m.Name
+            InternalName        = $m.InternalName
+            AssemblyVersion     = $m.AssemblyVersion
+            Description         = $m.Description
+            Punchline           = $m.Punchline
+            ApplicableVersion   = 'any'
+            DalamudApiLevel     = $m.DalamudApiLevel
+            Tags                = @('gay', 'social', 'dating', 'eikon')
+            CategoryTags        = @('other')
+            RepoUrl             = 'https://eikon.chat'
+            IconUrl             = 'https://eikon.chat/icon.png'
+            DownloadLinkInstall = $zip
+            DownloadLinkUpdate  = $zip
+            DownloadLinkTesting = $zip
+            AcceptsFeedback     = $true
+            IsHide              = $false
+            IsTestingExclusive  = $false
+          })
+          $repo | ConvertTo-Json -Depth 5 | Out-File -FilePath repo.json -Encoding utf8
+          Copy-Item 'bin/Release/Eikon/latest.zip' 'latest.zip' -Force
+          Get-Content repo.json
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $notes = "Add to Dalamud (Settings -> Experimental -> custom plugin repositories):`n``https://github.com/EikonXIV/Eikon/releases/latest/download/repo.json```nThen install **Eikon** and type ``/eikon``."
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag latest.zip repo.json --clobber
+          } else {
+            gh release create $tag latest.zip repo.json --title $tag --notes $notes --latest
+          }

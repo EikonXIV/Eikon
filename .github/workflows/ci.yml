@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The Dalamud.NET.Sdk resolves Dalamud from the XIVLauncher dev path, which a runner
+      # doesn't have. Drop the dev distribution there so the build can reference it.
+      - name: Provision Dalamud
+        shell: pwsh
+        run: |
+          $dev = "$env:AppData\XIVLauncher\addon\Hooks\dev"
+          New-Item -ItemType Directory -Force -Path $dev | Out-Null
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile dalamud.zip
+          Expand-Archive -Path dalamud.zip -DestinationPath $dev -Force
+
+      - name: Build
+        run: dotnet build Eikon.csproj -c Release --nologo
+
+      - name: Upload packaged plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: Eikon
+          path: bin/Release/Eikon/latest.zip
+          if-no-files-found: error
