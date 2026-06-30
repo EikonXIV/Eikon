@@ -34,6 +34,7 @@ internal sealed class ChatService
         public bool Nsfw;                     // image marked sensitive by the sender -> blur until revealed
         public string? ImageId;              // local sealed-image id (see ChatMediaCache)
         public string? OutEnvelope;          // image: the ratchet payload, kept so we can resend on a re-handshake
+        public DateTimeOffset? SentAt;       // sent (local clock) or received (server createdAt); null for messages from before this field existed
     }
 
     // Prefix marking a ratchet message whose plaintext is an image envelope (else it's plain text). A
@@ -95,7 +96,7 @@ internal sealed class ChatService
     public void Send(Guid peer, string text)
     {
         var clientMsgId = Guid.NewGuid().ToString();
-        var message = new Message { Mine = true, Text = text, State = MessageState.Pending, ClientMsgId = clientMsgId };
+        var message = new Message { Mine = true, Text = text, State = MessageState.Pending, ClientMsgId = clientMsgId, SentAt = DateTimeOffset.UtcNow };
         lock (this.gate)
         {
             this.EnsureLoaded();
@@ -135,7 +136,7 @@ internal sealed class ChatService
         var message = new Message
         {
             Mine = true, Text = caption, State = MessageState.Pending, ClientMsgId = clientMsgId,
-            IsImage = true, Nsfw = nsfw, ImageId = imageId,
+            IsImage = true, Nsfw = nsfw, ImageId = imageId, SentAt = DateTimeOffset.UtcNow,
         };
         lock (this.gate)
         {
@@ -207,7 +208,7 @@ internal sealed class ChatService
             }
             else
             {
-                message = new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id };
+                message = new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
             }
 
             lock (this.gate)
@@ -250,7 +251,7 @@ internal sealed class ChatService
             return new Message
             {
                 Mine = false, Text = caption, State = MessageState.Delivered, MessageId = dto.Id,
-                IsImage = true, Nsfw = nsfw, ImageId = imageId,
+                IsImage = true, Nsfw = nsfw, ImageId = imageId, SentAt = dto.CreatedAt,
             };
         }
         catch (Exception ex)
@@ -401,7 +402,7 @@ internal sealed class ChatService
                     var list = this.GetThread(peer);
                     foreach (var m in msgs)
                     {
-                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId });
+                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, SentAt = m.SentAt });
                         if (m.MessageId is { } id)
                             this.seen.Add(id);
                     }
@@ -427,7 +428,7 @@ internal sealed class ChatService
         {
             var dto = new Dictionary<string, List<MessageDto>>();
             foreach (var (peer, list) in this.threads)
-                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId });
+                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, SentAt = m.SentAt });
             var sealedBytes = this.vault.SealLocal(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(dto)));
 
             var tmp = this.historyPath + ".tmp";
@@ -452,5 +453,6 @@ internal sealed class ChatService
         public bool IsImage { get; set; }
         public bool Nsfw { get; set; }
         public string? ImageId { get; set; }
+        public DateTimeOffset? SentAt { get; set; }
     }
 }

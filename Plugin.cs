@@ -94,6 +94,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, ProfileDetailScreen>();
         services.AddSingleton<IScreen, MessagesScreen>();
         services.AddSingleton<IScreen, ChatScreen>();
+        services.AddSingleton<IScreen, SharedMediaScreen>();
         services.AddSingleton<IScreen, MyProfileScreen>();
         services.AddSingleton<IScreen, SettingsScreen>();
         services.AddSingleton<IScreen, FavoritesScreen>();

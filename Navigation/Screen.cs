@@ -12,6 +12,7 @@ internal enum Screen
     ProfileDetail,
     Messages,
     Chat,
+    SharedMedia,
     MyProfile,
     Settings,
     Favorites,

@@ -126,11 +126,44 @@ internal sealed class ChatScreen : IScreen
                 ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
                 using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(0f, Ui.Px(6f))))
                 {
-                    foreach (var message in thread)
-                        this.DrawBubble(message, contentWidth);
+                    // Day separators appear where timestamps exist; messages from before timestamps
+                    // were added sit above a single "earlier messages" divider, undated.
+                    DateTime? lastDay = null;
+                    var seenStamped = false;
+                    for (var i = 0; i < thread.Count; i++)
+                    {
+                        var message = thread[i];
+                        if (message.SentAt is { } sa)
+                        {
+                            if (!seenStamped)
+                            {
+                                seenStamped = true;
+                                lastDay = null;
+                                if (i > 0)
+                                    this.DrawEarlierDivider(contentWidth);
+                            }
+
+                            var day = sa.ToLocalTime().Date;
+                            if (lastDay != day)
+                            {
+                                this.DrawDaySeparator(DayLabel(sa), contentWidth);
+                                lastDay = day;
+                            }
+                        }
+
+                        // Time shows on the last message of a same-sender burst; the very last outgoing
+                        // message folds its time into the delivery receipt instead.
+                        var isLast = i == thread.Count - 1;
+                        var showTime = message.SentAt != null && !(isLast && message.Mine) && BurstEnds(thread, i);
+                        this.DrawBubble(message, contentWidth, showTime);
+                    }
 
                     if (thread.Count > 0 && thread[^1].Mine)
                         this.DrawReceipt(thread[^1], contentWidth);
+
+                    // Breathing room so the newest message (or its receipt) is not flush against the
+                    // composer; part of the scroll content, so stick-to-bottom keeps it visible.
+                    ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
 
                     // Stick to the newest message. A one-shot scroll lands short: the child layout
                     // is still settling on the opening frame, and image bubbles change height when
@@ -284,7 +317,13 @@ internal sealed class ChatScreen : IScreen
                     this.router.Navigate(Screen.ProfileDetail);
                 },
                 () => this.openSafety = true,
-                chatActions: true);
+                chatActions: true,
+                onSharedMedia: () =>
+                {
+                    this.selection.ProfileUserId = peer;
+                    this.selection.ProfileDisplayName = name;
+                    this.router.Navigate(Screen.SharedMedia);
+                });
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), moreGlyph);
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(56f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(56f)), Palette.Border.U32(), 1f);
@@ -467,11 +506,11 @@ internal sealed class ChatScreen : IScreen
         ImGui.Dummy(new Vector2(width, glyphSize.Y));
     }
 
-    private void DrawBubble(ChatService.Message message, float contentWidth)
+    private void DrawBubble(ChatService.Message message, float contentWidth, bool showTime)
     {
         if (message.IsImage)
         {
-            this.DrawImageBubble(message, contentWidth);
+            this.DrawImageBubble(message, contentWidth, showTime);
             return;
         }
 
@@ -494,10 +533,11 @@ internal sealed class ChatScreen : IScreen
         drawList.AddRectFilled(pos, pos + new Vector2(bubbleWidth, bubbleHeight), background, Ui.Px(14f));
         Ui.TextWrappedAt(drawList, this.fonts.Body, pos + new Vector2(padX, padY), foreground, message.Text, wrap);
 
-        ImGui.Dummy(new Vector2(contentWidth, bubbleHeight));
+        var extra = this.DrawBubbleTime(message, showTime, leftX, top + bubbleHeight, contentWidth);
+        ImGui.Dummy(new Vector2(contentWidth, bubbleHeight + extra));
     }
 
-    private void DrawImageBubble(ChatService.Message message, float contentWidth)
+    private void DrawImageBubble(ChatService.Message message, float contentWidth, bool showTime)
     {
         var maxW = MathF.Min(contentWidth * 0.62f, Ui.Px(220f));
         var rounding = Ui.Px(14f);
@@ -566,8 +606,9 @@ internal sealed class ChatScreen : IScreen
         if (hasCaption)
             Ui.TextWrappedAt(drawList, this.fonts.Body, new Vector2(x, top + h + Ui.Px(6f)), Palette.TextPrimary.U32(), message.Text, capWrap);
 
+        var extra = this.DrawBubbleTime(message, showTime, leftX, top + totalH, contentWidth);
         ImGui.SetCursorScreenPos(new Vector2(leftX, top));
-        ImGui.Dummy(new Vector2(contentWidth, totalH));
+        ImGui.Dummy(new Vector2(contentWidth, totalH + extra));
     }
 
     private void DrawReceipt(ChatService.Message message, float contentWidth)
@@ -580,11 +621,72 @@ internal sealed class ChatScreen : IScreen
             MessageState.Failed => "Failed to send",
             _ => string.Empty,
         };
+        if (message.SentAt is { } sa && label.Length > 0)
+            label = $"{sa.ToLocalTime():t} · {label}";
         var color = message.State == MessageState.Failed ? new Vector4(0.91f, 0.36f, 0.36f, 1f) : Palette.TextMuted;
         var size = Ui.Measure(this.fonts.Caption, label);
         var pos = ImGui.GetCursorScreenPos();
         Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(pos.X + contentWidth - size.X, pos.Y + Ui.Px(2f)), color.U32(), label);
         ImGui.Dummy(new Vector2(contentWidth, size.Y + Ui.Px(2f)));
+    }
+
+    // The small muted time under the last bubble of a burst, aligned to the bubble's side. Returns the
+    // extra height it consumed so the caller can extend the layout dummy.
+    private float DrawBubbleTime(ChatService.Message message, bool showTime, float leftX, float y, float contentWidth)
+    {
+        if (!showTime || message.SentAt is not { } sa)
+            return 0f;
+        var time = sa.ToLocalTime().ToString("t");
+        var ts = Ui.Measure(this.fonts.Caption, time);
+        var x = message.Mine ? leftX + contentWidth - ts.X : leftX;
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(x, y + Ui.Px(3f)), Palette.TextMuted.U32(), time);
+        return ts.Y + Ui.Px(3f);
+    }
+
+    // A burst ends at the last message, or when the next message flips sender, loses its timestamp, or
+    // crosses into a new day.
+    private static bool BurstEnds(IReadOnlyList<ChatService.Message> thread, int i)
+    {
+        if (i == thread.Count - 1)
+            return true;
+        var cur = thread[i];
+        var next = thread[i + 1];
+        if (cur.Mine != next.Mine || next.SentAt is null)
+            return true;
+        return cur.SentAt is { } a && next.SentAt is { } b && a.ToLocalTime().Date != b.ToLocalTime().Date;
+    }
+
+    private void DrawDaySeparator(string label, float contentWidth) => this.DrawSeparator(label, Palette.TextSecondary, contentWidth);
+
+    private void DrawEarlierDivider(float contentWidth) => this.DrawSeparator("earlier messages", Palette.TextMuted, contentWidth);
+
+    // Centered label with a hairline to each side: the day markers and the pre-timestamp boundary.
+    private void DrawSeparator(string label, Vector4 textColor, float contentWidth)
+    {
+        var blockHeight = Ui.Px(26f);
+        var pos = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        var ls = Ui.Measure(this.fonts.Caption, label);
+        var midY = pos.Y + (blockHeight * 0.5f);
+        var cx = pos.X + (contentWidth * 0.5f);
+        var halfLabel = (ls.X * 0.5f) + Ui.Px(10f);
+        drawList.AddLine(new Vector2(pos.X + Ui.Px(6f), midY), new Vector2(cx - halfLabel, midY), Palette.Border.U32(), 1f);
+        drawList.AddLine(new Vector2(cx + halfLabel, midY), new Vector2(pos.X + contentWidth - Ui.Px(6f), midY), Palette.Border.U32(), 1f);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(cx - (ls.X * 0.5f), midY - (ls.Y * 0.5f)), textColor.U32(), label);
+        ImGui.Dummy(new Vector2(contentWidth, blockHeight));
+    }
+
+    private static string DayLabel(DateTimeOffset sentAt)
+    {
+        var day = sentAt.ToLocalTime().Date;
+        var today = DateTime.Today;
+        if (day == today)
+            return "Today";
+        if (day == today.AddDays(-1))
+            return "Yesterday";
+        if (day > today.AddDays(-7))
+            return day.ToString("dddd");
+        return day.Year == today.Year ? day.ToString("MMM d") : day.ToString("MMM d, yyyy");
     }
 
     // Floating jump-to-latest button. Called from inside the scroll child so it paints over the

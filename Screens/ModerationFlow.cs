@@ -47,6 +47,7 @@ internal sealed class ModerationFlow
     private string target = string.Empty;
     private Vector2 menuAnchor;   // screen pos of the trigger button's bottom-right; the menu hangs from it
     private Action? onViewProfile;    // optional "View profile" row (only shown when the host provides it)
+    private Action? onSharedMedia;    // optional "Shared media" row (chat only)
     private Action? onSafetyNumber;   // optional "Safety number" row (chat only)
     private bool chatActions;         // host is the chat screen: show the chat-wallpaper rows
     private bool openMenu, openBlock, openReport;
@@ -66,12 +67,13 @@ internal sealed class ModerationFlow
         this.media = media;
     }
 
-    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false)
+    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null)
     {
         this.targetId = userId;
         this.target = name;
         this.menuAnchor = anchor;
         this.onViewProfile = onViewProfile;
+        this.onSharedMedia = onSharedMedia;
         this.onSafetyNumber = onSafetyNumber;
         this.chatActions = chatActions;
         this.openMenu = true;
@@ -163,6 +165,7 @@ internal sealed class ModerationFlow
         var width = Ui.Px(206f);
         var height = Ui.Px(140f)
             + (this.onViewProfile != null ? Ui.Px(40f) : 0f)
+            + (this.onSharedMedia != null ? Ui.Px(40f) : 0f)
             + (this.onSafetyNumber != null ? Ui.Px(40f) : 0f)
             + (this.chatActions ? Ui.Px(40f) : 0f)
             + (hasBackground ? Ui.Px(40f) : 0f);
@@ -208,6 +211,12 @@ internal sealed class ModerationFlow
             {
                 ImGui.CloseCurrentPopup();
                 view();
+            }
+
+            if (this.onSharedMedia is { } sharedMedia && this.MenuRow("##mm_media", FontAwesomeIcon.Images, "Shared media", false, width))
+            {
+                ImGui.CloseCurrentPopup();
+                sharedMedia();
             }
 
             if (this.onSafetyNumber is { } verify && this.MenuRow("##mm_verify", FontAwesomeIcon.ShieldAlt, "Safety number", false, width))
