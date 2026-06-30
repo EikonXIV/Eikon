@@ -23,6 +23,7 @@ internal sealed class Lightbox
     private IDalamudTextureWrap? singleTexture;   // a pre-decrypted image (chat photos), shown as-is
     private int index;
     private bool queuedOpen;
+    private bool expanded;     // false = fit-to-window; true = enlarged (the image and window both grow)
 
     public Lightbox(ThemeService theme, UiFonts fonts, Media media, PhotoService photos)
     {
@@ -82,6 +83,7 @@ internal sealed class Lightbox
         if (this.queuedOpen)
         {
             this.queuedOpen = false;
+            this.ResetView();
             ImGui.OpenPopup("##lightbox");
         }
 
@@ -99,20 +101,34 @@ internal sealed class Lightbox
 
         var pad = Ui.Px(12f);
         var dotsHeight = count > 1 ? Ui.Px(24f) : 0f;
-        var maxImage = new Vector2(
+        // Fit box: the modest default the viewer opens at. Enlarge box: ~95% of the screen, the cap
+        // the window can grow to on click.
+        var fitBox = new Vector2(
             MathF.Min(viewport.WorkSize.X * 0.7f, Ui.Px(540f)),
             (viewport.WorkSize.Y * 0.86f) - dotsHeight - (pad * 2f));
+        var enlargeBox = new Vector2(
+            viewport.WorkSize.X * 0.95f,
+            (viewport.WorkSize.Y * 0.95f) - dotsHeight - (pad * 2f));
 
+        const float maxUpscale = 2f;   // small images never enlarge past 2x native, so they stay sharp
+        var hasZoom = false;
         Vector2 fit;
         if (texture != null)
         {
-            var scale = MathF.Min(maxImage.X / texture.Width, maxImage.Y / texture.Height);
+            // Fit never upscales past native, so a small image opens at 100% in a small window.
+            var fitScale = MathF.Min(MathF.Min(fitBox.X / texture.Width, fitBox.Y / texture.Height), 1f);
+            // Enlarged grows toward the screen, but the 2x cap keeps small images from pixelating.
+            var fillScale = MathF.Min(enlargeBox.X / texture.Width, enlargeBox.Y / texture.Height);
+            var enlargeScale = MathF.Min(fillScale, maxUpscale);
+            // Only offer zoom when enlarging is meaningfully bigger than fit (no pointless 5% nudge).
+            hasZoom = enlargeScale > fitScale * 1.1f;
+            var scale = this.expanded && hasZoom ? enlargeScale : fitScale;
             fit = new Vector2(texture.Width * scale, texture.Height * scale);
         }
         else
         {
             // Not loaded yet, or a placeholder: a sensible portrait box until the photo arrives.
-            fit = new Vector2(maxImage.X, MathF.Min(maxImage.Y, maxImage.X * 1.25f));
+            fit = new Vector2(fitBox.X, MathF.Min(fitBox.Y, fitBox.X * 1.25f));
         }
 
         var size = new Vector2(fit.X + (pad * 2f), fit.Y + dotsHeight + (pad * 2f));
@@ -137,9 +153,11 @@ internal sealed class Lightbox
 
             if (texture != null)
             {
+                // The window is already sized to the active (fit or enlarged) scale, so fitting the
+                // image to the content box reproduces that scale, centred.
                 var scale = MathF.Min(img.X / texture.Width, img.Y / texture.Height);
                 var drawSize = new Vector2(texture.Width * scale, texture.Height * scale);
-                var imagePos = origin + new Vector2((img.X - drawSize.X) * 0.5f, (img.Y - drawSize.Y) * 0.5f);
+                var imagePos = origin + ((img - drawSize) * 0.5f);
                 drawList.AddImageRounded(texture.Handle, imagePos, imagePos + drawSize, Vector2.Zero, Vector2.One, 0xFFFFFFFFu, Ui.Px(10f));
             }
             else
@@ -154,7 +172,7 @@ internal sealed class Lightbox
                 }
             }
 
-            // Close first so it claims the top-right corner; the paging zones take the rest.
+            // Close first so it claims the top-right corner; the paging/zoom zones take the rest.
             // (Overlapping invisible buttons resolve to the one submitted first.)
             var closeCenter = new Vector2(origin.X + avail.X - Ui.Px(14f), origin.Y + Ui.Px(14f));
             ImGui.SetCursorScreenPos(new Vector2(closeCenter.X - Ui.Px(14f), closeCenter.Y - Ui.Px(14f)));
@@ -163,12 +181,13 @@ internal sealed class Lightbox
 
             if (count > 1)
             {
+                // Paging lives on the outer thirds; the centre band is free for the zoom toggle.
                 ImGui.SetCursorScreenPos(origin);
                 if (ImGui.InvisibleButton("##lb_prev", new Vector2(avail.X * 0.34f, img.Y)))
-                    this.index = (this.index - 1 + count) % count;
+                    this.Page(-1, count);
                 ImGui.SetCursorScreenPos(new Vector2(origin.X + (avail.X * 0.66f), origin.Y));
                 if (ImGui.InvisibleButton("##lb_next", new Vector2(avail.X * 0.34f, img.Y)))
-                    this.index = (this.index + 1) % count;
+                    this.Page(1, count);
 
                 // Visible paging affordances, vertically centred on the image.
                 var arrowY = origin.Y + (img.Y * 0.5f);
@@ -181,6 +200,28 @@ internal sealed class Lightbox
                 var y = origin.Y + img.Y + (dotsHeight * 0.5f);
                 for (var i = 0; i < count; i++)
                     drawList.AddCircleFilled(new Vector2(startX + (i * dotGap), y), Ui.Px(3.5f), (i == this.index ? this.theme.Accent : Palette.Border).U32(), 12);
+            }
+
+            // Click to grow / shrink. The hit area is the centre band for a gallery (edges page) or the
+            // whole image for a single photo; only offered when there is room to enlarge.
+            if (hasZoom)
+            {
+                var zoneX = count > 1 ? origin.X + (avail.X * 0.34f) : origin.X;
+                var zoneW = count > 1 ? avail.X * 0.32f : avail.X;
+                ImGui.SetCursorScreenPos(new Vector2(zoneX, origin.Y));
+                if (ImGui.InvisibleButton("##lb_zoom", new Vector2(zoneW, img.Y)))
+                    this.expanded = !this.expanded;
+                if (ImGui.IsItemHovered())
+                    ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+
+                // A small magnifier hint so the click-to-enlarge is discoverable.
+                var hint = (this.expanded ? FontAwesomeIcon.SearchMinus : FontAwesomeIcon.SearchPlus).ToIconString();
+                var hintCenter = count > 1
+                    ? new Vector2(origin.X + (avail.X * 0.5f), origin.Y + img.Y - Ui.Px(16f))
+                    : new Vector2(origin.X + avail.X - Ui.Px(16f), origin.Y + img.Y - Ui.Px(16f));
+                drawList.AddCircleFilled(hintCenter, Ui.Px(13f), Palette.Scrim.U32(), 16);
+                var hintSize = Ui.Measure(this.fonts.Icon, hint);
+                Ui.TextAt(drawList, this.fonts.Icon, hintCenter - (hintSize * 0.5f), Palette.White.U32(), hint);
             }
 
             drawList.AddCircleFilled(closeCenter, Ui.Px(13f), Palette.Scrim.U32(), 16);
@@ -200,5 +241,14 @@ internal sealed class Lightbox
         var glyph = icon.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, center - (glyphSize * 0.5f), Palette.White.U32(), glyph);
+    }
+
+    private void ResetView() => this.expanded = false;
+
+    // Page the gallery and snap back to fit, so a new photo never opens mid-enlarge.
+    private void Page(int direction, int count)
+    {
+        this.index = (this.index + direction + count) % count;
+        this.ResetView();
     }
 }
