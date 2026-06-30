@@ -1175,7 +1175,7 @@ namespace Eikon.Contracts
 
     public enum PhotoStateEnum { Approved, Pending, Rejected };
 
-    public enum PronounEnum { Any, Ask, Custom, HeHim, HeThey, TheyHe, TheyThem };
+    public enum PronounEnum { Any, Ask, Custom, HeHim, HeThey, SheHer, TheyHe, TheyThem };
 
     public enum ReportReasonEnum { Harassment, Impersonation, NonconsensualIllegal, Other, Spam, UnderageChildlike };
 
@@ -2284,6 +2284,8 @@ namespace Eikon.Contracts
                     return PronounEnum.HeHim;
                 case "he_they":
                     return PronounEnum.HeThey;
+                case "she_her":
+                    return PronounEnum.SheHer;
                 case "they_he":
                     return PronounEnum.TheyHe;
                 case "they_them":
@@ -2310,6 +2312,9 @@ namespace Eikon.Contracts
                     return;
                 case PronounEnum.HeThey:
                     JsonSerializer.Serialize(writer, "he_they", options);
+                    return;
+                case PronounEnum.SheHer:
+                    JsonSerializer.Serialize(writer, "she_her", options);
                     return;
                 case PronounEnum.TheyHe:
                     JsonSerializer.Serialize(writer, "they_he", options);

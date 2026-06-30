@@ -8,7 +8,7 @@ namespace Eikon.Net;
 internal static class ProfileMapper
 {
     private static readonly PronounEnum[] Pronouns =
-        { PronounEnum.HeHim, PronounEnum.HeThey, PronounEnum.TheyThem, PronounEnum.TheyHe, PronounEnum.Any, PronounEnum.Ask };
+        { PronounEnum.HeHim, PronounEnum.HeThey, PronounEnum.SheHer, PronounEnum.TheyThem, PronounEnum.TheyHe, PronounEnum.Any, PronounEnum.Ask };
 
     private static readonly GenderElement[] Genders =
         { GenderElement.CisMan, GenderElement.TransMan, GenderElement.Transmasc, GenderElement.NonBinary, GenderElement.Genderqueer, GenderElement.Intersex };

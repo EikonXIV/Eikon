@@ -6,7 +6,7 @@ namespace Eikon.UI;
 internal static class Options
 {
     public static readonly string[] Pronouns =
-        { "he/him", "he/they", "they/them", "they/he", "any", "ask" };
+        { "he/him", "he/they", "she/her", "they/them", "they/he", "any", "ask" };
 
     public static readonly string[] Genders =
         { "Cis man", "Trans man", "Transmasc", "Non-binary", "Genderqueer", "Intersex" };
