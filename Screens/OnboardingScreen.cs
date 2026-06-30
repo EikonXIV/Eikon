@@ -361,7 +361,7 @@ internal sealed class OnboardingScreen : IScreen
             if (this.kit.PrimaryButton("##ob_forward", last ? "Finalize" : "Continue", forwardWidth))
             {
                 if (last)
-                    this.Finalize();
+                    this.Complete();
                 else
                     this.step++;
             }
@@ -374,7 +374,7 @@ internal sealed class OnboardingScreen : IScreen
 
     // Create (or unlock) the local key vault from the passphrase and publish the public bundle,
     // then enter the app. Key material never leaves the device; only public keys are published.
-    private void Finalize()
+    private void Complete()
     {
         try
         {

@@ -226,6 +226,14 @@ internal sealed class ProfileDetailScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(2f)));
         this.Caption($"{this.current.World}  ·  {this.current.Dc}  ·  {proximity}");
 
+        if (this.current.Tribes.Count > 0)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+            this.kit.SectionLabel("Tribe");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            this.kit.ChipFlow("pd_tribe", ProfileMapper.Labels(this.current.Tribes), _ => false, contentWidth);
+        }
+
         if (this.current.LookingFor.Count > 0)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));

@@ -79,9 +79,13 @@ internal static class ProfileMapper
 
     public static string Label(MeetElement v) => Options.Meet[IndexOf(Meets, v)];
 
+    public static string Label(TribeElement v) => Options.Tribes[IndexOf(Tribes, v)];
+
     public static string[] Labels(IEnumerable<LookingForElement> values) => values.Select(Label).ToArray();
 
     public static string[] Labels(IEnumerable<RaceElement> values) => values.Select(Label).ToArray();
+
+    public static string[] Labels(IEnumerable<TribeElement> values) => values.Select(Label).ToArray();
 
     // Reverse: wire value -> UI option index / flags (for loading the editable profile).
     public static int IndexOfPronoun(PronounEnum v) => IndexOf(Pronouns, v);
