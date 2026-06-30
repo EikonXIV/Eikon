@@ -19,6 +19,9 @@ internal sealed class SettingsScreen : IScreen
 {
     private static readonly Vector4 Danger = new(0.91f, 0.36f, 0.36f, 1f);
 
+    // Muted fill for the mini layout-preview tiles in the unselected Browse-layout card (#26313F).
+    private static readonly Vector4 PreviewTile = new(0.149f, 0.192f, 0.247f, 1f);
+
     private readonly ScreenRouter router;
     private readonly ThemeService theme;
     private readonly Kit kit;
@@ -59,6 +62,11 @@ internal sealed class SettingsScreen : IScreen
         this.kit.SectionLabel("Theme color");
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.DrawSwatches(contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+        this.kit.SectionLabel("Browse layout");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.DrawLayoutCards(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Account");
@@ -272,6 +280,108 @@ internal sealed class SettingsScreen : IScreen
 
         if (clicked)
             this.theme.SetAccent(index);
+    }
+
+    // Two selectable cards (Expanded / Compact), each with a mini grid-preview, a title and a
+    // subtitle; the selected one gets an accent ring + check. Sets config.GridLayout, which the
+    // discovery grid reads. Drawn with draw lists to match the rest of Settings.
+    private void DrawLayoutCards(float contentWidth)
+    {
+        var gap = Ui.Px(10f);
+        var cardWidth = (contentWidth - gap) / 2f;
+        var cardHeight = Ui.Px(120f);
+        this.DrawLayoutCard(0, "Expanded", "Big photos, more detail", cardWidth, cardHeight);
+        ImGui.SameLine(0f, gap);
+        this.DrawLayoutCard(1, "Compact", "More profiles per screen", cardWidth, cardHeight);
+    }
+
+    private void DrawLayoutCard(int index, string title, string subtitle, float width, float height)
+    {
+        var selected = Math.Clamp(this.config.GridLayout, 0, 1) == index;
+        var pos = ImGui.GetCursorScreenPos();
+        if (ImGui.InvisibleButton($"##layout_{index}", new Vector2(width, height)) && this.config.GridLayout != index)
+        {
+            this.config.GridLayout = index;
+            this.config.Save();
+        }
+
+        var drawList = ImGui.GetWindowDrawList();
+        var rounding = Ui.Px(12f);
+        var size = new Vector2(width, height);
+
+        var bg = selected ? Palette.WithAlpha(this.theme.Accent, 0.09f) : Palette.Surface1;
+        drawList.AddRectFilled(pos, pos + size, bg.U32(), rounding);
+        if (selected)
+            drawList.AddRect(pos, pos + size, this.theme.Accent.U32(), rounding, ImDrawFlags.None, Ui.Px(1.5f));
+        else
+            drawList.AddRect(pos, pos + size, Palette.Border.U32(), rounding, ImDrawFlags.None, 1f);
+
+        var pad = Ui.Px(11f);
+        var previewHeight = Ui.Px(44f);
+        var previewWidth = width - (pad * 2f);
+        var previewPos = pos + new Vector2(pad, pad);
+        var tileColor = selected ? Palette.WithAlpha(this.theme.Accent, 0.45f) : PreviewTile;
+        if (index == 0)
+            DrawPreviewTiles(drawList, previewPos, previewWidth, previewHeight, 2, 1, tileColor);
+        else
+            DrawPreviewTiles(drawList, previewPos, previewWidth, previewHeight, 3, 2, tileColor);
+
+        if (selected)
+        {
+            var check = FontAwesomeIcon.CheckCircle.ToIconString();
+            var checkSize = Ui.Measure(this.fonts.Icon, check);
+            Ui.TextAt(drawList, this.fonts.Icon, pos + new Vector2(width - pad - checkSize.X, pad), this.theme.Accent.U32(), check);
+        }
+
+        var titlePos = pos + new Vector2(pad, pad + previewHeight + Ui.Px(9f));
+        Ui.TextAt(drawList, this.fonts.Body, titlePos, Palette.TextPrimary.U32(), title);
+        var titleSize = Ui.Measure(this.fonts.Body, title);
+
+        var subColor = (selected ? Palette.TextSecondary : Palette.TextMuted).U32();
+        var lineY = titlePos.Y + titleSize.Y + Ui.Px(3f);
+        foreach (var line in this.WrapCaption(subtitle, previewWidth))
+        {
+            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(titlePos.X, lineY), subColor, line);
+            lineY += Ui.Measure(this.fonts.Caption, line).Y;
+        }
+    }
+
+    private static void DrawPreviewTiles(ImDrawListPtr drawList, Vector2 pos, float width, float height, int cols, int rows, Vector4 color)
+    {
+        var gap = Ui.Px(rows > 1 ? 3f : 4f);
+        var tileWidth = (width - (gap * (cols - 1))) / cols;
+        var tileHeight = (height - (gap * (rows - 1))) / rows;
+        var rounding = Ui.Px(3f);
+        for (var row = 0; row < rows; row++)
+        for (var col = 0; col < cols; col++)
+        {
+            var tilePos = pos + new Vector2(col * (tileWidth + gap), row * (tileHeight + gap));
+            drawList.AddRectFilled(tilePos, tilePos + new Vector2(tileWidth, tileHeight), color.U32(), rounding);
+        }
+    }
+
+    // Greedy word-wrap of a short caption to a pixel width, measured in the caption font.
+    private List<string> WrapCaption(string text, float maxWidth)
+    {
+        var lines = new List<string>();
+        var line = string.Empty;
+        foreach (var word in text.Split(' '))
+        {
+            var candidate = line.Length == 0 ? word : line + " " + word;
+            if (Ui.Measure(this.fonts.Caption, candidate).X <= maxWidth)
+            {
+                line = candidate;
+                continue;
+            }
+
+            if (line.Length > 0)
+                lines.Add(line);
+            line = word;
+        }
+
+        if (line.Length > 0)
+            lines.Add(line);
+        return lines;
     }
 
     private bool NavRow(string id, string label, string value, Vector4 labelColor, bool chevron, float contentWidth)

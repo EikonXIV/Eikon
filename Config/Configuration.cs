@@ -11,6 +11,11 @@ internal sealed class Configuration : IPluginConfiguration
     // Index into AccentPresets.All. 0 is Blue, the default.
     public int AccentPresetIndex { get; set; }
 
+    // Discovery grid layout: 0 = Expanded (2-column portrait tiles, the default), 1 = Compact
+    // (3-column square tiles, denser for large pools). Purely a local display preference, so old and
+    // new builds read each other's config; an unknown value falls back to Expanded.
+    public int GridLayout { get; set; }
+
     // Eikon API server. Defaults to production for every build. To run against a local docker-compose
     // server during development, set this to "http://127.0.0.1:8080" in the saved config; it persists
     // and is not reset (the one-time loopback migration in Plugin.cs only runs once, at Version 1 -> 2).

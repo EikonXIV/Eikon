@@ -1,4 +1,5 @@
 using Dalamud.Interface;
+using Eikon.Config;
 using Eikon.Contracts;
 using Eikon.Navigation;
 using Eikon.Net;
@@ -18,8 +19,9 @@ internal sealed class GridScreen : IScreen
     private readonly DiscoveryService discovery;
     private readonly Selection selection;
     private readonly PhotoService photoSvc;
+    private readonly Configuration config;
 
-    public GridScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, DiscoveryService discovery, Selection selection, PhotoService photoSvc)
+    public GridScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, DiscoveryService discovery, Selection selection, PhotoService photoSvc, Configuration config)
     {
         this.router = router;
         this.theme = theme;
@@ -28,6 +30,7 @@ internal sealed class GridScreen : IScreen
         this.discovery = discovery;
         this.selection = selection;
         this.photoSvc = photoSvc;
+        this.config = config;
     }
 
     public Screen Id => Screen.Grid;
@@ -61,26 +64,30 @@ internal sealed class GridScreen : IScreen
             return;
         }
 
-        var shown = this.DrawGrid(contentWidth);
+        // Layout is a local display preference set in Settings (no on-grid toggle): 0 = Expanded
+        // (2-column portrait), 1 = Compact (3-column square, denser for large pools).
+        var compact = this.config.GridLayout == 1;
+        var shown = this.DrawGrid(contentWidth, compact);
         if (shown == 0)
             this.DrawEmpty(contentWidth);
     }
 
-    private int DrawGrid(float contentWidth)
+    private int DrawGrid(float contentWidth, bool compact)
     {
-        var gap = Ui.Px(8f);
-        var tileWidth = (contentWidth - gap) / 2f;
-        var size = new Vector2(tileWidth, tileWidth * 1.6f);
+        var columns = compact ? 3 : 2;
+        var gap = Ui.Px(compact ? 4f : 8f);
+        var tileWidth = (contentWidth - (gap * (columns - 1))) / columns;
+        var size = compact ? new Vector2(tileWidth, tileWidth) : new Vector2(tileWidth, tileWidth * 1.6f);
 
         var shown = 0;
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(gap, gap)))
         {
             foreach (var profile in this.discovery.Profiles)
             {
-                if (shown % 2 != 0)
+                if (shown % columns != 0)
                     ImGui.SameLine(0f, gap);
 
-                if (this.DrawTile(profile, size))
+                if (this.DrawTile(profile, size, compact))
                 {
                     this.selection.ProfileUserId = profile.UserId;
                     this.selection.ProfileDisplayName = profile.DisplayName;
@@ -127,12 +134,12 @@ internal sealed class GridScreen : IScreen
         }
     }
 
-    private bool DrawTile(DiscoverResultProfile profile, Vector2 size)
+    private bool DrawTile(DiscoverResultProfile profile, Vector2 size, bool compact)
     {
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton($"##tile_{profile.UserId}", size);
         var drawList = ImGui.GetWindowDrawList();
-        var rounding = Ui.Px(12f);
+        var rounding = Ui.Px(compact ? 8f : 12f);
 
         drawList.AddRectFilled(pos, pos + size, Palette.Surface2.U32(), rounding);
 
@@ -151,24 +158,51 @@ internal sealed class GridScreen : IScreen
                 Palette.TextMuted.U32(), initial);
         }
 
+        var dotInset = Ui.Px(compact ? 9f : 12f);
         if (profile.Online)
-            drawList.AddCircleFilled(pos + new Vector2(Ui.Px(12f), Ui.Px(12f)), Ui.Px(5f), this.theme.Accent.U32(), 16);
+            drawList.AddCircleFilled(pos + new Vector2(dotInset, dotInset), Ui.Px(compact ? 4f : 5f), this.theme.Accent.U32(), 16);
+
+        // Compact trades per-tile detail for density: no intent badge, and a single name line. The
+        // online dot already conveys "now", and the world/intent live on the expanded view and profile.
+        if (compact)
+        {
+            var scrimHeight = Ui.Px(26f);
+            var scrimTop = pos + new Vector2(0f, size.Y - scrimHeight);
+            drawList.AddRectFilled(scrimTop, pos + size, Palette.Scrim.U32(), rounding, ImDrawFlags.RoundCornersBottom);
+
+            var pad = Ui.Px(6f);
+            var name = this.Fit(profile.DisplayName, size.X - (pad * 2f));
+            var nameSize = Ui.Measure(this.fonts.Caption, name);
+            Ui.TextAt(drawList, this.fonts.Caption, scrimTop + new Vector2(pad, (scrimHeight - nameSize.Y) * 0.5f), Palette.White.U32(), name);
+            return clicked;
+        }
 
         var badge = Badge(profile);
         if (badge is not null)
             this.DrawBadge(drawList, pos, size, badge);
 
-        var scrimHeight = Ui.Px(42f);
-        var scrimTop = pos + new Vector2(0f, size.Y - scrimHeight);
-        drawList.AddRectFilled(scrimTop, pos + size, Palette.Scrim.U32(), rounding, ImDrawFlags.RoundCornersBottom);
+        var fullScrimHeight = Ui.Px(42f);
+        var fullScrimTop = pos + new Vector2(0f, size.Y - fullScrimHeight);
+        drawList.AddRectFilled(fullScrimTop, pos + size, Palette.Scrim.U32(), rounding, ImDrawFlags.RoundCornersBottom);
 
-        var nameSize = Ui.Measure(this.fonts.Caption, profile.DisplayName);
-        Ui.TextAt(drawList, this.fonts.Caption, scrimTop + new Vector2(Ui.Px(8f), Ui.Px(5f)), Palette.White.U32(), profile.DisplayName);
+        var fullNameSize = Ui.Measure(this.fonts.Caption, profile.DisplayName);
+        Ui.TextAt(drawList, this.fonts.Caption, fullScrimTop + new Vector2(Ui.Px(8f), Ui.Px(5f)), Palette.White.U32(), profile.DisplayName);
         Ui.TextAt(drawList, this.fonts.Caption,
-            scrimTop + new Vector2(Ui.Px(8f), Ui.Px(5f) + nameSize.Y),
+            fullScrimTop + new Vector2(Ui.Px(8f), Ui.Px(5f) + fullNameSize.Y),
             Palette.WithAlpha(Palette.White, 0.75f).U32(), profile.World);
 
         return clicked;
+    }
+
+    // Truncate a name with an ellipsis to fit a compact tile's width (measured in the caption font).
+    private string Fit(string text, float maxWidth)
+    {
+        if (Ui.Measure(this.fonts.Caption, text).X <= maxWidth)
+            return text;
+        var s = text;
+        while (s.Length > 1 && Ui.Measure(this.fonts.Caption, s + "…").X > maxWidth)
+            s = s[..^1];
+        return s + "…";
     }
 
     private static string? Badge(DiscoverResultProfile profile)
