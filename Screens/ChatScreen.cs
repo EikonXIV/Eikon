@@ -26,6 +26,7 @@ internal sealed class ChatScreen : IScreen
     private readonly InboxService inbox;
     private readonly PhotoService photoSvc;
     private readonly Configuration config;
+    private readonly WindowController windowController;
 
     private Guid markReadFor;       // peer we last marked read
     private int markReadCount = -1; // thread length at that point, so new messages while open re-mark
@@ -43,7 +44,7 @@ internal sealed class ChatScreen : IScreen
     private bool openImagePopup;
     private readonly HashSet<string> revealed = new();   // NSFW image ids the viewer chose to reveal
 
-    public ChatScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, Configuration config)
+    public ChatScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, Configuration config, WindowController windowController)
     {
         this.router = router;
         this.theme = theme;
@@ -59,6 +60,7 @@ internal sealed class ChatScreen : IScreen
         this.inbox = inbox;
         this.photoSvc = photoSvc;
         this.config = config;
+        this.windowController = windowController;
     }
 
     public Screen Id => Screen.Chat;
@@ -271,7 +273,51 @@ internal sealed class ChatScreen : IScreen
             this.router.Navigate(Screen.Messages);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), backGlyph);
 
+        // Right side, from the corner inward: minimize (the same control as the main window's title bar,
+        // collapsing the app to the orb), then the overflow menu, with a hairline between them so the
+        // window control reads apart from the chat actions.
+        var btn = Ui.Px(30f);
+        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
+        if (this.HeaderIconButton(drawList, "##chat_min", FontAwesomeIcon.Minus, minTL, btn))
+            this.windowController.Minimize();
+
+        var divX = minTL.X - Ui.Px(8f);
+        drawList.AddLine(new Vector2(divX, midY - Ui.Px(9f)), new Vector2(divX, midY + Ui.Px(9f)), Palette.Border.U32(), 1f);
+
+        var moreTL = new Vector2(divX - Ui.Px(8f) - btn, midY - (btn * 0.5f));
+        if (this.HeaderIconButton(drawList, "##chat_more", FontAwesomeIcon.EllipsisH, moreTL, btn))
+            this.moderation.Open(peer, name, new Vector2(moreTL.X + btn, moreTL.Y + btn),
+                () =>
+                {
+                    this.selection.ProfileUserId = peer;
+                    this.selection.ProfileDisplayName = name;
+                    this.router.Navigate(Screen.ProfileDetail);
+                },
+                () => this.openSafety = true,
+                chatActions: true,
+                onSharedMedia: () =>
+                {
+                    this.selection.ProfileUserId = peer;
+                    this.selection.ProfileDisplayName = name;
+                    this.router.Navigate(Screen.SharedMedia);
+                });
+
         var radius = Ui.Px(16f);
+
+        // Avatar and name double as a tap target that opens the profile (also offered in the overflow
+        // menu). Submitted before the avatar/name are painted so its hover highlight sits behind them.
+        var tapX = origin.X + pad + backSize.X + Ui.Px(6f);
+        var tapRight = moreTL.X - Ui.Px(6f);
+        var tapW = tapRight - tapX;
+        var tapClicked = false;
+        if (tapW > Ui.Px(40f))
+        {
+            ImGui.SetCursorScreenPos(new Vector2(tapX, midY - Ui.Px(18f)));
+            tapClicked = ImGui.InvisibleButton("##chat_peer", new Vector2(tapW, Ui.Px(36f)));
+            if (ImGui.IsItemHovered())
+                drawList.AddRectFilled(new Vector2(tapX, midY - Ui.Px(18f)), new Vector2(tapRight, midY + Ui.Px(18f)), Palette.WithAlpha(Palette.White, 0.04f).U32(), Ui.Px(10f));
+        }
+
         var avatarCenter = new Vector2(origin.X + pad + backSize.X + Ui.Px(12f) + radius, midY);
 
         // Photo and presence both come from the cached inbox row (the chat keeps the inbox loaded).
@@ -305,28 +351,30 @@ internal sealed class ChatScreen : IScreen
         var nameSize = Ui.Measure(this.fonts.Body, name);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(nameX, midY - (nameSize.Y * 0.5f)), Palette.TextPrimary.U32(), name);
 
-        var moreGlyph = FontAwesomeIcon.EllipsisH.ToIconString();
-        var moreSize = Ui.Measure(this.fonts.Icon, moreGlyph);
-        ImGui.SetCursorScreenPos(new Vector2(origin.X + fullWidth - pad - moreSize.X, midY - (moreSize.Y * 0.5f)));
-        if (ImGui.InvisibleButton("##chat_more", moreSize))
-            this.moderation.Open(peer, name, ImGui.GetItemRectMax(),
-                () =>
-                {
-                    this.selection.ProfileUserId = peer;
-                    this.selection.ProfileDisplayName = name;
-                    this.router.Navigate(Screen.ProfileDetail);
-                },
-                () => this.openSafety = true,
-                chatActions: true,
-                onSharedMedia: () =>
-                {
-                    this.selection.ProfileUserId = peer;
-                    this.selection.ProfileDisplayName = name;
-                    this.router.Navigate(Screen.SharedMedia);
-                });
-        Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), moreGlyph);
+        if (tapClicked)
+        {
+            this.selection.ProfileUserId = peer;
+            this.selection.ProfileDisplayName = name;
+            this.router.Navigate(Screen.ProfileDetail);
+        }
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(56f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(56f)), Palette.Border.U32(), 1f);
+    }
+
+    // A 30px header icon button that mirrors the main window's title-bar minimize chrome: a faint hover
+    // fill and a muted glyph that brightens on hover. Used for both the overflow and minimize controls.
+    private bool HeaderIconButton(ImDrawListPtr drawList, string id, FontAwesomeIcon icon, Vector2 topLeft, float size)
+    {
+        ImGui.SetCursorScreenPos(topLeft);
+        var clicked = ImGui.InvisibleButton(id, new Vector2(size, size));
+        var hovered = ImGui.IsItemHovered();
+        var min = ImGui.GetItemRectMin();
+        if (hovered)
+            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
+        var glyph = icon.ToIconString();
+        var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(min.X + ((size - glyphSize.X) * 0.5f), min.Y + ((size - glyphSize.Y) * 0.5f)), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
+        return clicked;
     }
 
     private void DrawE2ENote(float contentWidth, Guid peer)

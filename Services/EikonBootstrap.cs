@@ -28,6 +28,7 @@ internal sealed class EikonBootstrap : IDisposable
     private readonly ScreenRouter router;
     private readonly Selection selection;
     private readonly Media media;
+    private readonly WindowController windowController;
 
     public EikonBootstrap(
         IDalamudPluginInterface pluginInterface,
@@ -41,7 +42,8 @@ internal sealed class EikonBootstrap : IDisposable
         KeyVault keyVault,
         ScreenRouter router,
         Selection selection,
-        Media media)
+        Media media,
+        WindowController windowController)
     {
         this.pluginInterface = pluginInterface;
         this.commandManager = commandManager;
@@ -54,13 +56,15 @@ internal sealed class EikonBootstrap : IDisposable
         this.router = router;
         this.selection = selection;
         this.media = media;
+        this.windowController = windowController;
 
         this.windowSystem.AddWindow(this.mainWindow);
         this.windowSystem.AddWindow(this.orbWindow);
         this.windowSystem.AddWindow(this.notificationWindow);
 
-        // Minimize collapses the app to the orb; tapping the orb restores it.
-        this.mainWindow.MinimizeRequested += this.Minimize;
+        // Minimize collapses the app to the orb; tapping the orb restores it. The signal is shared so
+        // both the main title bar and the chat header raise it through the same path.
+        this.windowController.MinimizeRequested += this.Minimize;
         this.orbWindow.RestoreRequested += this.Restore;
         this.notifications.OpenRequested += this.OpenConversation;
 
@@ -78,7 +82,7 @@ internal sealed class EikonBootstrap : IDisposable
 
     public void Dispose()
     {
-        this.mainWindow.MinimizeRequested -= this.Minimize;
+        this.windowController.MinimizeRequested -= this.Minimize;
         this.orbWindow.RestoreRequested -= this.Restore;
         this.notifications.OpenRequested -= this.OpenConversation;
         this.pluginInterface.UiBuilder.Draw -= this.windowSystem.Draw;

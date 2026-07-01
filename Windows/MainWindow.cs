@@ -16,16 +16,14 @@ internal sealed class MainWindow : Window, IDisposable
     private readonly ThemeService theme;
     private readonly UiFonts fonts;
     private readonly InboxService inbox;
+    private readonly WindowController windowController;
     private readonly Dictionary<Screen, IScreen> screensById;
 
     private int pushedColors;
     private int pushedVars;
     private double lastInboxRefresh;
 
-    // Raised when the header minimize button is tapped; the bootstrap hides this window and shows the orb.
-    public event Action? MinimizeRequested;
-
-    public MainWindow(ScreenRouter router, ThemeService theme, UiFonts fonts, InboxService inbox, IEnumerable<IScreen> screens)
+    public MainWindow(ScreenRouter router, ThemeService theme, UiFonts fonts, InboxService inbox, WindowController windowController, IEnumerable<IScreen> screens)
         : base("Eikon##main",
             ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
             ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoTitleBar)
@@ -34,6 +32,7 @@ internal sealed class MainWindow : Window, IDisposable
         this.theme = theme;
         this.fonts = fonts;
         this.inbox = inbox;
+        this.windowController = windowController;
         this.screensById = screens.ToDictionary(s => s.Id);
 
         this.SizeConstraints = new WindowSizeConstraints
@@ -142,7 +141,7 @@ internal sealed class MainWindow : Window, IDisposable
         var btn = new Vector2(Ui.Px(30f), Ui.Px(30f));
         ImGui.SetCursorScreenPos(new Vector2(origin.X + width - padX - btn.X, origin.Y + ((height - btn.Y) * 0.5f)));
         if (ImGui.InvisibleButton("##minimize", btn))
-            this.MinimizeRequested?.Invoke();
+            this.windowController.Minimize();
         var hovered = ImGui.IsItemHovered();
         var btnMin = ImGui.GetItemRectMin();
         if (hovered)

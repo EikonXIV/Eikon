@@ -83,6 +83,7 @@ public sealed class Plugin : IDalamudPlugin
 
         // UI infrastructure. The app opens on the invite gate.
         services.AddSingleton(new ScreenRouter(Screen.AgeGuidelines));
+        services.AddSingleton<WindowController>();
         services.AddSingleton(new WindowSystem("Eikon"));
 
         // Screens. Registered as IScreen so the window can route to them.
