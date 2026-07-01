@@ -153,19 +153,35 @@ internal sealed class AlbumDetailScreen : IScreen
             Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(13f), pos.Y + (height * 0.5f) - (Ui.Measure(this.fonts.Icon, globe).Y * 0.5f)), new Vector4(0.56f, 0.84f, 0.65f, 1f).U32(), globe);
             Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(40f), pos.Y + Ui.Px(8f)), Palette.TextPrimary.U32(), "Public");
             Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + Ui.Px(40f), pos.Y + Ui.Px(26f)), Palette.TextMuted.U32(), "Anyone who can see your profile can view");
-        }
-        else
-        {
-            drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.12f).U32(), Ui.Px(11f));
-            drawList.AddRect(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.22f).U32(), Ui.Px(11f), ImDrawFlags.None, 1f);
-            var users = FontAwesomeIcon.Users.ToIconString();
-            var midY = pos.Y + (height * 0.5f);
-            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(13f), midY - (Ui.Measure(this.fonts.Icon, users).Y * 0.5f)), this.theme.AccentText.U32(), users);
-            var label = album.SharedCount == 1 ? "Shared with 1 person" : $"Shared with {album.SharedCount}";
-            Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(40f), midY - (Ui.Measure(this.fonts.Body, label).Y * 0.5f)), Palette.TextPrimary.U32(), label);
+            ImGui.Dummy(new Vector2(contentWidth, height));
+            return;
         }
 
-        ImGui.Dummy(new Vector2(contentWidth, height));
+        // Private: the bar taps through to the access sheet (share, requests, revoke).
+        var clicked = ImGui.InvisibleButton("##ad_accessbar", new Vector2(contentWidth, height));
+        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.12f).U32(), Ui.Px(11f));
+        drawList.AddRect(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.22f).U32(), Ui.Px(11f), ImDrawFlags.None, 1f);
+        var users = FontAwesomeIcon.Users.ToIconString();
+        var barMidY = pos.Y + (height * 0.5f);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(13f), barMidY - (Ui.Measure(this.fonts.Icon, users).Y * 0.5f)), this.theme.AccentText.U32(), users);
+        var barLabel = album.SharedCount == 1 ? "Shared with 1 person" : $"Shared with {album.SharedCount}";
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(40f), barMidY - (Ui.Measure(this.fonts.Body, barLabel).Y * 0.5f)), Palette.TextPrimary.U32(), barLabel);
+
+        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chs = Ui.Measure(this.fonts.Icon, chevron);
+        var chX = pos.X + contentWidth - Ui.Px(13f) - chs.X;
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(chX, barMidY - (chs.Y * 0.5f)), Palette.TextMuted.U32(), chevron);
+        if (album.RequestCount > 0)
+        {
+            var badge = album.RequestCount == 1 ? "1 request" : $"{album.RequestCount} requests";
+            var bs = Ui.Measure(this.fonts.Caption, badge);
+            var bx = chX - Ui.Px(10f) - bs.X - Ui.Px(14f);
+            drawList.AddRectFilled(new Vector2(bx, barMidY - Ui.Px(9f)), new Vector2(bx + bs.X + Ui.Px(14f), barMidY + Ui.Px(9f)), Palette.DangerFill.U32(), Ui.Px(9f));
+            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(bx + Ui.Px(7f), barMidY - (bs.Y * 0.5f)), Palette.White.U32(), badge);
+        }
+
+        if (clicked)
+            this.router.Navigate(Screen.AlbumAccess);
     }
 
     private void DrawGrid(AlbumDto album, float contentWidth)

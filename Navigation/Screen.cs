@@ -21,4 +21,6 @@ internal enum Screen
     Albums,
     AlbumDetail,
     AlbumRequests,
+    AlbumAccess,
+    AlbumViewer,
 }
