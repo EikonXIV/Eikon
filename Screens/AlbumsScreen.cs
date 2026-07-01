@@ -216,6 +216,7 @@ internal sealed class AlbumsScreen : IScreen
         {
             this.selection.AlbumId = album.Id;
             this.selection.AlbumName = album.Name;
+            this.selection.AlbumReturn = Screen.Albums;
             this.router.Navigate(Screen.AlbumDetail);
         }
     }

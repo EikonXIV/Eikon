@@ -31,6 +31,10 @@ internal sealed class ChatService
         public string? ClientMsgId;
         public Guid? MessageId;
         public bool IsImage;
+        public bool IsAlbum;                  // an album share card (album id + name + photo count)
+        public Guid? AlbumId;
+        public string? AlbumName;
+        public int AlbumCount;
         public bool Nsfw;                     // image marked sensitive by the sender -> blur until revealed
         public string? ImageId;              // local sealed-image id (see ChatMediaCache)
         public string? OutEnvelope;          // image: the ratchet payload, kept so we can resend on a re-handshake
@@ -40,6 +44,9 @@ internal sealed class ChatService
     // Prefix marking a ratchet message whose plaintext is an image envelope (else it's plain text). A
     // control char that won't occur in normal chat text, so existing text messages are unaffected.
     private const string ImageMagic = "img:";
+    // Prefix marking a ratchet message whose plaintext is an album share card. Same idea as
+    // ImageMagic: an album-less client shows the raw envelope; an album-aware one renders a card.
+    private const string AlbumMagic = "album:";
 
     private readonly RelayClient relay;
     private readonly MessageCrypto crypto;
@@ -126,6 +133,42 @@ internal sealed class ChatService
         });
     }
 
+    // Share an album in chat: send a ratchet message whose plaintext is an album card envelope (album
+    // id, name, photo count). Access is granted separately by the caller (before sending, for a private
+    // album). The recipient renders a "View album" card. Old clients show the raw envelope.
+    public void SendAlbumCard(Guid peer, Guid albumId, string name, int count)
+    {
+        var clientMsgId = Guid.NewGuid().ToString();
+        var envelope = AlbumMagic + JsonSerializer.Serialize(new { a = albumId.ToString(), n = name, c = count });
+        var message = new Message
+        {
+            Mine = true, State = MessageState.Pending, ClientMsgId = clientMsgId, SentAt = DateTimeOffset.UtcNow,
+            IsAlbum = true, AlbumId = albumId, AlbumName = name, AlbumCount = count, OutEnvelope = envelope,
+        };
+        lock (this.gate)
+        {
+            this.EnsureLoaded();
+            this.GetThread(peer).Add(message);
+            this.pending[clientMsgId] = message;
+            this.Save();
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var enc = await this.crypto.EncryptAsync(peer, envelope, CancellationToken.None);
+                if (enc is null) { message.State = MessageState.Failed; return; }
+                this.relay.SendMessage(peer.ToString(), enc.Value.Ciphertext, enc.Value.Header, enc.Value.Nonce, clientMsgId);
+            }
+            catch (Exception ex)
+            {
+                this.log.Warning(ex, "Sharing album failed.");
+                message.State = MessageState.Failed;
+            }
+        });
+    }
+
     // Send a photo: resize + JPEG-encode, encrypt the blob under a fresh key, upload the opaque blob,
     // and send a normal ratchet message whose plaintext is the image envelope (storage key + blob key
     // + nsfw flag + caption). The relay only ever sees ciphertext.
@@ -206,6 +249,11 @@ internal sealed class ChatService
                     return;
                 message = built;
             }
+            else if (text.StartsWith(AlbumMagic, StringComparison.Ordinal))
+            {
+                message = BuildAlbumMessage(dto, text)
+                    ?? new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
+            }
             else
             {
                 message = new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
@@ -257,6 +305,29 @@ internal sealed class ChatService
         catch (Exception ex)
         {
             this.log.Warning(ex, "Receiving image failed.");
+            return null;
+        }
+    }
+
+    // Parse an album share card envelope into a card message. Nothing to fetch: the album's photos load
+    // on demand through its grant-checked route when the recipient opens it.
+    private static Message? BuildAlbumMessage(EncryptedMessageDto dto, string envelopeText)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(envelopeText[AlbumMagic.Length..]);
+            var root = doc.RootElement;
+            var albumId = Guid.Parse(root.GetProperty("a").GetString()!);
+            var name = root.TryGetProperty("n", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+            var count = root.TryGetProperty("c", out var c) && c.TryGetInt32(out var ci) ? ci : 0;
+            return new Message
+            {
+                Mine = false, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt,
+                IsAlbum = true, AlbumId = albumId, AlbumName = name, AlbumCount = count,
+            };
+        }
+        catch
+        {
             return null;
         }
     }
@@ -335,7 +406,7 @@ internal sealed class ChatService
 
     private async Task ResendAsync(Guid peer, Message message)
     {
-        var payload = message.IsImage ? message.OutEnvelope : message.Text;
+        var payload = message.IsImage || message.IsAlbum ? message.OutEnvelope : message.Text;
         if (string.IsNullOrEmpty(payload))
         {
             message.State = MessageState.Failed;   // image envelope wasn't retained (e.g. across a restart)
@@ -402,7 +473,7 @@ internal sealed class ChatService
                     var list = this.GetThread(peer);
                     foreach (var m in msgs)
                     {
-                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, SentAt = m.SentAt });
+                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, SentAt = m.SentAt });
                         if (m.MessageId is { } id)
                             this.seen.Add(id);
                     }
@@ -428,7 +499,7 @@ internal sealed class ChatService
         {
             var dto = new Dictionary<string, List<MessageDto>>();
             foreach (var (peer, list) in this.threads)
-                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, SentAt = m.SentAt });
+                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, SentAt = m.SentAt });
             var sealedBytes = this.vault.SealLocal(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(dto)));
 
             var tmp = this.historyPath + ".tmp";
@@ -453,6 +524,10 @@ internal sealed class ChatService
         public bool IsImage { get; set; }
         public bool Nsfw { get; set; }
         public string? ImageId { get; set; }
+        public bool IsAlbum { get; set; }
+        public Guid? AlbumId { get; set; }
+        public string? AlbumName { get; set; }
+        public int AlbumCount { get; set; }
         public DateTimeOffset? SentAt { get; set; }
     }
 }

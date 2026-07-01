@@ -360,6 +360,7 @@ internal sealed class ProfileDetailScreen : IScreen
             {
                 this.selection.AlbumId = album.Id;
                 this.selection.AlbumName = album.Name;
+                this.selection.AlbumReturn = Screen.ProfileDetail;
                 this.router.Navigate(Screen.AlbumViewer);
             }
             else if (album.Access == PeerAlbumAccessEnum.Locked)

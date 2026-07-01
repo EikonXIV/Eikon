@@ -41,7 +41,7 @@ internal sealed class AlbumViewerScreen : IScreen
         var albumId = this.selection.AlbumId;
         if (albumId is null)
         {
-            this.router.Navigate(Screen.ProfileDetail);
+            this.router.Navigate(this.selection.AlbumReturn);
             return;
         }
 
@@ -101,7 +101,7 @@ internal sealed class AlbumViewerScreen : IScreen
         var backSize = Ui.Measure(this.fonts.Icon, back);
         ImGui.SetCursorScreenPos(new Vector2(origin.X + pad, midY - (backSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##av_back", backSize))
-            this.router.Navigate(Screen.ProfileDetail);
+            this.router.Navigate(this.selection.AlbumReturn);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
         var name = this.selection.ProfileDisplayName ?? string.Empty;

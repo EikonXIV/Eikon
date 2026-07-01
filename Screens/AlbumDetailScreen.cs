@@ -57,7 +57,7 @@ internal sealed class AlbumDetailScreen : IScreen
         var id = this.selection.AlbumId;
         if (id is null)
         {
-            this.router.Navigate(Screen.Albums);
+            this.router.Navigate(this.selection.AlbumReturn);
             return;
         }
 
@@ -112,7 +112,7 @@ internal sealed class AlbumDetailScreen : IScreen
         var backSize = Ui.Measure(this.fonts.Icon, back);
         ImGui.SetCursorScreenPos(new Vector2(origin.X + pad, midY - (backSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##ad_back", backSize))
-            this.router.Navigate(Screen.Albums);
+            this.router.Navigate(this.selection.AlbumReturn);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
         var titleSize = Ui.Measure(this.fonts.Body, name);
@@ -443,7 +443,7 @@ internal sealed class AlbumDetailScreen : IScreen
             {
                 this.albums.Delete(albumId);
                 ImGui.CloseCurrentPopup();
-                this.router.Navigate(Screen.Albums);
+                this.router.Navigate(this.selection.AlbumReturn);
             }
 
             ImGui.EndPopup();

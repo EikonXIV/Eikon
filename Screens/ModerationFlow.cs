@@ -48,6 +48,7 @@ internal sealed class ModerationFlow
     private Vector2 menuAnchor;   // screen pos of the trigger button's bottom-right; the menu hangs from it
     private Action? onViewProfile;    // optional "View profile" row (only shown when the host provides it)
     private Action? onSharedMedia;    // optional "Shared media" row (chat only)
+    private Action? onShareAlbum;     // optional "Share an album" row (chat only)
     private Action? onSafetyNumber;   // optional "Safety number" row (chat only)
     private bool chatActions;         // host is the chat screen: show the chat-wallpaper rows
     private bool openMenu, openBlock, openReport;
@@ -67,13 +68,14 @@ internal sealed class ModerationFlow
         this.media = media;
     }
 
-    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null)
+    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null, Action? onShareAlbum = null)
     {
         this.targetId = userId;
         this.target = name;
         this.menuAnchor = anchor;
         this.onViewProfile = onViewProfile;
         this.onSharedMedia = onSharedMedia;
+        this.onShareAlbum = onShareAlbum;
         this.onSafetyNumber = onSafetyNumber;
         this.chatActions = chatActions;
         this.openMenu = true;
@@ -167,6 +169,7 @@ internal sealed class ModerationFlow
         var height = Ui.Px(12f)                                  // window padding (top + bottom)
             + (this.onViewProfile != null ? row : 0f)
             + (this.onSharedMedia != null ? row : 0f)
+            + (this.onShareAlbum != null ? row : 0f)
             + (this.chatActions ? Ui.Px(24f) : 0f)              // "Preferences" section label
             + row                                                // mute / unmute
             + (this.chatActions ? row : 0f)                     // set / change chat background
@@ -225,6 +228,12 @@ internal sealed class ModerationFlow
             {
                 ImGui.CloseCurrentPopup();
                 sharedMedia();
+            }
+
+            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.LayerGroup, "Share an album", false, width))
+            {
+                ImGui.CloseCurrentPopup();
+                shareAlbum();
             }
 
             // Preferences group: the per-conversation settings. Only the chat overflow carries the fuller
