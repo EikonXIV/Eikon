@@ -124,7 +124,7 @@ internal sealed class MessagesScreen : IScreen
         this.DrawAvatar(drawList, avatarCenter, avatar * 0.5f, conversation.MainPhotoId, Initial(name));
 
         var dot = new Vector2(centerX + (avatar * 0.5f) - Ui.Px(5f), pos.Y + avatar - Ui.Px(6f));
-        drawList.AddCircleFilled(dot, Ui.Px(5f), this.theme.Accent.U32(), 12);
+        drawList.AddCircleFilled(dot, Ui.Px(5f), this.theme.Secondary.Base.U32(), 12);
         drawList.AddCircle(dot, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(1.5f));
 
         Ui.TextAt(drawList, this.fonts.Caption,
@@ -153,7 +153,7 @@ internal sealed class MessagesScreen : IScreen
         if (conversation.Online)
         {
             var dot = new Vector2(avatarCenter.X + radius - Ui.Px(4f), avatarCenter.Y + radius - Ui.Px(4f));
-            drawList.AddCircleFilled(dot, Ui.Px(5f), this.theme.Accent.U32(), 12);
+            drawList.AddCircleFilled(dot, Ui.Px(5f), this.theme.Secondary.Base.U32(), 12);
             drawList.AddCircle(dot, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(1.5f));
         }
 
@@ -166,7 +166,7 @@ internal sealed class MessagesScreen : IScreen
             var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
             Ui.TextAt(drawList, this.fonts.Icon,
                 new Vector2(textX + nameSize.X + Ui.Px(6f), pos.Y + Ui.Px(12f) + ((nameSize.Y - glyphSize.Y) * 0.5f)),
-                this.theme.Accent.U32(), glyph);
+                this.theme.Secondary.Base.U32(), glyph);
         }
 
         var unread = conversation.Unread > 0;
@@ -178,7 +178,7 @@ internal sealed class MessagesScreen : IScreen
         if (time.Length > 0)
         {
             var timeSize = Ui.Measure(this.fonts.Caption, time);
-            var timeColor = (unread ? this.theme.Accent : Palette.TextMuted).U32();
+            var timeColor = (unread ? this.theme.Secondary.Text : Palette.TextMuted).U32();
             Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + width - timeSize.X, pos.Y + Ui.Px(12f)), timeColor, time);
         }
 

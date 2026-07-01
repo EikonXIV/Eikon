@@ -110,7 +110,7 @@ internal sealed class FilterScreen : IScreen
         ImGui.SetCursorPos(new Vector2(fullWidth - pad - resetSize.X, midY - (resetSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##filter_reset", resetSize))
             this.Reset();
-        Ui.TextAt(drawList, this.fonts.Caption, ImGui.GetItemRectMin(), this.theme.Accent.U32(), reset);
+        Ui.TextAt(drawList, this.fonts.Caption, ImGui.GetItemRectMin(), this.theme.Secondary.Text.U32(), reset);
 
         drawList.AddLine(
             new Vector2(origin.X, origin.Y + Ui.Px(53f)),

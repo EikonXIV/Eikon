@@ -160,7 +160,7 @@ internal sealed class GridScreen : IScreen
 
         var dotInset = Ui.Px(compact ? 9f : 12f);
         if (profile.Online)
-            drawList.AddCircleFilled(pos + new Vector2(dotInset, dotInset), Ui.Px(compact ? 4f : 5f), this.theme.Accent.U32(), 16);
+            drawList.AddCircleFilled(pos + new Vector2(dotInset, dotInset), Ui.Px(compact ? 4f : 5f), this.theme.Secondary.Base.U32(), 16);
 
         // Compact trades per-tile detail for density: no intent badge, and a single name line. The
         // online dot already conveys "now", and the world/intent live on the expanded view and profile.

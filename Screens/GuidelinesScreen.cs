@@ -133,7 +133,7 @@ internal sealed class GuidelinesScreen : IScreen
 
         using (this.fonts.Caption.Push())
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, this.theme.Accent))
+            using (ImRaii.PushColor(ImGuiCol.Text, this.theme.Secondary.Text))
                 ImGui.TextUnformatted("•");
             ImGui.SameLine(0f, 0f);
             ImGui.SetCursorPosX(startX + indent);

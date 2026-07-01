@@ -105,11 +105,11 @@ internal sealed class FavoritesScreen : IScreen
         }
 
         if (profile.Online)
-            drawList.AddCircleFilled(pos + new Vector2(Ui.Px(12f), Ui.Px(12f)), Ui.Px(5f), this.theme.Accent.U32(), 16);
+            drawList.AddCircleFilled(pos + new Vector2(Ui.Px(12f), Ui.Px(12f)), Ui.Px(5f), this.theme.Secondary.Base.U32(), 16);
 
         var star = FontAwesomeIcon.Star.ToIconString();
         var starSize = Ui.Measure(this.fonts.Icon, star);
-        Ui.TextAt(drawList, this.fonts.Icon, pos + new Vector2(size.X - starSize.X - Ui.Px(8f), Ui.Px(8f)), this.theme.Accent.U32(), star);
+        Ui.TextAt(drawList, this.fonts.Icon, pos + new Vector2(size.X - starSize.X - Ui.Px(8f), Ui.Px(8f)), this.theme.Secondary.Base.U32(), star);
 
         var scrimHeight = Ui.Px(42f);
         var scrimTop = pos + new Vector2(0f, size.Y - scrimHeight);

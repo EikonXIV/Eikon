@@ -356,7 +356,7 @@ internal sealed class ChatScreen : IScreen
 
         // Presence dot on the avatar: accent when online, muted when offline.
         var dot = avatarCenter + new Vector2(radius - Ui.Px(3f), radius - Ui.Px(3f));
-        drawList.AddCircleFilled(dot, Ui.Px(4.5f), (online ? this.theme.Accent : Palette.TextMuted).U32(), 12);
+        drawList.AddCircleFilled(dot, Ui.Px(4.5f), (online ? this.theme.Secondary.Base : Palette.TextMuted).U32(), 12);
         drawList.AddCircle(dot, Ui.Px(4.5f), Palette.Bg.U32(), 12, Ui.Px(1.5f));
 
         var nameX = avatarCenter.X + radius + Ui.Px(10f);
@@ -406,7 +406,7 @@ internal sealed class ChatScreen : IScreen
         {
             note = "Encrypted - identity verified";
             glyphIcon = FontAwesomeIcon.CheckCircle;
-            color = this.theme.Accent.U32();
+            color = this.theme.Secondary.Text.U32();
         }
         else
         {
@@ -561,8 +561,8 @@ internal sealed class ChatScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var x = pos.X + ((width - total) * 0.5f);
         var drawList = ImGui.GetWindowDrawList();
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(x, pos.Y), this.theme.Accent.U32(), glyph);
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(x + glyphSize.X + Ui.Px(7f), pos.Y + ((glyphSize.Y - labelSize.Y) * 0.5f)), this.theme.Accent.U32(), label);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(x, pos.Y), this.theme.Secondary.Base.U32(), glyph);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(x + glyphSize.X + Ui.Px(7f), pos.Y + ((glyphSize.Y - labelSize.Y) * 0.5f)), this.theme.Secondary.Base.U32(), label);
         ImGui.Dummy(new Vector2(width, glyphSize.Y));
     }
 

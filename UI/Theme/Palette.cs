@@ -43,6 +43,32 @@ internal static class Palette
 
     public static float Luminance(Vector4 c) => (0.299f * c.X) + (0.587f * c.Y) + (0.114f * c.Z);
 
+    // Marks (dots, 1px strokes, small glyphs) drawn straight on the dark Bg need a minimum contrast
+    // to stay visible. A dark, saturated flag hue (e.g. Bi blue, Ace purple) fails that against the
+    // tinted dark background, so we blend it toward white just until it clears the floor. The twelve
+    // solid-accent hues already clear it, so they return unchanged (t == 0) and stay pixel-identical.
+    // Call after Retint — it reads the freshly tinted Bg.
+    private const float MarkContrastFloor = 3.0f;
+
+    public static Vector4 LiftForDark(Vector4 hue)
+    {
+        for (var t = 0f; t <= 1f; t += 0.1f)
+        {
+            var lifted = Lerp(hue, White, t);
+            if (Contrast(Luminance(lifted), Luminance(Bg)) >= MarkContrastFloor)
+                return lifted;
+        }
+
+        return White;
+    }
+
+    private static float Contrast(float l1, float l2)
+    {
+        var hi = MathF.Max(l1, l2);
+        var lo = MathF.Min(l1, l2);
+        return (hi + 0.05f) / (lo + 0.05f);
+    }
+
     // Re-tint the themeable backgrounds toward the active accent. Each surface blends toward a
     // progressively brighter dark shade of the accent so depth is preserved, but everything stays
     // dark (we tint toward a darkened accent, never the bright token) so light text keeps its contrast.

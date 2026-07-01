@@ -97,9 +97,20 @@ internal sealed class MainWindow : Window, IDisposable
         var avail = ImGui.GetContentRegionAvail();
         var headerHeight = Ui.Px(46f);
         var navHeight = Ui.Px(56f);
-        var bodyHeight = avail.Y - headerHeight - navHeight;
+        var stripes = this.theme.Stripes;
+        var barHeight = stripes.Count > 0 ? Ui.Px(4f) : 0f;
+        var bodyHeight = avail.Y - headerHeight - barHeight - navHeight;
 
         this.DrawHeader(headerHeight, avail.X);
+
+        // A flag theme paints its full stripe set as a thin band under the header (chrome screens only,
+        // which is exactly where this method runs). Solid themes expose no stripes, so no bar shows and
+        // the body keeps its original height.
+        if (barHeight > 0f)
+        {
+            Ui.FlagBar(ImGui.GetWindowDrawList(), ImGui.GetCursorScreenPos(), avail.X, stripes, barHeight);
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + barHeight);
+        }
 
         using (var body = ImRaii.Child("body", new Vector2(avail.X, bodyHeight)))
         {
