@@ -27,6 +27,7 @@ internal sealed class AlbumService : IDisposable
     private readonly HashSet<Guid> loadingPeers = new();
     private bool mineLoading;
     private bool requestsLoading;
+    private bool requestsLoaded;
 
     public AlbumService(IApiClient api, AuthService auth, IPluginLog log)
     {
@@ -58,6 +59,15 @@ internal sealed class AlbumService : IDisposable
         }, "Listing albums failed.", () => this.mineLoading = false);
     }
 
+    // Load the incoming requests once (for the manager badge and the requests screen). Refreshed
+    // explicitly after an approve or deny, not polled every frame.
+    public void EnsureRequests()
+    {
+        if (this.requestsLoaded || this.requestsLoading)
+            return;
+        this.ReloadRequests();
+    }
+
     public void ReloadRequests()
     {
         if (this.requestsLoading)
@@ -66,6 +76,7 @@ internal sealed class AlbumService : IDisposable
         this.Fire(async token =>
         {
             this.Requests = await this.api.ListAlbumRequestsAsync(token, CancellationToken.None);
+            this.requestsLoaded = true;
         }, "Listing album requests failed.", () => this.requestsLoading = false);
     }
 
