@@ -409,7 +409,7 @@ internal sealed class OnboardingScreen : IScreen
         Interests = new List<string>(),
         NsfwEnabled = this.nsfwEnabled,
         AfterDark = this.nsfwEnabled
-            ? new SaveProfileRequestAfterDark
+            ? new AfterDarkDto
             {
                 Position = ProfileMapper.Position(this.position),
                 Role = ProfileMapper.Role(this.role),

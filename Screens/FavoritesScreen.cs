@@ -80,7 +80,7 @@ internal sealed class FavoritesScreen : IScreen
         }
     }
 
-    private bool DrawTile(FavoritesResponseProfile profile, Vector2 size)
+    private bool DrawTile(BasicProfileDto profile, Vector2 size)
     {
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##fav_" + profile.UserId, size);

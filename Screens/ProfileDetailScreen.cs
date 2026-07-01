@@ -305,7 +305,7 @@ internal sealed class ProfileDetailScreen : IScreen
         ImGui.Dummy(new Vector2(0f, nameSize.Y));
     }
 
-    private void DrawAfterDark(float contentWidth, ProfileDetailDtoAfterDark ad)
+    private void DrawAfterDark(float contentWidth, AfterDarkDto ad)
     {
         using (ImRaii.PushColor(ImGuiCol.ChildBg, Palette.WithAlpha(this.theme.Accent, 0.06f)))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.WithAlpha(this.theme.Accent, 0.28f)))

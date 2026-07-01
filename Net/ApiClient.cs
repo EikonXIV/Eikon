@@ -17,7 +17,7 @@ internal interface IApiClient
 
     Task<LoginPollResponse> LoginPollAsync(string txnId, string pollSecret, CancellationToken ct);
 
-    Task<Tokens> RefreshAsync(string refreshToken, CancellationToken ct);
+    Task<SessionTokens> RefreshAsync(string refreshToken, CancellationToken ct);
 
     Task<VerifyStartResponse> VerifyStartAsync(string accessToken, CancellationToken ct);
 
@@ -49,7 +49,7 @@ internal interface IApiClient
 
     Task<(string Ed25519Pub, string X25519Pub, string X25519Sig)> GetIdentityAsync(string accessToken, string userId, CancellationToken ct);
 
-    Task<Photo> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct);
+    Task<PhotoDto> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct);
 
     Task<List<PhotoDto>> ListPhotosAsync(string accessToken, CancellationToken ct);
 
@@ -75,11 +75,11 @@ internal interface IApiClient
 
     Task FavoriteAsync(string accessToken, Guid targetId, bool on, CancellationToken ct);
 
-    Task<List<Conversation>> GetConversationsAsync(string accessToken, CancellationToken ct);
+    Task<List<ConversationSummaryDto>> GetConversationsAsync(string accessToken, CancellationToken ct);
 
     Task MarkConversationReadAsync(string accessToken, Guid peerId, CancellationToken ct);
 
-    Task<List<FavoritesResponseProfile>> GetFavoritesAsync(string accessToken, CancellationToken ct);
+    Task<List<BasicProfileDto>> GetFavoritesAsync(string accessToken, CancellationToken ct);
 }
 
 internal sealed class ApiClient : IApiClient, IDisposable
@@ -108,11 +108,11 @@ internal sealed class ApiClient : IApiClient, IDisposable
         return LoginPollResponse.FromJson(json);
     }
 
-    public async Task<Tokens> RefreshAsync(string refreshToken, CancellationToken ct)
+    public async Task<SessionTokens> RefreshAsync(string refreshToken, CancellationToken ct)
     {
         var body = JsonSerializer.Serialize(new { refreshToken });
         var json = await this.PostAsync("/auth/refresh", body, ct);
-        return JsonSerializer.Deserialize<Tokens>(json, Converter.Settings)
+        return JsonSerializer.Deserialize<SessionTokens>(json, Converter.Settings)
             ?? throw new ApiException("Empty refresh response.");
     }
 
@@ -254,7 +254,7 @@ internal sealed class ApiClient : IApiClient, IDisposable
             root.GetProperty("x25519Sig").GetString() ?? string.Empty);
     }
 
-    public async Task<Photo> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct)
+    public async Task<PhotoDto> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct)
     {
         var json = JsonSerializer.Serialize(new { imageBase64 = Convert.ToBase64String(image), contentType });
         var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/photos", json, accessToken, ct);
@@ -348,11 +348,11 @@ internal sealed class ApiClient : IApiClient, IDisposable
         Ensure(status, body, "/api/favorite");
     }
 
-    public async Task<List<Conversation>> GetConversationsAsync(string accessToken, CancellationToken ct)
+    public async Task<List<ConversationSummaryDto>> GetConversationsAsync(string accessToken, CancellationToken ct)
     {
         var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/conversations", null, accessToken, ct);
         Ensure(status, body, "/api/conversations");
-        return ConversationsResponse.FromJson(body).Conversations ?? new List<Conversation>();
+        return ConversationsResponse.FromJson(body).Conversations ?? new List<ConversationSummaryDto>();
     }
 
     public async Task MarkConversationReadAsync(string accessToken, Guid peerId, CancellationToken ct)
@@ -361,11 +361,11 @@ internal sealed class ApiClient : IApiClient, IDisposable
         Ensure(status, body, "/api/conversations/read");
     }
 
-    public async Task<List<FavoritesResponseProfile>> GetFavoritesAsync(string accessToken, CancellationToken ct)
+    public async Task<List<BasicProfileDto>> GetFavoritesAsync(string accessToken, CancellationToken ct)
     {
         var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/favorites", null, accessToken, ct);
         Ensure(status, body, "/api/favorites");
-        return FavoritesResponse.FromJson(body).Profiles ?? new List<FavoritesResponseProfile>();
+        return FavoritesResponse.FromJson(body).Profiles ?? new List<BasicProfileDto>();
     }
 
     private static void Ensure(int status, string body, string path)

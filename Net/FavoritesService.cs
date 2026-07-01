@@ -21,7 +21,7 @@ internal sealed class FavoritesService
 
     public bool Loaded { get; private set; }
 
-    public IReadOnlyList<FavoritesResponseProfile> Profiles { get; private set; } = new List<FavoritesResponseProfile>();
+    public IReadOnlyList<BasicProfileDto> Profiles { get; private set; } = new List<BasicProfileDto>();
 
     public void EnsureLoaded()
     {

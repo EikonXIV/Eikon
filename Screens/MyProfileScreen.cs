@@ -545,7 +545,7 @@ internal sealed class MyProfileScreen : IScreen
         Interests = Options.Interests.Where((_, i) => this.interests[i]).ToList(),
         NsfwEnabled = this.nsfwEnabled,
         AfterDark = this.nsfwEnabled
-            ? new SaveProfileRequestAfterDark
+            ? new AfterDarkDto
             {
                 Position = ProfileMapper.Position(this.position),
                 Role = ProfileMapper.Role(this.roleIndex),
