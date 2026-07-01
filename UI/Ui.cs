@@ -57,6 +57,19 @@ internal static class Ui
         drawList.AddCircleFilled(P(12f, 12f), (1.7f / 24f) * box, glow, 12);
     }
 
+    // Filled rectangle with an independent radius per corner, in the order top-left, top-right,
+    // bottom-right, bottom-left. ImGui's AddRectFilled only takes one radius; the chat bubbles need a
+    // small "tail tuck" on their sender-side bottom corner (DESIGN/SCREENS: 14/14/14/4 and 14/14/4/14),
+    // so this builds the outline as a convex path and fills it. A zero radius yields a sharp corner.
+    public static void FillRectCorners(ImDrawListPtr drawList, Vector2 min, Vector2 max, uint color, float topLeft, float topRight, float bottomRight, float bottomLeft)
+    {
+        drawList.PathArcToFast(new Vector2(min.X + topLeft, min.Y + topLeft), topLeft, 6, 9);
+        drawList.PathArcToFast(new Vector2(max.X - topRight, min.Y + topRight), topRight, 9, 12);
+        drawList.PathArcToFast(new Vector2(max.X - bottomRight, max.Y - bottomRight), bottomRight, 0, 3);
+        drawList.PathArcToFast(new Vector2(min.X + bottomLeft, max.Y - bottomLeft), bottomLeft, 3, 6);
+        drawList.PathFillConvex(color);
+    }
+
     // Cover-crop UVs: fill a target aspect (width/height) from an image, with optional zoom and a
     // vertical pan. Shared by the photo tiles and the profile hero.
     public static (Vector2 Min, Vector2 Max) CoverUv(float imageWidth, float imageHeight, float targetAspect, float zoom = 1f, float offsetY = 0.5f)

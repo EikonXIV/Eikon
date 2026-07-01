@@ -578,7 +578,17 @@ internal sealed class ChatScreen : IScreen
         var drawList = ImGui.GetWindowDrawList();
         var background = (message.Mine ? this.theme.AccentDeep : Palette.Surface2).U32();
         var foreground = (message.Mine ? this.theme.OnAccent : Palette.TextPrimary).U32();
-        drawList.AddRectFilled(pos, pos + new Vector2(bubbleWidth, bubbleHeight), background, Ui.Px(14f));
+
+        // Tail tuck: the bubble's bottom corner on its own side is tightened (14 -> 4) so it reads as
+        // "coming from" that side. Mine (right) tucks bottom-right; the peer's (left) tucks bottom-left.
+        var big = Ui.Px(14f);
+        var tuck = Ui.Px(4f);
+        var max = pos + new Vector2(bubbleWidth, bubbleHeight);
+        if (message.Mine)
+            Ui.FillRectCorners(drawList, pos, max, background, big, big, tuck, big);
+        else
+            Ui.FillRectCorners(drawList, pos, max, background, big, big, big, tuck);
+
         Ui.TextWrappedAt(drawList, this.fonts.Body, pos + new Vector2(padX, padY), foreground, message.Text, wrap);
 
         var extra = this.DrawBubbleTime(message, showTime, leftX, top + bubbleHeight, contentWidth);
@@ -779,34 +789,48 @@ internal sealed class ChatScreen : IScreen
 
     private void DrawComposer(float pad, Vector2 avail, float composerHeight, float fieldHeight, Guid peer)
     {
-        var iconRow = Ui.Px(38f);
         var sendDiameter = Ui.Px(38f);
+        var attachBox = Ui.Px(38f);
         var gap = Ui.Px(8f);
 
         var attachGlyph = FontAwesomeIcon.Image.ToIconString();
         var attachSize = Ui.Measure(this.fonts.Icon, attachGlyph);
-        var fieldWidth = (avail.X - (pad * 2f)) - attachSize.X - gap - sendDiameter - gap;
+        var fieldWidth = (avail.X - (pad * 2f)) - attachBox - gap - sendDiameter - gap;
 
         var fieldTop = avail.Y - composerHeight + Ui.Px(9f);
         var fieldBottom = fieldTop + fieldHeight;
         var drawList = ImGui.GetWindowDrawList();
 
-        // Attach + send sit on the field's bottom line, so they stay put as it grows upward.
-        ImGui.SetCursorPos(new Vector2(pad, fieldBottom - iconRow));
-        var attachPos = ImGui.GetCursorScreenPos();
-        if (ImGui.InvisibleButton("##chat_attach", new Vector2(attachSize.X, iconRow)))
-            this.media.PickImage(p => { this.pendingImagePath = p; this.pendingNsfw = false; this.openImagePopup = true; });
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(attachPos.X, attachPos.Y + ((iconRow - attachSize.Y) * 0.5f)), Palette.TextSecondary.U32(), attachGlyph);
+        // Hairline across the top of the composer band, mirroring the header's divider, so the input
+        // reads as anchored chrome rather than floating over the scrolling thread. It rides up with the
+        // band as the field grows.
+        ImGui.SetCursorPos(new Vector2(0f, avail.Y - composerHeight));
+        var barTop = ImGui.GetCursorScreenPos();
+        drawList.AddLine(barTop, new Vector2(barTop.X + avail.X, barTop.Y), Palette.Border.U32(), 1f);
 
-        ImGui.SetCursorPos(new Vector2(pad + attachSize.X + gap, fieldTop));
+        // Attach + send sit on the field's bottom line, so they stay put as it grows upward. Both carry a
+        // header-style hover state so the two most-used controls feel as live as the header chrome.
+        ImGui.SetCursorPos(new Vector2(pad, fieldBottom - attachBox));
+        var attachPos = ImGui.GetCursorScreenPos();
+        var attachClicked = ImGui.InvisibleButton("##chat_attach", new Vector2(attachBox, attachBox));
+        var attachHover = ImGui.IsItemHovered();
+        if (attachClicked)
+            this.media.PickImage(p => { this.pendingImagePath = p; this.pendingNsfw = false; this.openImagePopup = true; });
+        if (attachHover)
+            drawList.AddRectFilled(attachPos, attachPos + new Vector2(attachBox, attachBox), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(10f));
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(attachPos.X + ((attachBox - attachSize.X) * 0.5f), attachPos.Y + ((attachBox - attachSize.Y) * 0.5f)), (attachHover ? Palette.TextPrimary : Palette.TextSecondary).U32(), attachGlyph);
+
+        ImGui.SetCursorPos(new Vector2(pad + attachBox + gap, fieldTop));
         var enterSend = this.kit.ComposerField("##chat_draft", ref this.draft, "Message", fieldWidth, fieldHeight, this.refocusComposer);
         this.refocusComposer = false;
 
         ImGui.SetCursorPos(new Vector2(avail.X - pad - sendDiameter, fieldBottom - sendDiameter));
         var sendPos = ImGui.GetCursorScreenPos();
         var clickSend = ImGui.InvisibleButton("##chat_send", new Vector2(sendDiameter, sendDiameter));
+        var sendHover = ImGui.IsItemHovered();
         var text = this.draft.Trim();
-        if (text.Length > 0 && (enterSend || clickSend))
+        var actionable = text.Length > 0;
+        if (actionable && (enterSend || clickSend))
         {
             this.chat.Send(peer, text);
             this.draft = string.Empty;
@@ -819,11 +843,15 @@ internal sealed class ChatScreen : IScreen
             this.refocusComposer = true;
         }
 
+        // Send reflects whether there is anything to send: a muted disc when the field is empty (tapping
+        // it does nothing), the solid accent once there is text, brightening further on hover.
         var sendCenter = sendPos + new Vector2(sendDiameter * 0.5f, sendDiameter * 0.5f);
-        drawList.AddCircleFilled(sendCenter, sendDiameter * 0.5f, this.theme.AccentDeep.U32(), 24);
+        var sendFill = actionable ? (sendHover ? this.theme.Accent : this.theme.AccentDeep) : Palette.Surface2;
+        drawList.AddCircleFilled(sendCenter, sendDiameter * 0.5f, sendFill.U32(), 24);
         var sendGlyph = FontAwesomeIcon.PaperPlane.ToIconString();
         var sendSize = Ui.Measure(this.fonts.Icon, sendGlyph);
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(sendCenter.X - (sendSize.X * 0.5f), sendCenter.Y - (sendSize.Y * 0.5f)), this.theme.OnAccent.U32(), sendGlyph);
+        var sendGlyphColor = actionable ? this.theme.OnAccent : Palette.TextMuted;
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(sendCenter.X - (sendSize.X * 0.5f), sendCenter.Y - (sendSize.Y * 0.5f)), sendGlyphColor.U32(), sendGlyph);
     }
 
     private void DrawImagePopup(Guid peer)

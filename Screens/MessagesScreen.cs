@@ -139,7 +139,13 @@ internal sealed class MessagesScreen : IScreen
         var rowHeight = Ui.Px(60f);
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##conv_" + conversation.UserId, new Vector2(width, rowHeight));
+        var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
+
+        // Faint rounded fill on hover, painted behind the avatar and text, so the list reads as tappable
+        // rows to match the hover feedback elsewhere (header controls, the chat peer tap).
+        if (hovered)
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowHeight), Palette.WithAlpha(Palette.White, 0.045f).U32(), Ui.Px(12f));
 
         var radius = Ui.Px(23f);
         var avatarCenter = new Vector2(pos.X + radius, pos.Y + (rowHeight * 0.5f));
