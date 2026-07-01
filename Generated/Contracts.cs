@@ -401,6 +401,10 @@ namespace Eikon.Contracts
     {
         [JsonPropertyName("granteeId")]
         public Guid GranteeId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("source")]
+        public AlbumGrantSourceEnum? Source { get; set; }
     }
 
     public partial class JoinWaitlistRequest
