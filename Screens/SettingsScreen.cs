@@ -189,7 +189,7 @@ internal sealed class SettingsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         if (this.NavRow("##s_guidelines", "Community Guidelines", string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.Guidelines);
-        this.NavRow("##s_version", "Version", "0.1.0", Palette.TextSecondary, false, contentWidth);
+        this.NavRow("##s_version", "Version", "1.0.0", Palette.TextSecondary, false, contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
     }

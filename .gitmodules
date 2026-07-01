@@ -1,3 +1,4 @@
 [submodule "external/OtterGui"]
 	path = external/OtterGui
 	url = https://github.com/Ottermandias/OtterGui.git
+	ignore = untracked
