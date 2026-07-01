@@ -22,6 +22,7 @@ internal sealed class AlbumDetailScreen : IScreen
     private readonly Selection selection;
     private readonly Lightbox lightbox;
     private readonly Media media;
+    private readonly WindowController windowController;
 
     private bool openOverflow;
     private Vector2 overflowPos;
@@ -34,7 +35,7 @@ internal sealed class AlbumDetailScreen : IScreen
     private string renameText = string.Empty;
     private bool openDelete;
 
-    public AlbumDetailScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, Lightbox lightbox, Media media)
+    public AlbumDetailScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, Lightbox lightbox, Media media, WindowController windowController)
     {
         this.router = router;
         this.theme = theme;
@@ -44,6 +45,7 @@ internal sealed class AlbumDetailScreen : IScreen
         this.selection = selection;
         this.lightbox = lightbox;
         this.media = media;
+        this.windowController = windowController;
     }
 
     public Screen Id => Screen.AlbumDetail;
@@ -116,17 +118,22 @@ internal sealed class AlbumDetailScreen : IScreen
         var titleSize = Ui.Measure(this.fonts.Body, name);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), name);
 
+        // Right side, corner inward: minimize (always, collapses to the orb), a hairline, then the
+        // overflow menu once the album has loaded.
+        var btn = Ui.Px(30f);
+        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
+        if (this.kit.HeaderIconButton(drawList, "##ad_min", FontAwesomeIcon.Minus.ToIconString(), minTL, btn))
+            this.windowController.Minimize();
         if (!loading)
         {
-            var dots = FontAwesomeIcon.EllipsisH.ToIconString();
-            var ds = Ui.Measure(this.fonts.Icon, dots);
-            ImGui.SetCursorScreenPos(new Vector2(origin.X + fullWidth - pad - ds.X, midY - (ds.Y * 0.5f)));
-            if (ImGui.InvisibleButton("##ad_overflow", ds))
+            var divX = minTL.X - Ui.Px(8f);
+            drawList.AddLine(new Vector2(divX, midY - Ui.Px(9f)), new Vector2(divX, midY + Ui.Px(9f)), Palette.Border.U32(), 1f);
+            var dotsTL = new Vector2(divX - Ui.Px(8f) - btn, midY - (btn * 0.5f));
+            if (this.kit.HeaderIconButton(drawList, "##ad_overflow", FontAwesomeIcon.EllipsisH.ToIconString(), dotsTL, btn))
             {
-                this.overflowPos = new Vector2(ImGui.GetItemRectMax().X, ImGui.GetItemRectMax().Y + Ui.Px(4f));
+                this.overflowPos = new Vector2(dotsTL.X + btn, dotsTL.Y + btn + Ui.Px(4f));
                 this.openOverflow = true;
             }
-            Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), dots);
         }
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
@@ -220,10 +227,11 @@ internal sealed class AlbumDetailScreen : IScreen
         if (isCover)
         {
             var star = FontAwesomeIcon.Star.ToIconString();
-            var center = new Vector2(pos.X + size.X - Ui.Px(14f), pos.Y + Ui.Px(14f));
-            drawList.AddCircleFilled(center, Ui.Px(9f), Palette.WithAlpha(Palette.Bg, 0.6f).U32(), 12);
-            var ss = Ui.Measure(this.fonts.Caption, star);
-            Ui.TextAt(drawList, this.fonts.Caption, center - (ss * 0.5f), this.theme.AccentText.U32(), star);
+            var ss = Ui.Measure(this.fonts.Icon, star);
+            var radius = (MathF.Max(ss.X, ss.Y) * 0.5f) + Ui.Px(4f);
+            var center = new Vector2(pos.X + size.X - radius - Ui.Px(5f), pos.Y + radius + Ui.Px(5f));
+            drawList.AddCircleFilled(center, radius, Palette.WithAlpha(Palette.Bg, 0.66f).U32(), 16);
+            Ui.TextAt(drawList, this.fonts.Icon, center - (ss * 0.5f), this.theme.AccentText.U32(), star);
         }
 
         if (clicked)

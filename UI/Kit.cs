@@ -53,6 +53,22 @@ internal sealed class Kit
             ImGui.TextUnformatted(text);
     }
 
+    // A square header icon button matching the main window's title-bar chrome: a faint hover fill and a
+    // muted glyph that brightens on hover. `glyph` is a FontAwesome icon string. Positioned in screen
+    // space at topLeft, so a screen drawing its own header (minimize, overflow) can place it precisely.
+    public bool HeaderIconButton(ImDrawListPtr drawList, string id, string glyph, Vector2 topLeft, float size)
+    {
+        ImGui.SetCursorScreenPos(topLeft);
+        var clicked = ImGui.InvisibleButton(id, new Vector2(size, size));
+        var hovered = ImGui.IsItemHovered();
+        var min = ImGui.GetItemRectMin();
+        if (hovered)
+            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
+        var gs = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(min.X + ((size - gs.X) * 0.5f), min.Y + ((size - gs.Y) * 0.5f)), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
+        return clicked;
+    }
+
     public bool PrimaryButton(string id, string label, float width = 0f)
         => this.FilledButton(id, label, width, this.theme.AccentDeep, this.theme.Accent, this.theme.OnAccent);
 

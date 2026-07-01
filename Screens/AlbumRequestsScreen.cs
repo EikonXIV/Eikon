@@ -16,14 +16,16 @@ internal sealed class AlbumRequestsScreen : IScreen
     private readonly Kit kit;
     private readonly UiFonts fonts;
     private readonly AlbumService albums;
+    private readonly WindowController windowController;
 
-    public AlbumRequestsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums)
+    public AlbumRequestsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, WindowController windowController)
     {
         this.router = router;
         this.theme = theme;
         this.kit = kit;
         this.fonts = fonts;
         this.albums = albums;
+        this.windowController = windowController;
     }
 
     public Screen Id => Screen.AlbumRequests;
@@ -82,6 +84,11 @@ internal sealed class AlbumRequestsScreen : IScreen
         const string title = "Access requests";
         var titleSize = Ui.Measure(this.fonts.Body, title);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), title);
+
+        var btn = Ui.Px(30f);
+        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
+        if (this.kit.HeaderIconButton(drawList, "##areq_min", FontAwesomeIcon.Minus.ToIconString(), minTL, btn))
+            this.windowController.Minimize();
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
     }

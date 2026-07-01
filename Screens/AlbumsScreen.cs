@@ -18,12 +18,13 @@ internal sealed class AlbumsScreen : IScreen
     private readonly UiFonts fonts;
     private readonly AlbumService albums;
     private readonly Selection selection;
+    private readonly WindowController windowController;
 
     private bool openNew;
     private string newName = string.Empty;
     private int newVisibility;   // 0 = private, 1 = public
 
-    public AlbumsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection)
+    public AlbumsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, WindowController windowController)
     {
         this.router = router;
         this.theme = theme;
@@ -31,6 +32,7 @@ internal sealed class AlbumsScreen : IScreen
         this.fonts = fonts;
         this.albums = albums;
         this.selection = selection;
+        this.windowController = windowController;
     }
 
     public Screen Id => Screen.Albums;
@@ -67,7 +69,7 @@ internal sealed class AlbumsScreen : IScreen
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
                     this.kit.EmptyState(FontAwesomeIcon.LockOpen.ToIconString(), "No albums yet",
-                        "Create private collections and unlock them for people you choose.", contentWidth);
+                        "Create collections to unlock for people you choose, or make public on your profile.", contentWidth);
                     var w = Ui.Px(160f);
                     ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((contentWidth - w) * 0.5f));
                     if (this.kit.PrimaryButton("##albums_create", "Create album", w))
@@ -104,12 +106,17 @@ internal sealed class AlbumsScreen : IScreen
         var titleSize = Ui.Measure(this.fonts.Body, title);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), title);
 
-        var plus = FontAwesomeIcon.Plus.ToIconString();
-        var plusSize = Ui.Measure(this.fonts.Icon, plus);
-        ImGui.SetCursorScreenPos(new Vector2(origin.X + fullWidth - pad - plusSize.X, midY - (plusSize.Y * 0.5f)));
-        if (ImGui.InvisibleButton("##albums_new", plusSize))
+        // Right side, corner inward: minimize (collapses to the orb, same as the main title bar), a
+        // hairline, then new-album, so the window control reads apart from the screen action.
+        var btn = Ui.Px(30f);
+        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
+        if (this.kit.HeaderIconButton(drawList, "##albums_min", FontAwesomeIcon.Minus.ToIconString(), minTL, btn))
+            this.windowController.Minimize();
+        var divX = minTL.X - Ui.Px(8f);
+        drawList.AddLine(new Vector2(divX, midY - Ui.Px(9f)), new Vector2(divX, midY + Ui.Px(9f)), Palette.Border.U32(), 1f);
+        var plusTL = new Vector2(divX - Ui.Px(8f) - btn, midY - (btn * 0.5f));
+        if (this.kit.HeaderIconButton(drawList, "##albums_new", FontAwesomeIcon.Plus.ToIconString(), plusTL, btn))
             this.OpenNew();
-        Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), plus);
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
     }
@@ -194,11 +201,12 @@ internal sealed class AlbumsScreen : IScreen
         // Private albums carry a lock chip on the cover.
         if (album.Visibility == AlbumVisibilityEnum.Private)
         {
-            var chip = new Vector2(pos.X + width - Ui.Px(29f), pos.Y + Ui.Px(7f));
-            drawList.AddCircleFilled(chip + new Vector2(Ui.Px(11f), Ui.Px(11f)), Ui.Px(11f), Palette.WithAlpha(Palette.Bg, 0.72f).U32(), 16);
             var lockG = FontAwesomeIcon.Lock.ToIconString();
-            var ls = Ui.Measure(this.fonts.Caption, lockG);
-            Ui.TextAt(drawList, this.fonts.Caption, chip + new Vector2(Ui.Px(11f) - (ls.X * 0.5f), Ui.Px(11f) - (ls.Y * 0.5f)), Palette.TextSecondary.U32(), lockG);
+            var ls = Ui.Measure(this.fonts.Icon, lockG);
+            var radius = (MathF.Max(ls.X, ls.Y) * 0.5f) + Ui.Px(4f);
+            var center = new Vector2(pos.X + width - radius - Ui.Px(6f), pos.Y + radius + Ui.Px(6f));
+            drawList.AddCircleFilled(center, radius, Palette.WithAlpha(Palette.Bg, 0.72f).U32(), 16);
+            Ui.TextAt(drawList, this.fonts.Icon, center - (ls * 0.5f), Palette.TextSecondary.U32(), lockG);
         }
 
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(11f), pos.Y + coverH + Ui.Px(8f)), Palette.TextPrimary.U32(), this.Fit(album.Name, width - Ui.Px(22f)));

@@ -124,7 +124,7 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.photos.DrawGrid(contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.SettingRow("##r_albums", "Private albums", string.Empty, contentWidth)) this.router.Navigate(Screen.Albums);
+        if (this.SettingRow("##r_albums", "Albums", string.Empty, contentWidth)) this.router.Navigate(Screen.Albums);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         this.kit.SectionLabel("About you");
