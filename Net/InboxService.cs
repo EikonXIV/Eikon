@@ -30,7 +30,7 @@ internal sealed class InboxService
 
     public bool Loaded { get; private set; }
 
-    public IReadOnlyList<Conversation> Conversations { get; private set; } = new List<Conversation>();
+    public IReadOnlyList<ConversationSummaryDto> Conversations { get; private set; } = new List<ConversationSummaryDto>();
 
     public void EnsureLoaded()
     {

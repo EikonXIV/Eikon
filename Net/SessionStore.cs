@@ -89,7 +89,7 @@ internal sealed class SessionStore
         }
     }
 
-    public void Set(Tokens tokens)
+    public void Set(SessionTokens tokens)
     {
         this.AccessToken = tokens.AccessToken;
         this.AccessExpiresAt = tokens.AccessExpiresAt;

@@ -70,7 +70,7 @@ internal sealed class NotificationWindow : Window
     {
         var height = Ui.Px(56f);
         var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton("##ntf_" + toast.Peer, new Vector2(width, height));
+        var clicked = ImGui.InvisibleButton($"##ntf_{toast.Peer}_{(int)toast.Kind}_{toast.AlbumId}", new Vector2(width, height));
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         var rounding = Ui.Px(12f);
@@ -112,11 +112,11 @@ internal sealed class NotificationWindow : Window
         var textX = pos.X + Ui.Px(13f) + (radius * 2f) + Ui.Px(11f);
         var name = this.Fit(toast.Name, (pos.X + width) - textX - Ui.Px(12f));
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(11f)), Palette.TextPrimary.U32(), name);
-        var sub = toast.Count > 1 ? $"{toast.Count} new messages" : "New message";
+        var sub = toast.Subtitle ?? (toast.Count > 1 ? $"{toast.Count} new messages" : "New message");
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(31f)), Palette.TextSecondary.U32(), sub);
 
         if (clicked)
-            this.notifications.Open(toast.Peer);
+            this.notifications.Open(toast);
     }
 
     private string Fit(string text, float maxWidth)

@@ -1,5 +1,6 @@
 using Dalamud.Interface;
 using Eikon.Config;
+using Eikon.Contracts;
 using Eikon.Navigation;
 using Eikon.Net;
 using Eikon.Services;
@@ -25,6 +26,7 @@ internal sealed class ChatScreen : IScreen
     private readonly Lightbox lightbox;
     private readonly InboxService inbox;
     private readonly PhotoService photoSvc;
+    private readonly AlbumService albums;
     private readonly Configuration config;
     private readonly WindowController windowController;
 
@@ -43,8 +45,10 @@ internal sealed class ChatScreen : IScreen
     private bool pendingNsfw;
     private bool openImagePopup;
     private readonly HashSet<string> revealed = new();   // NSFW image ids the viewer chose to reveal
+    private Guid threadPeer;         // the open thread's peer, for resolving album covers in received cards
+    private bool openAlbumPicker;    // "Share an album" was tapped in the overflow menu
 
-    public ChatScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, Configuration config, WindowController windowController)
+    public ChatScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, Configuration config, WindowController windowController)
     {
         this.router = router;
         this.theme = theme;
@@ -59,6 +63,7 @@ internal sealed class ChatScreen : IScreen
         this.lightbox = lightbox;
         this.inbox = inbox;
         this.photoSvc = photoSvc;
+        this.albums = albums;
         this.config = config;
         this.windowController = windowController;
     }
@@ -77,6 +82,7 @@ internal sealed class ChatScreen : IScreen
         }
 
         this.chat.Start();
+        this.threadPeer = peer.Value;
         var name = this.selection.ProfileDisplayName;
         var thread = this.chat.Thread(peer.Value);
 
@@ -232,6 +238,7 @@ internal sealed class ChatScreen : IScreen
         this.lightbox.Draw();
         this.DrawSafetyNumber(avail.X, name, peer.Value);
         this.DrawImagePopup(peer.Value);
+        this.DrawAlbumPicker(peer.Value, name);
     }
 
     // Per-conversation chat wallpaper (config.ChatBackgrounds; a local file the viewer picked, never
@@ -300,6 +307,11 @@ internal sealed class ChatScreen : IScreen
                     this.selection.ProfileUserId = peer;
                     this.selection.ProfileDisplayName = name;
                     this.router.Navigate(Screen.SharedMedia);
+                },
+                onShareAlbum: () =>
+                {
+                    this.albums.EnsureLoaded();
+                    this.openAlbumPicker = true;
                 });
 
         var radius = Ui.Px(16f);
@@ -562,6 +574,12 @@ internal sealed class ChatScreen : IScreen
             return;
         }
 
+        if (message.IsAlbum)
+        {
+            this.DrawAlbumBubble(message, contentWidth, showTime);
+            return;
+        }
+
         var maxWidth = contentWidth * 0.76f;
         var padX = Ui.Px(11f);
         var padY = Ui.Px(8f);
@@ -667,6 +685,100 @@ internal sealed class ChatScreen : IScreen
         var extra = this.DrawBubbleTime(message, showTime, leftX, top + totalH, contentWidth);
         ImGui.SetCursorScreenPos(new Vector2(leftX, top));
         ImGui.Dummy(new Vector2(contentWidth, totalH + extra));
+    }
+
+    // Album share card. A compact bubble with the album's cover (or a placeholder tile), its name, and
+    // the photo count. Tapping opens it: the peer's copy goes to the read-only viewer, your own copy to
+    // the album's detail. The cover resolves through the grant-checked mint, so a card for an album you
+    // can no longer see falls back to the placeholder tile rather than a broken image.
+    private void DrawAlbumBubble(ChatService.Message message, float contentWidth, bool showTime)
+    {
+        var mine = message.Mine;
+        var width = MathF.Min(contentWidth * 0.74f, Ui.Px(248f));
+        var height = Ui.Px(66f);
+        var pad = Ui.Px(11f);
+
+        var leftX = ImGui.GetCursorScreenPos().X;
+        var top = ImGui.GetCursorScreenPos().Y;
+        var x = mine ? leftX + contentWidth - width : leftX;
+        var pos = new Vector2(x, top);
+        var drawList = ImGui.GetWindowDrawList();
+
+        var id = message.ClientMsgId ?? message.MessageId?.ToString() ?? message.AlbumId?.ToString() ?? "album";
+        ImGui.SetCursorScreenPos(pos);
+        var clicked = ImGui.InvisibleButton("##album_" + id, new Vector2(width, height));
+        ImGui.SetItemAllowOverlap();
+
+        drawList.AddRectFilled(pos, pos + new Vector2(width, height), (mine ? this.theme.AccentDeep : Palette.Surface2).U32(), Ui.Px(14f));
+
+        // Cover tile.
+        var thumb = Ui.Px(44f);
+        var tpos = new Vector2(pos.X + pad, pos.Y + ((height - thumb) * 0.5f));
+        var cover = this.ResolveAlbumCover(message, mine);
+        var tex = (message.AlbumId is { } aid && cover is { } cp) ? this.albums.Texture(aid, cp) : null;
+        if (tex is { Width: > 0, Height: > 0 })
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, 1f);
+            drawList.AddImageRounded(tex.Handle, tpos, tpos + new Vector2(thumb, thumb), uvMin, uvMax, 0xFFFFFFFFu, Ui.Px(9f));
+        }
+        else
+        {
+            drawList.AddRectFilled(tpos, tpos + new Vector2(thumb, thumb), (mine ? Palette.WithAlpha(Palette.White, 0.12f) : Palette.Surface1).U32(), Ui.Px(9f));
+            var glyph = FontAwesomeIcon.LayerGroup.ToIconString();
+            var gs = Ui.Measure(this.fonts.Icon, glyph);
+            Ui.TextAt(drawList, this.fonts.Icon, tpos + (new Vector2(thumb, thumb) * 0.5f) - (gs * 0.5f), (mine ? this.theme.OnAccent : Palette.TextSecondary).U32(), glyph);
+        }
+
+        var textX = tpos.X + thumb + Ui.Px(11f);
+        var kickerColor = (mine ? Palette.WithAlpha(this.theme.OnAccent, 0.72f) : Palette.TextMuted).U32();
+        var nameColor = (mine ? this.theme.OnAccent : Palette.TextPrimary).U32();
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(12f)), kickerColor, mine ? "Shared album" : "Shared an album");
+
+        var albumName = message.AlbumName ?? "Album";
+        var maxTextW = (pos.X + width - pad) - textX;
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(27f)), nameColor, this.Fit(albumName, maxTextW));
+
+        var count = message.AlbumCount == 1 ? "1 photo" : message.AlbumCount + " photos";
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(46f)), kickerColor, mine ? count : count + "  ·  View");
+
+        if (clicked && message.AlbumId is { } target)
+        {
+            this.selection.AlbumId = target;
+            this.selection.AlbumName = albumName;
+            this.selection.AlbumReturn = Screen.Chat;
+            this.router.Navigate(mine ? Screen.AlbumDetail : Screen.AlbumViewer);
+        }
+
+        var extra = this.DrawBubbleTime(message, showTime, leftX, top + height, contentWidth);
+        ImGui.SetCursorScreenPos(new Vector2(leftX, top));
+        ImGui.Dummy(new Vector2(contentWidth, height + extra));
+    }
+
+    // The cover photo id for an album card: from your own album list when the card is yours, otherwise
+    // from the peer's album list (which loads lazily and stays cached). Null until it loads, or when the
+    // album is no longer visible - the card shows the placeholder tile in that case.
+    private Guid? ResolveAlbumCover(ChatService.Message message, bool mine)
+    {
+        if (message.AlbumId is not { } aid)
+            return null;
+        if (mine)
+            return this.albums.Mine.FirstOrDefault(a => a.Id == aid)?.CoverPhotoId;
+        foreach (var pa in this.albums.PeerAlbums(this.threadPeer))
+            if (pa.Id == aid)
+                return pa.CoverPhotoId;
+        return null;
+    }
+
+    private string Fit(string text, float maxWidth)
+    {
+        if (maxWidth <= 0f || Ui.Measure(this.fonts.Body, text).X <= maxWidth)
+            return text;
+        const string ellipsis = "...";
+        var ew = Ui.Measure(this.fonts.Body, ellipsis).X;
+        var n = text.Length;
+        while (n > 0 && Ui.Measure(this.fonts.Body, text[..n]).X + ew > maxWidth)
+            n--;
+        return text[..n].TrimEnd() + ellipsis;
     }
 
     private void DrawReceipt(ChatService.Message message, float contentWidth)
@@ -923,5 +1035,107 @@ internal sealed class ChatScreen : IScreen
 
             ImGui.EndPopup();
         }
+    }
+
+    // "Share an album" picker (from the chat overflow). Lists your albums; picking one grants this peer
+    // access (recorded as shared from chat) and drops a share card into the thread. Private albums unlock
+    // just for them; public ones were already open, so the grant simply records who you shared it with.
+    private void DrawAlbumPicker(Guid peer, string name)
+    {
+        if (this.openAlbumPicker)
+        {
+            this.openAlbumPicker = false;
+            ImGui.OpenPopup("##sharealbum");
+        }
+
+        ImGui.SetNextWindowPos(ImGui.GetWindowPos() + (ImGui.GetWindowSize() * 0.5f), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+        ImGui.SetNextWindowSize(new Vector2(Ui.Px(340f), Ui.Px(460f)));
+        var flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove;
+        var open = true;
+
+        using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1))
+        using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(18f), Ui.Px(18f))))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
+        {
+            if (!ImGui.BeginPopupModal("##sharealbum", ref open, flags))
+                return;
+
+            var width = ImGui.GetContentRegionAvail().X;
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Share an album");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+                ImGui.TextWrapped($"{name} will be able to open the album you pick. A private album unlocks just for them.");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+
+            var mine = this.albums.Mine;
+            using (var list = ImRaii.Child("##album_pick_list", new Vector2(width, Ui.Px(298f))))
+            {
+                if (list.Success)
+                {
+                    if (mine.Count == 0)
+                    {
+                        ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
+                        this.kit.EmptyState(FontAwesomeIcon.LayerGroup.ToIconString(), "No albums yet", "Create an album to share it here.", width);
+                    }
+                    else
+                    {
+                        foreach (var album in mine)
+                        {
+                            if (this.DrawAlbumPickRow(album, width))
+                            {
+                                this.albums.Grant(album.Id, peer, "chat");
+                                this.chat.SendAlbumCard(peer, album.Id, album.Name, (int)album.PhotoCount);
+                                ImGui.CloseCurrentPopup();
+                            }
+                        }
+                    }
+                }
+            }
+
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+            if (this.kit.SecondaryButton("##album_pick_cancel", "Cancel", width))
+                ImGui.CloseCurrentPopup();
+
+            ImGui.EndPopup();
+        }
+    }
+
+    private bool DrawAlbumPickRow(AlbumDto album, float width)
+    {
+        var rowH = Ui.Px(58f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##apick_" + album.Id, new Vector2(width, rowH));
+        var hovered = ImGui.IsItemHovered();
+        var drawList = ImGui.GetWindowDrawList();
+        if (hovered)
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.White, 0.04f).U32(), Ui.Px(10f));
+
+        var thumb = Ui.Px(44f);
+        var tpos = new Vector2(pos.X + Ui.Px(4f), pos.Y + ((rowH - thumb) * 0.5f));
+        var tex = album.CoverPhotoId is { } cp ? this.albums.Texture(album.Id, cp) : null;
+        if (tex is { Width: > 0, Height: > 0 })
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, 1f);
+            drawList.AddImageRounded(tex.Handle, tpos, tpos + new Vector2(thumb, thumb), uvMin, uvMax, 0xFFFFFFFFu, Ui.Px(9f));
+        }
+        else
+        {
+            drawList.AddRectFilled(tpos, tpos + new Vector2(thumb, thumb), Palette.Surface2.U32(), Ui.Px(9f));
+            var glyph = FontAwesomeIcon.LayerGroup.ToIconString();
+            var gs = Ui.Measure(this.fonts.Icon, glyph);
+            Ui.TextAt(drawList, this.fonts.Icon, tpos + (new Vector2(thumb, thumb) * 0.5f) - (gs * 0.5f), Palette.TextSecondary.U32(), glyph);
+        }
+
+        var textX = tpos.X + thumb + Ui.Px(12f);
+        var maxTextW = (pos.X + width - Ui.Px(12f)) - textX;
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(13f)), Palette.TextPrimary.U32(), this.Fit(album.Name, maxTextW));
+        var count = album.PhotoCount == 1 ? "1 photo" : album.PhotoCount + " photos";
+        var sub = count + "  ·  " + (album.Visibility == AlbumVisibilityEnum.Public ? "Public" : "Private");
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(32f)), Palette.TextMuted.U32(), sub);
+
+        return clicked;
     }
 }

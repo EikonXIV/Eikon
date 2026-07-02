@@ -17,7 +17,7 @@ internal interface IApiClient
 
     Task<LoginPollResponse> LoginPollAsync(string txnId, string pollSecret, CancellationToken ct);
 
-    Task<Tokens> RefreshAsync(string refreshToken, CancellationToken ct);
+    Task<SessionTokens> RefreshAsync(string refreshToken, CancellationToken ct);
 
     Task<VerifyStartResponse> VerifyStartAsync(string accessToken, CancellationToken ct);
 
@@ -49,7 +49,7 @@ internal interface IApiClient
 
     Task<(string Ed25519Pub, string X25519Pub, string X25519Sig)> GetIdentityAsync(string accessToken, string userId, CancellationToken ct);
 
-    Task<Photo> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct);
+    Task<PhotoDto> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct);
 
     Task<List<PhotoDto>> ListPhotosAsync(string accessToken, CancellationToken ct);
 
@@ -75,11 +75,43 @@ internal interface IApiClient
 
     Task FavoriteAsync(string accessToken, Guid targetId, bool on, CancellationToken ct);
 
-    Task<List<Conversation>> GetConversationsAsync(string accessToken, CancellationToken ct);
+    Task<List<ConversationSummaryDto>> GetConversationsAsync(string accessToken, CancellationToken ct);
 
     Task MarkConversationReadAsync(string accessToken, Guid peerId, CancellationToken ct);
 
-    Task<List<FavoritesResponseProfile>> GetFavoritesAsync(string accessToken, CancellationToken ct);
+    Task<List<BasicProfileDto>> GetFavoritesAsync(string accessToken, CancellationToken ct);
+
+    Task<AlbumDto> CreateAlbumAsync(string accessToken, string name, string visibility, CancellationToken ct);
+
+    Task<List<AlbumDto>> ListAlbumsAsync(string accessToken, CancellationToken ct);
+
+    Task UpdateAlbumAsync(string accessToken, string albumId, string? name, string? visibility, string? coverPhotoId, CancellationToken ct);
+
+    Task DeleteAlbumAsync(string accessToken, string albumId, CancellationToken ct);
+
+    Task<AlbumPhotoDto> AddAlbumPhotoAsync(string accessToken, string albumId, byte[] image, string contentType, CancellationToken ct);
+
+    Task<List<AlbumPhotoDto>> ListAlbumPhotosAsync(string accessToken, string albumId, CancellationToken ct);
+
+    Task RemoveAlbumPhotoAsync(string accessToken, string albumId, string photoId, CancellationToken ct);
+
+    Task<string> AlbumPhotoViewUrlAsync(string accessToken, string albumId, string photoId, CancellationToken ct);
+
+    Task<List<AlbumGranteeDto>> ListAlbumGrantsAsync(string accessToken, string albumId, CancellationToken ct);
+
+    Task GrantAlbumAsync(string accessToken, string albumId, Guid granteeId, string source, CancellationToken ct);
+
+    Task RevokeAlbumAsync(string accessToken, string albumId, string granteeId, CancellationToken ct);
+
+    Task RequestAlbumAccessAsync(string accessToken, string albumId, CancellationToken ct);
+
+    Task<List<AlbumRequestDto>> ListAlbumRequestsAsync(string accessToken, CancellationToken ct);
+
+    Task ApproveAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct);
+
+    Task DenyAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct);
+
+    Task<List<PeerAlbumDto>> ListPeerAlbumsAsync(string accessToken, string userId, CancellationToken ct);
 }
 
 internal sealed class ApiClient : IApiClient, IDisposable
@@ -108,11 +140,11 @@ internal sealed class ApiClient : IApiClient, IDisposable
         return LoginPollResponse.FromJson(json);
     }
 
-    public async Task<Tokens> RefreshAsync(string refreshToken, CancellationToken ct)
+    public async Task<SessionTokens> RefreshAsync(string refreshToken, CancellationToken ct)
     {
         var body = JsonSerializer.Serialize(new { refreshToken });
         var json = await this.PostAsync("/auth/refresh", body, ct);
-        return JsonSerializer.Deserialize<Tokens>(json, Converter.Settings)
+        return JsonSerializer.Deserialize<SessionTokens>(json, Converter.Settings)
             ?? throw new ApiException("Empty refresh response.");
     }
 
@@ -254,7 +286,7 @@ internal sealed class ApiClient : IApiClient, IDisposable
             root.GetProperty("x25519Sig").GetString() ?? string.Empty);
     }
 
-    public async Task<Photo> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct)
+    public async Task<PhotoDto> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct)
     {
         var json = JsonSerializer.Serialize(new { imageBase64 = Convert.ToBase64String(image), contentType });
         var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/photos", json, accessToken, ct);
@@ -348,11 +380,11 @@ internal sealed class ApiClient : IApiClient, IDisposable
         Ensure(status, body, "/api/favorite");
     }
 
-    public async Task<List<Conversation>> GetConversationsAsync(string accessToken, CancellationToken ct)
+    public async Task<List<ConversationSummaryDto>> GetConversationsAsync(string accessToken, CancellationToken ct)
     {
         var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/conversations", null, accessToken, ct);
         Ensure(status, body, "/api/conversations");
-        return ConversationsResponse.FromJson(body).Conversations ?? new List<Conversation>();
+        return ConversationsResponse.FromJson(body).Conversations ?? new List<ConversationSummaryDto>();
     }
 
     public async Task MarkConversationReadAsync(string accessToken, Guid peerId, CancellationToken ct)
@@ -361,11 +393,129 @@ internal sealed class ApiClient : IApiClient, IDisposable
         Ensure(status, body, "/api/conversations/read");
     }
 
-    public async Task<List<FavoritesResponseProfile>> GetFavoritesAsync(string accessToken, CancellationToken ct)
+    public async Task<List<BasicProfileDto>> GetFavoritesAsync(string accessToken, CancellationToken ct)
     {
         var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/favorites", null, accessToken, ct);
         Ensure(status, body, "/api/favorites");
-        return FavoritesResponse.FromJson(body).Profiles ?? new List<FavoritesResponseProfile>();
+        return FavoritesResponse.FromJson(body).Profiles ?? new List<BasicProfileDto>();
+    }
+
+    // ---- albums -------------------------------------------------------------------------------
+
+    public async Task<AlbumDto> CreateAlbumAsync(string accessToken, string name, string visibility, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/albums", JsonSerializer.Serialize(new { name, visibility }), accessToken, ct);
+        Ensure(status, body, "/api/albums");
+        return AlbumDto.FromJson(body);
+    }
+
+    public async Task<List<AlbumDto>> ListAlbumsAsync(string accessToken, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/albums", null, accessToken, ct);
+        Ensure(status, body, "/api/albums");
+        return AlbumsResponse.FromJson(body).Albums ?? new List<AlbumDto>();
+    }
+
+    public async Task UpdateAlbumAsync(string accessToken, string albumId, string? name, string? visibility, string? coverPhotoId, CancellationToken ct)
+    {
+        // Only send fields that were supplied: UpdateAlbumRequest's fields are optional and an explicit
+        // null would fail the server's Zod (optional means absent, not null).
+        var patch = new Dictionary<string, object>();
+        if (name is not null) patch["name"] = name;
+        if (visibility is not null) patch["visibility"] = visibility;
+        if (coverPhotoId is not null) patch["coverPhotoId"] = coverPhotoId;
+        var (status, body) = await this.SendAsync(HttpMethod.Patch, "/api/albums/" + albumId, JsonSerializer.Serialize(patch), accessToken, ct);
+        Ensure(status, body, "/api/albums/:id");
+    }
+
+    public async Task DeleteAlbumAsync(string accessToken, string albumId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Delete, "/api/albums/" + albumId, null, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id");
+    }
+
+    public async Task<AlbumPhotoDto> AddAlbumPhotoAsync(string accessToken, string albumId, byte[] image, string contentType, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(new { imageBase64 = Convert.ToBase64String(image), contentType });
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/albums/{albumId}/photos", json, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/photos");
+        return AlbumPhotoDto.FromJson(body);
+    }
+
+    public async Task<List<AlbumPhotoDto>> ListAlbumPhotosAsync(string accessToken, string albumId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, $"/api/albums/{albumId}/photos", null, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/photos");
+        var result = new List<AlbumPhotoDto>();
+        using var doc = JsonDocument.Parse(body);   // bare array, like GET /api/photos-style lists
+        foreach (var element in doc.RootElement.EnumerateArray())
+            result.Add(AlbumPhotoDto.FromJson(element.GetRawText()));
+        return result;
+    }
+
+    public async Task RemoveAlbumPhotoAsync(string accessToken, string albumId, string photoId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Delete, $"/api/albums/{albumId}/photos/{photoId}", null, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/photos/:photoId");
+    }
+
+    public async Task<string> AlbumPhotoViewUrlAsync(string accessToken, string albumId, string photoId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, $"/api/albums/{albumId}/photos/{photoId}/view-url", null, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/photos/:photoId/view-url");
+        return PhotoViewUrlResponse.FromJson(body).Url.ToString();
+    }
+
+    public async Task<List<AlbumGranteeDto>> ListAlbumGrantsAsync(string accessToken, string albumId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, $"/api/albums/{albumId}/grants", null, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/grants");
+        return AlbumGrantsResponse.FromJson(body).Grantees ?? new List<AlbumGranteeDto>();
+    }
+
+    public async Task GrantAlbumAsync(string accessToken, string albumId, Guid granteeId, string source, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(new { granteeId, source });
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/albums/{albumId}/grants", json, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/grants");
+    }
+
+    public async Task RevokeAlbumAsync(string accessToken, string albumId, string granteeId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Delete, $"/api/albums/{albumId}/grants/{granteeId}", null, accessToken, ct);
+        Ensure(status, body, "/api/albums/:id/grants/:granteeId");
+    }
+
+    public async Task RequestAlbumAccessAsync(string accessToken, string albumId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/album-requests", JsonSerializer.Serialize(new { albumId }), accessToken, ct);
+        Ensure(status, body, "/api/album-requests");
+    }
+
+    public async Task<List<AlbumRequestDto>> ListAlbumRequestsAsync(string accessToken, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/album-requests", null, accessToken, ct);
+        Ensure(status, body, "/api/album-requests");
+        return AlbumRequestsResponse.FromJson(body).Requests ?? new List<AlbumRequestDto>();
+    }
+
+    public async Task ApproveAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/album-requests/{requestId}/approve", null, accessToken, ct);
+        Ensure(status, body, "/api/album-requests/:id/approve");
+    }
+
+    public async Task DenyAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/album-requests/{requestId}/deny", null, accessToken, ct);
+        Ensure(status, body, "/api/album-requests/:id/deny");
+    }
+
+    public async Task<List<PeerAlbumDto>> ListPeerAlbumsAsync(string accessToken, string userId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, $"/api/users/{userId}/albums", null, accessToken, ct);
+        Ensure(status, body, "/api/users/:id/albums");
+        return PeerAlbumsResponse.FromJson(body).Albums ?? new List<PeerAlbumDto>();
     }
 
     private static void Ensure(int status, string body, string path)

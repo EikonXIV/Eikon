@@ -134,7 +134,7 @@ internal sealed class GridScreen : IScreen
         }
     }
 
-    private bool DrawTile(DiscoverResultProfile profile, Vector2 size, bool compact)
+    private bool DrawTile(BasicProfileDto profile, Vector2 size, bool compact)
     {
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton($"##tile_{profile.UserId}", size);
@@ -205,7 +205,7 @@ internal sealed class GridScreen : IScreen
         return s + "…";
     }
 
-    private static string? Badge(DiscoverResultProfile profile)
+    private static string? Badge(BasicProfileDto profile)
     {
         if (profile.LookingFor is null)
             return null;

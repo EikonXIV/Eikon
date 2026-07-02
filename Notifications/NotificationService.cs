@@ -6,20 +6,33 @@ using Eikon.Windows;
 
 namespace Eikon.Notifications;
 
-// One pending toast for a peer. Coalesced: repeated messages bump Count and push ExpiresAt forward
-// rather than stacking new toasts. Timing uses Environment.TickCount64 (thread-safe, no ImGui).
+// What a toast is about, which decides its subtitle and where a tap goes.
+internal enum ToastKind
+{
+    Message,          // a new chat message (coalesced by peer)
+    AlbumRequest,     // someone asked to see one of your albums -> the requests screen
+    AlbumApproved,    // an owner approved your request -> the album viewer
+}
+
+// One pending toast. Message toasts coalesce per peer: repeats bump Count and push ExpiresAt forward
+// rather than stacking. Album toasts are keyed by peer + album and carry the album so a tap can open it.
+// Timing uses Environment.TickCount64 (thread-safe, no ImGui).
 internal sealed class NotificationToast
 {
+    public ToastKind Kind = ToastKind.Message;
     public Guid Peer;
     public string Name = "New message";
+    public string? Subtitle;      // null for messages (rendered from Count); set for album toasts
+    public Guid? AlbumId;
+    public string? AlbumName;
     public int Count;
     public long ExpiresAt;
 }
 
-// Drives new-message notifications. The relay's receive task only enqueues the sender id (cheap,
-// thread-safe); all decisions, name lookups, and the sound happen on the UI thread in Tick() so ImGui
-// and game calls stay on the right thread. Discreet by design: a toast shows the sender's name and a
-// count, never message content.
+// Drives toasts. The relay's receive task only enqueues cheap, thread-safe payloads (a sender id for
+// messages, a notice for album events); all decisions, name lookups, and the sound happen on the UI
+// thread in Tick() so ImGui and game calls stay on the right thread. Discreet by design: a toast shows
+// the other person's name and a short subtitle, never message content.
 internal sealed class NotificationService
 {
     private const int LifetimeMs = 5000;
@@ -33,6 +46,7 @@ internal sealed class NotificationService
     private readonly MainWindow mainWindow;
     private readonly SoundService sound;
     private readonly ConcurrentQueue<Guid> pending = new();
+    private readonly ConcurrentQueue<(ToastKind Kind, AlbumNotice Notice)> albumPending = new();
     private readonly List<NotificationToast> toasts = new();
     private long lastSoundAt;
 
@@ -46,15 +60,17 @@ internal sealed class NotificationService
         this.sound = sound;
 
         relay.MessageReceived += m => this.pending.Enqueue(m.SenderId);
+        relay.AlbumRequestReceived += n => this.albumPending.Enqueue((ToastKind.AlbumRequest, n));
+        relay.AlbumGranted += n => this.albumPending.Enqueue((ToastKind.AlbumApproved, n));
         chat.Start();   // keep the relay running so notifications fire even before Messages is opened
     }
 
-    // Raised when a toast is clicked; the host restores the app and opens the conversation.
-    public event Action<Guid, string>? OpenRequested;
+    // Raised when a toast is clicked; the host restores the app and opens the toast's target.
+    public event Action<NotificationToast>? OpenRequested;
 
     public IReadOnlyList<NotificationToast> Toasts => this.toasts;
 
-    // UI thread, every frame. Drains incoming senders into coalesced toasts, prunes expired ones, and
+    // UI thread, every frame. Drains incoming events into coalesced toasts, prunes expired ones, and
     // plays the sound (rate-limited). Returns whether any toast is visible.
     public bool Tick()
     {
@@ -68,7 +84,7 @@ internal sealed class NotificationService
             if (this.IsViewing(peer)) continue;
 
             var name = this.NameOf(peer);
-            var existing = this.toasts.Find(t => t.Peer == peer);
+            var existing = this.toasts.Find(t => t.Kind == ToastKind.Message && t.Peer == peer);
             if (existing != null)
             {
                 existing.Count++;
@@ -77,9 +93,31 @@ internal sealed class NotificationService
             }
             else
             {
-                this.toasts.Add(new NotificationToast { Peer = peer, Name = name, Count = 1, ExpiresAt = now + LifetimeMs });
-                if (this.toasts.Count > MaxToasts)
-                    this.toasts.RemoveAt(0);
+                this.Add(new NotificationToast { Peer = peer, Name = name, Count = 1, ExpiresAt = now + LifetimeMs });
+            }
+
+            shown = true;
+        }
+
+        while (this.albumPending.TryDequeue(out var item))
+        {
+            if (!this.config.NotificationsEnabled) continue;
+            var (kind, notice) = item;
+            if (this.IsViewingAlbums(kind, notice.AlbumId)) continue;
+
+            var subtitle = kind == ToastKind.AlbumRequest ? "Requested album access" : "Unlocked an album for you";
+            var existing = this.toasts.Find(t => t.Kind == kind && t.Peer == notice.PeerId && t.AlbumId == notice.AlbumId);
+            if (existing != null)
+            {
+                existing.ExpiresAt = now + LifetimeMs;
+            }
+            else
+            {
+                this.Add(new NotificationToast
+                {
+                    Kind = kind, Peer = notice.PeerId, Name = notice.PeerName, Subtitle = subtitle,
+                    AlbumId = notice.AlbumId, AlbumName = notice.AlbumName, Count = 1, ExpiresAt = now + LifetimeMs,
+                });
             }
 
             shown = true;
@@ -96,15 +134,32 @@ internal sealed class NotificationService
         return this.toasts.Count > 0;
     }
 
-    public void Open(Guid peer)
+    public void Open(NotificationToast toast)
     {
-        var name = this.toasts.Find(t => t.Peer == peer)?.Name ?? this.NameOf(peer);
-        this.toasts.RemoveAll(t => t.Peer == peer);
-        this.OpenRequested?.Invoke(peer, name);
+        this.toasts.RemoveAll(t => t.Kind == toast.Kind && t.Peer == toast.Peer && t.AlbumId == toast.AlbumId);
+        this.OpenRequested?.Invoke(toast);
+    }
+
+    private void Add(NotificationToast toast)
+    {
+        this.toasts.Add(toast);
+        if (this.toasts.Count > MaxToasts)
+            this.toasts.RemoveAt(0);
     }
 
     private bool IsViewing(Guid peer) =>
         this.mainWindow.IsOpen && this.router.Current == Screen.Chat && this.selection.ProfileUserId == peer;
+
+    // Suppress an album toast when the member is already looking at where it would take them: the
+    // requests screen for a new request, or that album's viewer for an approval.
+    private bool IsViewingAlbums(ToastKind kind, Guid albumId)
+    {
+        if (!this.mainWindow.IsOpen)
+            return false;
+        return kind == ToastKind.AlbumRequest
+            ? this.router.Current == Screen.AlbumRequests
+            : this.router.Current == Screen.AlbumViewer && this.selection.AlbumId == albumId;
+    }
 
     private string NameOf(Guid peer)
     {

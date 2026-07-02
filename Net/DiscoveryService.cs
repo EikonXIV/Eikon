@@ -33,7 +33,7 @@ internal sealed class DiscoveryService
 
     public bool OnlineOnly { get; private set; }
 
-    public IReadOnlyList<DiscoverResultProfile> Profiles { get; private set; } = Array.Empty<DiscoverResultProfile>();
+    public IReadOnlyList<BasicProfileDto> Profiles { get; private set; } = Array.Empty<BasicProfileDto>();
 
     public void EnsureInitial()
     {
@@ -96,17 +96,17 @@ internal sealed class DiscoveryService
                 var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
                 if (string.IsNullOrEmpty(token))
                 {
-                    this.Profiles = Array.Empty<DiscoverResultProfile>();
+                    this.Profiles = Array.Empty<BasicProfileDto>();
                     return;
                 }
 
                 var result = await this.api.DiscoverAsync(token, snapshot, CancellationToken.None);
-                this.Profiles = result.Profiles ?? new List<DiscoverResultProfile>();
+                this.Profiles = result.Profiles ?? new List<BasicProfileDto>();
             }
             catch (Exception ex)
             {
                 this.log.Warning(ex, "Discover failed.");
-                this.Profiles = Array.Empty<DiscoverResultProfile>();
+                this.Profiles = Array.Empty<BasicProfileDto>();
             }
             finally
             {

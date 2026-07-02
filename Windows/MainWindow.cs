@@ -131,7 +131,7 @@ internal sealed class MainWindow : Window, IDisposable
             new Vector2(origin.X + width, origin.Y + height),
             Palette.Border.U32(), 1f);
 
-        const string title = "Eikon";
+        const string title = BuildInfo.DisplayName;
         var titleSize = Ui.Measure(this.fonts.Title, title);
         Ui.TextAt(drawList, this.fonts.Title,
             new Vector2(origin.X + padX, origin.Y + ((height - titleSize.Y) * 0.5f)),

@@ -18,4 +18,9 @@ internal enum Screen
     Favorites,
     Guidelines,
     Blocked,
+    Albums,
+    AlbumDetail,
+    AlbumRequests,
+    AlbumAccess,
+    AlbumViewer,
 }

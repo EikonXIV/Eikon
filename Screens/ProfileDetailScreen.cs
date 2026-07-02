@@ -30,7 +30,9 @@ internal sealed class ProfileDetailScreen : IScreen
     private bool favorited; // optimistic star state for the current peer
     private int heroIndex;  // which photo the hero shows / pages through, reset per profile
 
-    public ProfileDetailScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, Lightbox lightbox, ProfileDetailService details, Selection selection, PhotoService photoSvc, SafetyService safety, SessionStore session)
+    private readonly AlbumService albums;
+
+    public ProfileDetailScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, Lightbox lightbox, ProfileDetailService details, Selection selection, PhotoService photoSvc, SafetyService safety, SessionStore session, AlbumService albums)
     {
         this.router = router;
         this.theme = theme;
@@ -43,6 +45,7 @@ internal sealed class ProfileDetailScreen : IScreen
         this.photoSvc = photoSvc;
         this.safety = safety;
         this.session = session;
+        this.albums = albums;
     }
 
     public Screen Id => Screen.ProfileDetail;
@@ -266,7 +269,105 @@ internal sealed class ProfileDetailScreen : IScreen
             this.DrawAfterDark(contentWidth, ad);
         }
 
+        if (!this.isSelf)
+            this.DrawAlbums(contentWidth);
+
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+    }
+
+    // The peer's albums: public and already-unlocked ones open the viewer; locked ones offer a request
+    // (or show it is pending). Empty and hidden albums never reach here (the server filters them).
+    private void DrawAlbums(float contentWidth)
+    {
+        if (this.selection.ProfileUserId is not { } userId)
+            return;
+        var peerAlbums = this.albums.PeerAlbums(userId);
+        if (peerAlbums.Count == 0)
+            return;
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+        this.kit.SectionLabel("Albums");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        foreach (var album in peerAlbums)
+            this.DrawAlbumRow(userId, album, contentWidth);
+    }
+
+    private void DrawAlbumRow(Guid userId, PeerAlbumDto album, float contentWidth)
+    {
+        var rowH = Ui.Px(60f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##pd_album_" + album.Id, new Vector2(contentWidth, rowH));
+        var hovered = ImGui.IsItemHovered();
+        var drawList = ImGui.GetWindowDrawList();
+        if (hovered)
+            drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, rowH), Palette.WithAlpha(Palette.White, 0.04f).U32(), Ui.Px(10f));
+
+        var viewable = album.Access is PeerAlbumAccessEnum.Public or PeerAlbumAccessEnum.Granted;
+        var thumb = Ui.Px(48f);
+        var tmin = new Vector2(pos.X, pos.Y + ((rowH - thumb) * 0.5f));
+        var tmax = tmin + new Vector2(thumb, thumb);
+        drawList.AddRectFilled(tmin, tmax, Palette.Surface2.U32(), Ui.Px(10f));
+        var tex = viewable && album.CoverPhotoId is { } cover ? this.albums.Texture(album.Id, cover) : null;
+        if (tex is { Width: > 0, Height: > 0 })
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, 1f);
+            drawList.AddImageRounded(tex.Handle, tmin, tmax, uvMin, uvMax, 0xFFFFFFFFu, Ui.Px(10f));
+        }
+        else
+        {
+            var glyph = (viewable ? FontAwesomeIcon.Image : FontAwesomeIcon.Lock).ToIconString();
+            var gs = Ui.Measure(this.fonts.Icon, glyph);
+            Ui.TextAt(drawList, this.fonts.Icon, ((tmin + tmax) * 0.5f) - (gs * 0.5f), Palette.TextMuted.U32(), glyph);
+        }
+
+        var textX = pos.X + thumb + Ui.Px(12f);
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(13f)), Palette.TextPrimary.U32(), album.Name);
+        var vis = album.Access == PeerAlbumAccessEnum.Public ? "public" : "private";
+        var meta = album.PhotoCount == 1 ? $"1 photo · {vis}" : $"{album.PhotoCount} photos · {vis}";
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(33f)), Palette.TextMuted.U32(), meta);
+
+        var midY = pos.Y + (rowH * 0.5f);
+        if (viewable)
+        {
+            const string label = "View";
+            var ls = Ui.Measure(this.fonts.Body, label);
+            var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+            var chs = Ui.Measure(this.fonts.Icon, chevron);
+            var ax = pos.X + contentWidth - ls.X - Ui.Px(4f) - chs.X;
+            Ui.TextAt(drawList, this.fonts.Body, new Vector2(ax, midY - (ls.Y * 0.5f)), this.theme.AccentText.U32(), label);
+            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(ax + ls.X + Ui.Px(4f), midY - (chs.Y * 0.5f)), this.theme.AccentText.U32(), chevron);
+        }
+        else if (album.Access == PeerAlbumAccessEnum.Requested)
+        {
+            const string label = "Requested";
+            var ls = Ui.Measure(this.fonts.Caption, label);
+            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + contentWidth - ls.X, midY - (ls.Y * 0.5f)), Palette.TextMuted.U32(), label);
+        }
+        else
+        {
+            const string label = "Request access";
+            var ls = Ui.Measure(this.fonts.Caption, label);
+            var pillW = ls.X + Ui.Px(20f);
+            var pillH = Ui.Px(28f);
+            var pillPos = new Vector2(pos.X + contentWidth - pillW, midY - (pillH * 0.5f));
+            drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(this.theme.Accent, 0.5f).U32(), Ui.Px(8f), ImDrawFlags.None, 1f);
+            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pillPos.X + Ui.Px(10f), pillPos.Y + ((pillH - ls.Y) * 0.5f)), this.theme.AccentText.U32(), label);
+        }
+
+        if (clicked)
+        {
+            if (viewable)
+            {
+                this.selection.AlbumId = album.Id;
+                this.selection.AlbumName = album.Name;
+                this.selection.AlbumReturn = Screen.ProfileDetail;
+                this.router.Navigate(Screen.AlbumViewer);
+            }
+            else if (album.Access == PeerAlbumAccessEnum.Locked)
+            {
+                this.albums.RequestAccess(album.Id, userId);
+            }
+        }
     }
 
     private void Caption(string text)
@@ -305,7 +406,7 @@ internal sealed class ProfileDetailScreen : IScreen
         ImGui.Dummy(new Vector2(0f, nameSize.Y));
     }
 
-    private void DrawAfterDark(float contentWidth, ProfileDetailDtoAfterDark ad)
+    private void DrawAfterDark(float contentWidth, AfterDarkDto ad)
     {
         using (ImRaii.PushColor(ImGuiCol.ChildBg, Palette.WithAlpha(this.theme.Accent, 0.06f)))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.WithAlpha(this.theme.Accent, 0.28f)))

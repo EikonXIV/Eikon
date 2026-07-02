@@ -16,10 +16,15 @@ internal sealed class Configuration : IPluginConfiguration
     // new builds read each other's config; an unknown value falls back to Expanded.
     public int GridLayout { get; set; }
 
-    // Eikon API server. Defaults to production for every build. To run against a local docker-compose
-    // server during development, set this to "http://127.0.0.1:8080" in the saved config; it persists
-    // and is not reset (the one-time loopback migration in Plugin.cs only runs once, at Version 1 -> 2).
+    // Eikon API server. Release builds default to production. Local (Debug) builds default to the
+    // docker-compose server, since they load as the separate EikonLocal plugin with their own config and
+    // are meant for local work; that value persists and the prod-only loopback migration in Plugin.cs is
+    // skipped for them. Either can be overridden in the saved config.
+#if DEBUG
+    public string ServerBaseUrl { get; set; } = "http://127.0.0.1:8080";
+#else
     public string ServerBaseUrl { get; set; } = "https://api.eikon.chat";
+#endif
 
     // Persisted session, DPAPI-sealed at rest. The refresh token restores the session across launches;
     // the access token + its expiry let a relaunch or plugin update inside the token's lifetime restore

@@ -87,14 +87,14 @@ internal sealed class MessagesScreen : IScreen
                 this.Open(conversation);
     }
 
-    private void Open(Conversation conversation)
+    private void Open(ConversationSummaryDto conversation)
     {
         this.selection.ProfileUserId = conversation.UserId;
         this.selection.ProfileDisplayName = conversation.DisplayName;
         this.router.Navigate(Screen.Chat);
     }
 
-    private void DrawOnlineStrip(IReadOnlyList<Conversation> online)
+    private void DrawOnlineStrip(IReadOnlyList<ConversationSummaryDto> online)
     {
         var first = true;
         foreach (var conversation in online)
@@ -107,7 +107,7 @@ internal sealed class MessagesScreen : IScreen
         }
     }
 
-    private bool DrawAvatarChip(Conversation conversation)
+    private bool DrawAvatarChip(ConversationSummaryDto conversation)
     {
         var avatar = Ui.Px(44f);
         var name = conversation.DisplayName;
@@ -134,7 +134,7 @@ internal sealed class MessagesScreen : IScreen
         return clicked;
     }
 
-    private bool DrawRow(Conversation conversation, float width)
+    private bool DrawRow(ConversationSummaryDto conversation, float width)
     {
         var rowHeight = Ui.Px(60f);
         var pos = ImGui.GetCursorScreenPos();
@@ -199,7 +199,7 @@ internal sealed class MessagesScreen : IScreen
         return clicked;
     }
 
-    private string Preview(Conversation conversation)
+    private string Preview(ConversationSummaryDto conversation)
     {
         var last = this.inbox.Preview(conversation.UserId);
         if (last is not null)

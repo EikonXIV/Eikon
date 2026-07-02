@@ -123,6 +123,8 @@ internal sealed class MyProfileScreen : IScreen
         this.kit.SectionLabel("Photos");
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.photos.DrawGrid(contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        if (this.SettingRow("##r_albums", "Albums", string.Empty, contentWidth)) this.router.Navigate(Screen.Albums);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         this.kit.SectionLabel("About you");
@@ -545,7 +547,7 @@ internal sealed class MyProfileScreen : IScreen
         Interests = Options.Interests.Where((_, i) => this.interests[i]).ToList(),
         NsfwEnabled = this.nsfwEnabled,
         AfterDark = this.nsfwEnabled
-            ? new SaveProfileRequestAfterDark
+            ? new AfterDarkDto
             {
                 Position = ProfileMapper.Position(this.position),
                 Role = ProfileMapper.Role(this.roleIndex),

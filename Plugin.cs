@@ -32,9 +32,11 @@ public sealed class Plugin : IDalamudPlugin
         var config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         // One-time move to production (Version 1 -> 2). Earlier builds defaulted to a local dev server
-        // and that value persists, so an install (or a tester who ran a debug build) stays stuck on
-        // loopback. Reset any loopback URL to api.eikon.chat once, then leave the setting alone so a
-        // self-hoster or local dev can point it elsewhere and have it stick.
+        // and that value persists, so an install stays stuck on loopback. Reset any loopback URL to
+        // api.eikon.chat once, then leave the setting alone so a self-hoster can point it elsewhere and
+        // have it stick. Release only: a local (EikonLocal) build is meant to talk to loopback, so it
+        // keeps its own config untouched by this.
+#if !DEBUG
         if (config.Version < 2)
         {
             if (Uri.TryCreate(config.ServerBaseUrl, UriKind.Absolute, out var configured) && configured.IsLoopback)
@@ -42,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
             config.Version = 2;
             config.Save();
         }
+#endif
 
         var services = new ServiceCollection();
 
@@ -75,6 +78,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<FavoritesService>();
         services.AddSingleton<BlockedService>();
         services.AddSingleton<PhotoService>();
+        services.AddSingleton<AlbumService>();
         services.AddSingleton<SafetyService>();
         services.AddSingleton<ModerationKeyService>();
         services.AddSingleton<Media>();
@@ -84,7 +88,7 @@ public sealed class Plugin : IDalamudPlugin
         // UI infrastructure. The app opens on the invite gate.
         services.AddSingleton(new ScreenRouter(Screen.AgeGuidelines));
         services.AddSingleton<WindowController>();
-        services.AddSingleton(new WindowSystem("Eikon"));
+        services.AddSingleton(new WindowSystem(BuildInfo.WindowNamespace));
 
         // Screens. Registered as IScreen so the window can route to them.
         services.AddSingleton<IScreen, AgeGuidelinesScreen>();
@@ -101,6 +105,11 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, FavoritesScreen>();
         services.AddSingleton<IScreen, GuidelinesScreen>();
         services.AddSingleton<IScreen, BlockedUsersScreen>();
+        services.AddSingleton<IScreen, AlbumsScreen>();
+        services.AddSingleton<IScreen, AlbumDetailScreen>();
+        services.AddSingleton<IScreen, AlbumRequestsScreen>();
+        services.AddSingleton<IScreen, AlbumAccessScreen>();
+        services.AddSingleton<IScreen, AlbumViewerScreen>();
 
         services.AddSingleton<SoundService>();
         services.AddSingleton<NotificationService>();

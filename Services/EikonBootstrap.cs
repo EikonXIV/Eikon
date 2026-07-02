@@ -15,7 +15,7 @@ namespace Eikon.Services;
 // removed before the windows themselves are disposed.
 internal sealed class EikonBootstrap : IDisposable
 {
-    private const string CommandName = "/eikon";
+    private const string CommandName = BuildInfo.Command;
 
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly ICommandManager commandManager;
@@ -66,7 +66,7 @@ internal sealed class EikonBootstrap : IDisposable
         // both the main title bar and the chat header raise it through the same path.
         this.windowController.MinimizeRequested += this.Minimize;
         this.orbWindow.RestoreRequested += this.Restore;
-        this.notifications.OpenRequested += this.OpenConversation;
+        this.notifications.OpenRequested += this.OpenNotification;
 
         this.commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
         {
@@ -84,7 +84,7 @@ internal sealed class EikonBootstrap : IDisposable
     {
         this.windowController.MinimizeRequested -= this.Minimize;
         this.orbWindow.RestoreRequested -= this.Restore;
-        this.notifications.OpenRequested -= this.OpenConversation;
+        this.notifications.OpenRequested -= this.OpenNotification;
         this.pluginInterface.UiBuilder.Draw -= this.windowSystem.Draw;
         this.pluginInterface.UiBuilder.Draw -= this.media.Draw;
         this.pluginInterface.UiBuilder.OpenMainUi -= this.OpenMain;
@@ -125,13 +125,32 @@ internal sealed class EikonBootstrap : IDisposable
             this.router.Navigate(Screen.Unlock);
     }
 
-    // Tapping a notification restores the app and opens that conversation (passphrase first if locked).
-    private void OpenConversation(Guid peer, string name)
+    // Tapping a notification restores the app and opens the toast's target (passphrase first if locked:
+    // Restore routes to Unlock and we don't override it).
+    private void OpenNotification(NotificationToast toast)
     {
-        this.selection.ProfileUserId = peer;
-        this.selection.ProfileDisplayName = name;
         this.Restore();
-        if (this.keyVault.IsUnlocked)
-            this.router.Navigate(Screen.Chat);
+        if (!this.keyVault.IsUnlocked)
+            return;
+
+        switch (toast.Kind)
+        {
+            case ToastKind.AlbumRequest:
+                this.router.Navigate(Screen.AlbumRequests);
+                break;
+            case ToastKind.AlbumApproved:
+                this.selection.ProfileUserId = toast.Peer;
+                this.selection.ProfileDisplayName = toast.Name;
+                this.selection.AlbumId = toast.AlbumId;
+                this.selection.AlbumName = toast.AlbumName ?? string.Empty;
+                this.selection.AlbumReturn = Screen.ProfileDetail;
+                this.router.Navigate(Screen.AlbumViewer);
+                break;
+            default:
+                this.selection.ProfileUserId = toast.Peer;
+                this.selection.ProfileDisplayName = toast.Name;
+                this.router.Navigate(Screen.Chat);
+                break;
+        }
     }
 }
