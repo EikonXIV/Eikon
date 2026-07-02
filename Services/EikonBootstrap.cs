@@ -15,7 +15,7 @@ namespace Eikon.Services;
 // removed before the windows themselves are disposed.
 internal sealed class EikonBootstrap : IDisposable
 {
-    private const string CommandName = "/eikon";
+    private const string CommandName = BuildInfo.Command;
 
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly ICommandManager commandManager;

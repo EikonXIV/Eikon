@@ -1,0 +1,8 @@
+{
+  "Name": "Eikon (Local)",
+  "Author": "Rian M☆",
+  "Punchline": "Local dev build of Eikon. Not for distribution.",
+  "Description": "Local development build of Eikon, loaded as a separate plugin so it keeps its own config (pluginConfigs/EikonLocal.json) and never touches an installed release. Open it with /eikonlocal.",
+  "ApplicableVersion": "any",
+  "Tags": [ "eikon", "dating", "dev" ]
+}

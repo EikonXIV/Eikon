@@ -12,6 +12,15 @@
     <NoWarn>$(NoWarn);CS8602;CS8618;CS8601;CS8603</NoWarn>
   </PropertyGroup>
 
+  <!-- Local dev builds load as a distinct plugin: the assembly is EikonLocal, which DalamudPackager
+       uses as the InternalName, so the Debug build keeps its own config at pluginConfigs/EikonLocal.json
+       and can never overwrite an installed release's Eikon.json. The manifest is read from
+       EikonLocal.json. Release keeps the default name (Eikon), so distribution is unchanged. The command
+       and window names switch in step (see BuildInfo.cs). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <AssemblyName>EikonLocal</AssemblyName>
+  </PropertyGroup>
+
   <!-- The OtterGui submodule under external/ is consumed via ProjectReference only. Exclude its
        sources from this plugin's own compilation so its types are not built twice. -->
   <ItemGroup>
