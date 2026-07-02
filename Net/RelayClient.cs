@@ -10,6 +10,9 @@ using Eikon.Contracts;
 
 namespace Eikon.Net;
 
+// An album access event from the relay: the other person, and the album it concerns.
+internal readonly record struct AlbumNotice(Guid PeerId, string PeerName, Guid AlbumId, string AlbumName);
+
 // Long-lived WebSocket to the relay (ARCHITECTURE 6). Connects with the access token, receives server
 // frames, and sends client frames; reconnects with backoff. Only ever carries ciphertext. Events
 // fire on the receive task; handlers must tolerate that.
@@ -39,6 +42,13 @@ internal sealed class RelayClient : IDisposable
     public event Action<Guid>? Delivered;
 
     public event Action<Guid>? RekeyRequested;
+
+    // Album access events pushed from the server (not chat messages): someone asked to see one of your
+    // albums, or an owner approved your request. Carry the other person's name and the album so a toast
+    // reads without a lookup.
+    public event Action<AlbumNotice>? AlbumRequestReceived;
+
+    public event Action<AlbumNotice>? AlbumGranted;
 
     public void Start()
     {
@@ -172,6 +182,12 @@ internal sealed class RelayClient : IDisposable
                 case "rekey":
                     this.RekeyRequested?.Invoke(root.GetProperty("from").GetGuid());
                     break;
+                case "album_request":
+                    this.AlbumRequestReceived?.Invoke(ParseAlbumNotice(root));
+                    break;
+                case "album_grant":
+                    this.AlbumGranted?.Invoke(ParseAlbumNotice(root));
+                    break;
                 default:
                     break;
             }
@@ -181,6 +197,12 @@ internal sealed class RelayClient : IDisposable
             this.log.Warning(ex, "Bad relay frame.");
         }
     }
+
+    private static AlbumNotice ParseAlbumNotice(JsonElement root) => new(
+        root.GetProperty("from").GetGuid(),
+        root.TryGetProperty("fromName", out var n) ? n.GetString() ?? "Someone" : "Someone",
+        root.GetProperty("albumId").GetGuid(),
+        root.TryGetProperty("albumName", out var a) ? a.GetString() ?? "an album" : "an album");
 
     private async Task DrainOutbox(CancellationToken ct)
     {

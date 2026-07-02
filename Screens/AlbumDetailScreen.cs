@@ -195,7 +195,7 @@ internal sealed class AlbumDetailScreen : IScreen
 
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(gap, gap)))
         {
-            this.DrawAddTile(size);
+            this.DrawAddTile(size, photos.Count >= MaxAlbumPhotos);
             var col = 1;
             foreach (var photo in photos)
             {
@@ -207,17 +207,25 @@ internal sealed class AlbumDetailScreen : IScreen
         }
     }
 
-    private void DrawAddTile(Vector2 size)
+    private const int MaxAlbumPhotos = 24;   // mirrors the server cap in albums/routes.ts
+
+    private void DrawAddTile(Vector2 size, bool atCap)
     {
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##ad_add", size);
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRect(pos, pos + size, Palette.WithAlpha(Palette.White, 0.2f).U32(), Ui.Px(9f), ImDrawFlags.None, 1f);
-        var plus = FontAwesomeIcon.Plus.ToIconString();
-        var ps = Ui.Measure(this.fonts.Icon, plus);
-        Ui.TextAt(drawList, this.fonts.Icon, pos + (size * 0.5f) - (ps * 0.5f), Palette.TextSecondary.U32(), plus);
+        var tint = atCap ? Palette.TextMuted : Palette.TextSecondary;
+        drawList.AddRect(pos, pos + size, Palette.WithAlpha(Palette.White, atCap ? 0.1f : 0.2f).U32(), Ui.Px(9f), ImDrawFlags.None, 1f);
+        var glyph = (atCap ? FontAwesomeIcon.Lock : FontAwesomeIcon.Plus).ToIconString();
+        var gs = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(drawList, this.fonts.Icon, pos + (size * 0.5f) - (gs * 0.5f), tint.U32(), glyph);
         if (clicked)
-            this.media.PickImage(p => { this.pendingPath = p; this.openAdd = true; });
+        {
+            if (atCap)
+                this.openAdd = true;   // the dialog explains the limit
+            else
+                this.media.PickImage(p => { this.pendingPath = p; this.openAdd = true; });
+        }
     }
 
     private void DrawPhotoTile(Guid albumId, Guid photoId, bool isCover, Vector2 size)
@@ -342,6 +350,26 @@ internal sealed class AlbumDetailScreen : IScreen
                 return;
 
             var width = ImGui.GetContentRegionAvail().X;
+
+            // Full album: explain rather than add. The server also rejects, but this keeps the picker
+            // from opening onto a dead end.
+            if (this.albums.Photos(albumId).Count >= MaxAlbumPhotos)
+            {
+                Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Album is full");
+                ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+                using (this.fonts.Caption.Push())
+                using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+                    ImGui.TextWrapped($"An album holds up to {MaxAlbumPhotos} photos. Remove one to add another.");
+                ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+                if (this.kit.SecondaryButton("##ad_add_close", "Close", width))
+                {
+                    this.pendingPath = null;
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+                return;
+            }
+
             Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Add photo");
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
             if (this.pendingPath != null && this.media.Load(this.pendingPath) is { Width: > 0, Height: > 0 } tex)

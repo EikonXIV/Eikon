@@ -221,20 +221,24 @@ internal sealed class AlbumsScreen : IScreen
         }
     }
 
+    private const int MaxAlbums = 10;   // mirrors the server cap in albums/routes.ts
+
     private void DrawNewCard(float width)
     {
+        var atCap = this.albums.Mine.Count >= MaxAlbums;
         var cardH = Ui.Px(84f) + Ui.Px(46f);
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##album_new_card", new Vector2(width, cardH));
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRect(pos, pos + new Vector2(width, cardH), Palette.WithAlpha(Palette.White, 0.18f).U32(), Ui.Px(13f), ImDrawFlags.None, 1f);
+        var tint = atCap ? Palette.TextMuted : Palette.TextSecondary;
+        drawList.AddRect(pos, pos + new Vector2(width, cardH), Palette.WithAlpha(Palette.White, atCap ? 0.10f : 0.18f).U32(), Ui.Px(13f), ImDrawFlags.None, 1f);
         var center = new Vector2(pos.X + (width * 0.5f), pos.Y + (cardH * 0.5f));
-        var plus = FontAwesomeIcon.Plus.ToIconString();
-        var ps = Ui.Measure(this.fonts.Icon, plus);
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (ps.X * 0.5f), center.Y - ps.Y), Palette.TextSecondary.U32(), plus);
-        const string label = "New album";
+        var glyph = (atCap ? FontAwesomeIcon.Lock : FontAwesomeIcon.Plus).ToIconString();
+        var gs = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (gs.X * 0.5f), center.Y - gs.Y), tint.U32(), glyph);
+        var label = atCap ? "Album limit" : "New album";
         var lls = Ui.Measure(this.fonts.Caption, label);
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (lls.X * 0.5f), center.Y + Ui.Px(4f)), Palette.TextSecondary.U32(), label);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (lls.X * 0.5f), center.Y + Ui.Px(4f)), tint.U32(), label);
         if (clicked)
             this.OpenNew();
     }
@@ -268,6 +272,23 @@ internal sealed class AlbumsScreen : IScreen
                 return;
 
             var width = Ui.Px(288f);
+
+            // At the cap the dialog explains rather than creating; both the header + and the new card
+            // route here, so this is the one place that has to say it.
+            if (this.albums.Mine.Count >= MaxAlbums)
+            {
+                Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Album limit reached");
+                ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+                using (this.fonts.Caption.Push())
+                using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+                    ImGui.TextWrapped($"You can keep up to {MaxAlbums} albums. Delete one to make room for a new one.");
+                ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+                if (this.kit.SecondaryButton("##new_close", "Close", width))
+                    ImGui.CloseCurrentPopup();
+                ImGui.EndPopup();
+                return;
+            }
+
             Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "New album");
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
             this.kit.TextField("##new_name", ref this.newName, "Album name", width);
