@@ -27,6 +27,16 @@
     <Compile Remove="external\**" />
     <EmbeddedResource Remove="external\**" />
     <None Remove="external\**" />
+    <!-- The test project lives under tests/ and references this project; keep its sources out of the
+         plugin's own compilation. -->
+    <Compile Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+
+  <!-- Grant the test assembly access to internal types (IApiClient, ApiClient, ApiException). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Eikon.Tests" />
   </ItemGroup>
 
   <ItemGroup>

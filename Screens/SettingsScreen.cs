@@ -32,12 +32,13 @@ internal sealed class SettingsScreen : IScreen
     private readonly Configuration config;
     private readonly SoundService sound;
     private readonly IPluginLog log;
+    private readonly DeleteAccountFlow deleteFlow;
 
     private bool discreet;
     private bool onlyVerifiedMessage;
     private bool settingsLoaded;   // privacy prefs fetched from the server this session
 
-    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log)
+    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow)
     {
         this.router = router;
         this.theme = theme;
@@ -49,6 +50,7 @@ internal sealed class SettingsScreen : IScreen
         this.config = config;
         this.sound = sound;
         this.log = log;
+        this.deleteFlow = deleteFlow;
     }
 
     public Screen Id => Screen.Settings;
@@ -84,7 +86,8 @@ internal sealed class SettingsScreen : IScreen
         }
         if (this.NavRow("##s_logout", "Log out", string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.AgeGuidelines);
-        this.NavRow("##s_delete", "Delete account", string.Empty, Danger, true, contentWidth);
+        if (this.NavRow("##s_delete", "Delete account", string.Empty, Danger, true, contentWidth))
+            this.deleteFlow.Open();
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Privacy");
@@ -192,6 +195,8 @@ internal sealed class SettingsScreen : IScreen
         this.NavRow("##s_version", "Version", "1.0.0", Palette.TextSecondary, false, contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+
+        this.deleteFlow.Draw();
     }
 
     // Pull the privacy prefs from the server once per session so the toggles reflect saved state.

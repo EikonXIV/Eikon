@@ -84,6 +84,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<Media>();
         services.AddSingleton<Lightbox>();
         services.AddSingleton<ModerationFlow>();
+        services.AddSingleton<DeleteAccountFlow>();
 
         // UI infrastructure. The app opens on the invite gate.
         services.AddSingleton(new ScreenRouter(Screen.AgeGuidelines));
@@ -94,6 +95,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, AgeGuidelinesScreen>();
         services.AddSingleton<IScreen, OnboardingScreen>();
         services.AddSingleton<IScreen, UnlockScreen>();
+        services.AddSingleton<IScreen, RestoreAccountScreen>();
         services.AddSingleton<IScreen, GridScreen>();
         services.AddSingleton<IScreen, FilterScreen>();
         services.AddSingleton<IScreen, ProfileDetailScreen>();

@@ -29,6 +29,17 @@ internal interface IApiClient
 
     Task UpdateSettingsAsync(string accessToken, bool discreet, bool onlyVerifiedMessage, CancellationToken ct);
 
+    // Reads /auth/me. Returns the HTTP status and, when the account is soft-deleted within the grace
+    // window, deletionPendingUntil. A 401/403 means the session is not usable (deleted past grace,
+    // suspended, or bad token), so the caller signs out instead of entering an app that will 401.
+    Task<(int Status, string? DeletionPendingUntil)> GetMeAsync(string accessToken, CancellationToken ct);
+
+    Task DeleteAccountAsync(string accessToken, IReadOnlyList<string>? reasons, string? note, CancellationToken ct);
+
+    Task RestoreAccountAsync(string accessToken, CancellationToken ct);
+
+    Task DeleteNowAsync(string accessToken, CancellationToken ct);
+
     Task PublishKeysAsync(string accessToken, PublicKeyBundle bundle, CancellationToken ct);
 
     Task<WorldCatalogResponse> GetWorldsAsync(CancellationToken ct);
@@ -127,6 +138,10 @@ internal sealed class ApiClient : IApiClient, IDisposable
         };
     }
 
+    // Test seam: inject a preconfigured HttpClient (e.g. over a stub handler) so request shaping can be
+    // asserted without a live server. Production always uses the Configuration constructor above.
+    internal ApiClient(HttpClient http) => this.http = http;
+
     public async Task<LoginStartResponse> LoginStartAsync(CancellationToken ct)
     {
         var json = await this.PostAsync("/auth/login/start", null, ct);
@@ -186,6 +201,44 @@ internal sealed class ApiClient : IApiClient, IDisposable
         var payload = JsonSerializer.Serialize(new { discreet, onlyVerifiedMessage });
         var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/settings", payload, accessToken, ct);
         Ensure(status, body, "/api/settings");
+    }
+
+    public async Task<(int Status, string? DeletionPendingUntil)> GetMeAsync(string accessToken, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, "/auth/me", null, accessToken, ct);
+        if (status is < 200 or >= 300)
+            return (status, null);
+        using var doc = JsonDocument.Parse(body);
+        var until = doc.RootElement.TryGetProperty("deletionPendingUntil", out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString()
+            : null;
+        return (status, until);
+    }
+
+    // Only send the fields that are set: the server's optional reasons/note reject a JSON null (which is
+    // distinct from absent), so an empty body is {}.
+    public async Task DeleteAccountAsync(string accessToken, IReadOnlyList<string>? reasons, string? note, CancellationToken ct)
+    {
+        var fields = new Dictionary<string, object>();
+        if (reasons is { Count: > 0 })
+            fields["reasons"] = reasons;
+        if (!string.IsNullOrWhiteSpace(note))
+            fields["note"] = note!;
+        var payload = JsonSerializer.Serialize(fields);
+        var (status, body) = await this.SendAsync(HttpMethod.Delete, "/api/account", payload, accessToken, ct);
+        Ensure(status, body, "/api/account");
+    }
+
+    public async Task RestoreAccountAsync(string accessToken, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/account/restore", "{}", accessToken, ct);
+        Ensure(status, body, "/api/account/restore");
+    }
+
+    public async Task DeleteNowAsync(string accessToken, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/account/delete-now", "{}", accessToken, ct);
+        Ensure(status, body, "/api/account/delete-now");
     }
 
     public async Task PublishKeysAsync(string accessToken, PublicKeyBundle bundle, CancellationToken ct)
