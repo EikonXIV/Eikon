@@ -3,7 +3,7 @@
   <!-- Eikon Dalamud plugin. The Dalamud.NET.Sdk wires the TFM, all Dalamud/ImGui references,
        and the plugin manifest automatically (it finds the dev Dalamud under %AppData%\XIVLauncher). -->
   <PropertyGroup>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Description>Eikon: in-game, end-to-end-encrypted dating &amp; social for FFXIV.</Description>
     <Authors>Rian M☆</Authors>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -27,6 +27,16 @@
     <Compile Remove="external\**" />
     <EmbeddedResource Remove="external\**" />
     <None Remove="external\**" />
+    <!-- The test project lives under tests/ and references this project; keep its sources out of the
+         plugin's own compilation. -->
+    <Compile Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+
+  <!-- Grant the test assembly access to internal types (IApiClient, ApiClient, ApiException). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Eikon.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -68,6 +68,10 @@ internal sealed class AuthService : IDisposable
 
     public bool IsVerified { get; private set; }
 
+    // Set after auth when the account is soft-deleted but still inside the grace window; drives the
+    // restore prompt (Screen.RestoreAccount). Null when the account is active.
+    public string? DeletionPendingUntil { get; private set; }
+
     public void StartLogin()
     {
         if (this.Phase == AuthPhase.Authorizing)
@@ -106,6 +110,49 @@ internal sealed class AuthService : IDisposable
         this.VerifyState = VerifyPhase.Idle;
         this.VerifyMessage = string.Empty;
         this.IsVerified = false;
+        this.DeletionPendingUntil = null;
+    }
+
+    // Restore a soft-deleted account from the sign-in restore prompt. On success clears the pending
+    // state and continues to the normal app landing. Returns false on failure so the screen can keep
+    // the prompt up with an error.
+    public async Task<bool> RestoreAsync(CancellationToken ct)
+    {
+        try
+        {
+            var access = await this.GetAccessTokenAsync(ct);
+            if (string.IsNullOrEmpty(access))
+                return false;
+            await this.api.RestoreAccountAsync(access, ct);
+            this.DeletionPendingUntil = null;
+            this.RouteToApp();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.log.Warning(ex, "Account restore failed.");
+            return false;
+        }
+    }
+
+    // "Delete now instead" on the restore prompt: hard-delete immediately, then sign out to the gate.
+    public async Task<bool> ConfirmDeleteNowAsync(CancellationToken ct)
+    {
+        try
+        {
+            var access = await this.GetAccessTokenAsync(ct);
+            if (string.IsNullOrEmpty(access))
+                return false;
+            await this.api.DeleteNowAsync(access, ct);
+            this.SignOut();
+            this.router.Navigate(Screen.AgeGuidelines);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.log.Warning(ex, "Immediate account deletion failed.");
+            return false;
+        }
     }
 
     // Start optional XIVAuth character verification (badge only). Requires a signed-in session.
@@ -352,7 +399,50 @@ internal sealed class AuthService : IDisposable
     // vault and passphrase). Returning members skip straight in: to the grid if the vault auto-
     // unlocked, or to the passphrase unlock screen if it is still locked (after a logout or reset,
     // or on a new machine).
+    // After authentication, first check whether this account is pending deletion (recoverable inside
+    // the grace window); if so, land on the restore prompt instead of the app. Otherwise route normally.
+    // A failed check falls through to the app so a transient error doesn't strand a healthy account.
     private void RouteAfterAuth()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var access = await this.GetAccessTokenAsync(CancellationToken.None);
+                if (!string.IsNullOrEmpty(access))
+                {
+                    var (status, pendingUntil) = await this.api.GetMeAsync(access, CancellationToken.None);
+                    if (!string.IsNullOrEmpty(pendingUntil))
+                    {
+                        this.DeletionPendingUntil = pendingUntil;
+                        this.router.Navigate(Screen.RestoreAccount);
+                        return;
+                    }
+                    // Authenticated but the account is not usable (deleted past its grace window, or
+                    // suspended): sign out to the gate rather than drop into an app that 401s on every
+                    // call. Transient errors (5xx, network) fall through and let the app retry.
+                    if (status is 401 or 403)
+                    {
+                        this.SignOut();
+                        this.router.Navigate(Screen.AgeGuidelines);
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                this.log.Warning(ex, "Deletion-state check failed; continuing into the app.");
+            }
+
+            this.DeletionPendingUntil = null;
+            this.RouteToApp();
+        });
+    }
+
+    // The normal post-auth landing. New members finish onboarding (which sets up the vault and
+    // passphrase). Returning members skip in: to the grid if the vault auto-unlocked, or to the
+    // passphrase unlock screen if it is still locked (after a logout or reset, or on a new machine).
+    private void RouteToApp()
     {
         // Re-read the verified badge from the server so it survives a reload (it isn't kept locally);
         // otherwise a returning member looks unverified and gets re-prompted to verify needlessly.

@@ -7,6 +7,7 @@ internal enum Screen
     AgeGuidelines,
     Onboarding,
     Unlock,
+    RestoreAccount,
     Grid,
     Filter,
     ProfileDetail,

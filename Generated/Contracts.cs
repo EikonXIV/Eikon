@@ -26,6 +26,7 @@
 //    var conversationsResponse = ConversationsResponse.FromJson(jsonString);
 //    var createAlbumRequest = CreateAlbumRequest.FromJson(jsonString);
 //    var dataCenterDto = DataCenterDto.FromJson(jsonString);
+//    var deleteAccountRequest = DeleteAccountRequest.FromJson(jsonString);
 //    var discoverQuery = DiscoverQuery.FromJson(jsonString);
 //    var discoverResult = DiscoverResult.FromJson(jsonString);
 //    var encryptedMessageDto = EncryptedMessageDto.FromJson(jsonString);
@@ -296,6 +297,18 @@ namespace Eikon.Contracts
         public AlbumVisibilityEnum Visibility { get; set; }
     }
 
+    public partial class DeleteAccountRequest
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("note")]
+        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
+        public string Note { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("reasons")]
+        public List<string> Reasons { get; set; }
+    }
+
     public partial class DiscoverQuery
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -414,7 +427,7 @@ namespace Eikon.Contracts
         public long? DcId { get; set; }
 
         [JsonPropertyName("discord")]
-        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
         public string Discord { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -714,7 +727,7 @@ namespace Eikon.Contracts
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("details")]
-        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
         public string Details { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1147,6 +1160,11 @@ namespace Eikon.Contracts
         public static DataCenterDto FromJson(string json) => JsonSerializer.Deserialize<DataCenterDto>(json, Eikon.Contracts.Converter.Settings);
     }
 
+    public partial class DeleteAccountRequest
+    {
+        public static DeleteAccountRequest FromJson(string json) => JsonSerializer.Deserialize<DeleteAccountRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
     public partial class DiscoverQuery
     {
         public static DiscoverQuery FromJson(string json) => JsonSerializer.Deserialize<DiscoverQuery>(json, Eikon.Contracts.Converter.Settings);
@@ -1415,6 +1433,7 @@ namespace Eikon.Contracts
         public static string ToJson(this ConversationsResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this CreateAlbumRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DataCenterDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this DeleteAccountRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DiscoverQuery self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DiscoverResult self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this EncryptedMessageDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
@@ -1999,6 +2018,33 @@ namespace Eikon.Contracts
         public static readonly RegionEnumConverter Singleton = new RegionEnumConverter();
     }
 
+    internal class TentacledMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length <= 1000)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length <= 1000)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly TentacledMinMaxLengthCheckConverter Singleton = new TentacledMinMaxLengthCheckConverter();
+    }
+
     internal class GenderElementConverter : JsonConverter<GenderElement>
     {
         public override bool CanConvert(Type t) => t == typeof(GenderElement);
@@ -2270,7 +2316,7 @@ namespace Eikon.Contracts
         public static readonly TribeElementConverter Singleton = new TribeElementConverter();
     }
 
-    internal class TentacledMinMaxLengthCheckConverter : JsonConverter<string>
+    internal class StickyMinMaxLengthCheckConverter : JsonConverter<string>
     {
         public override bool CanConvert(Type t) => t == typeof(string);
 
@@ -2294,7 +2340,7 @@ namespace Eikon.Contracts
             throw new Exception("Cannot marshal type string");
         }
 
-        public static readonly TentacledMinMaxLengthCheckConverter Singleton = new TentacledMinMaxLengthCheckConverter();
+        public static readonly StickyMinMaxLengthCheckConverter Singleton = new StickyMinMaxLengthCheckConverter();
     }
 
     internal class StatusConverter : JsonConverter<Status>
@@ -2535,33 +2581,6 @@ namespace Eikon.Contracts
         }
 
         public static readonly ReportReasonEnumConverter Singleton = new ReportReasonEnumConverter();
-    }
-
-    internal class StickyMinMaxLengthCheckConverter : JsonConverter<string>
-    {
-        public override bool CanConvert(Type t) => t == typeof(string);
-
-        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            var value = reader.GetString();
-            if (value.Length <= 1000)
-            {
-                return value;
-            }
-            throw new Exception("Cannot unmarshal type string");
-        }
-
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-        {
-            if (value.Length <= 1000)
-            {
-                JsonSerializer.Serialize(writer, value, options);
-                return;
-            }
-            throw new Exception("Cannot marshal type string");
-        }
-
-        public static readonly StickyMinMaxLengthCheckConverter Singleton = new StickyMinMaxLengthCheckConverter();
     }
 
     internal class IndigoMinMaxLengthCheckConverter : JsonConverter<string>
