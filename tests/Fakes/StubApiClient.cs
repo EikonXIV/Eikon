@@ -31,9 +31,9 @@ internal sealed class StubApiClient : IApiClient
             {
                 KeyId = b.SignedPreKey.KeyId,
                 PublicKey = Convert.ToBase64String(b.SignedPreKey.PublicKey),
-                Signature = b.SignedPreKey.Signature is null ? null : Convert.ToBase64String(b.SignedPreKey.Signature),
+                Signature = Convert.ToBase64String(b.SignedPreKey.Signature!),   // PublicBundle always signs the SPK
             },
-            OneTimePreKey = otk is null ? null : new PreKeyDto
+            OneTimePreKey = otk is null ? null! : new PreKeyDto
             {
                 KeyId = otk.KeyId,
                 PublicKey = Convert.ToBase64String(otk.PublicKey),
