@@ -2,7 +2,6 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using Dalamud.Plugin.Services;
 using Eikon.Contracts;
 using Eikon.Crypto;
 using CryptoLib = Eikon.Crypto.Crypto;
@@ -35,25 +34,31 @@ internal sealed class MessageCrypto
     private static readonly byte[] StepChain = "chain"u8.ToArray();
 
     private readonly IApiClient api;
-    private readonly AuthService auth;
+    private readonly ITokenProvider auth;
     private readonly KeyVault vault;
     private readonly IdentityService identity;
-    private readonly IPluginLog log;
+    private readonly ILog log;
     private readonly object gate = new();
     private readonly Dictionary<Guid, Session> sessions = new();
     private readonly string sessionPath;
     private bool loaded;
     private bool loadFailed;   // sessions file exists but couldn't be read/decrypted -> fail closed
 
-    public MessageCrypto(IApiClient api, AuthService auth, KeyVault vault, IdentityService identity, IPluginLog log)
+    // sessionPath defaults to the Dalamud plugin config dir; a test supplies a temp path. The default is
+    // isolated in DefaultSessionPath() so, when a path is supplied, the ctor never JIT-resolves the
+    // Dalamud static (which is not loadable under `dotnet test`).
+    public MessageCrypto(IApiClient api, ITokenProvider auth, KeyVault vault, IdentityService identity, ILog log, string? sessionPath = null)
     {
         this.api = api;
         this.auth = auth;
         this.vault = vault;
         this.identity = identity;
         this.log = log;
-        this.sessionPath = Path.Combine(Plugin.PluginInterface.GetPluginConfigDirectory(), "sessions.bin");
+        this.sessionPath = sessionPath ?? DefaultSessionPath();
     }
+
+    private static string DefaultSessionPath() =>
+        Path.Combine(Plugin.PluginInterface.GetPluginConfigDirectory(), "sessions.bin");
 
     // Binds the session secret to the participant pair and protocol version (defense in depth: a
     // session can't be transplanted to a different pair or silently downgraded). Both peers compute

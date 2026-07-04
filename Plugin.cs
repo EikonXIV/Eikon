@@ -63,6 +63,10 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IApiClient, ApiClient>();
         services.AddSingleton<SessionStore>();
         services.AddSingleton<AuthService>();
+        // Crypto services depend on these seams rather than Dalamud/AuthService directly, so they stay
+        // unit-testable. Both resolve to the same underlying singletons the plugin already registers.
+        services.AddSingleton<ILog>(sp => new PluginLogAdapter(sp.GetRequiredService<IPluginLog>()));
+        services.AddSingleton<ITokenProvider>(sp => sp.GetRequiredService<AuthService>());
         services.AddSingleton<WorldCatalog>();
         services.AddSingleton<ProfileService>();
         services.AddSingleton<DiscoveryService>();
