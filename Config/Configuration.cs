@@ -16,6 +16,11 @@ internal sealed class Configuration : IPluginConfiguration
     // new builds read each other's config; an unknown value falls back to Expanded.
     public int GridLayout { get; set; }
 
+    // The plugin version whose "What's new" the member last acknowledged, as "Major.Minor.Build". Null on
+    // a fresh install (the screen is then skipped and this is set silently). Additive and optional, so old
+    // and new builds read each other's config.
+    public string? LastSeenVersion { get; set; }
+
     // Eikon API server. Release builds default to production. Local (Debug) builds default to the
     // docker-compose server, since they load as the separate EikonLocal plugin with their own config and
     // are meant for local work; that value persists and the prod-only loopback migration in Plugin.cs is
