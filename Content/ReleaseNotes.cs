@@ -12,6 +12,15 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 4, 0),
+            "July 2026",
+            New:
+            [
+                "Fully close Eikon with the new title-bar X, or by right-clicking the orb. Reopen any time with /eikon.",
+            ],
+            Improved: [],
+            Fixed: []),
+        new Release(
             new Version(1, 3, 1),
             "July 2026",
             New: [],
