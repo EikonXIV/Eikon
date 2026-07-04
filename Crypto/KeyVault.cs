@@ -50,11 +50,17 @@ internal sealed class KeyVault
     // a member on a shared PC can turn it off ("require passphrase on this PC") so every launch prompts.
     private bool autoUnlock = true;
 
-    public KeyVault()
+    // vaultPath is a test seam: production passes nothing and gets the Dalamud config-dir path (no
+    // behavior change); a test can point the vault at a temp file so it needs no Dalamud runtime. The
+    // Dalamud path lives in its own method so the '??' short-circuit means the ctor JIT-compiles and
+    // runs without ever touching Dalamud when a path is supplied.
+    public KeyVault(string? vaultPath = null)
     {
-        var dir = Plugin.PluginInterface.GetPluginConfigDirectory();
-        this.path = Path.Combine(dir, "vault.json");
+        this.path = vaultPath ?? DefaultVaultPath();
     }
+
+    private static string DefaultVaultPath() =>
+        Path.Combine(Plugin.PluginInterface.GetPluginConfigDirectory(), "vault.json");
 
     public bool HasIdentity => File.Exists(this.path);
 
