@@ -62,10 +62,14 @@ internal sealed class EikonBootstrap : IDisposable
         this.windowSystem.AddWindow(this.orbWindow);
         this.windowSystem.AddWindow(this.notificationWindow);
 
-        // Minimize collapses the app to the orb; tapping the orb restores it. The signal is shared so
-        // both the main title bar and the chat header raise it through the same path.
+        // Minimize collapses the app to the orb; tapping the orb restores it. Close (title-bar X or
+        // right-clicking the orb) hides everything until the slash command or the installer's Open
+        // button reopens it. The signals are shared so the main title bar, the chat header, and the
+        // orb all raise them through the same path.
         this.windowController.MinimizeRequested += this.Minimize;
+        this.windowController.CloseRequested += this.Close;
         this.orbWindow.RestoreRequested += this.Restore;
+        this.orbWindow.CloseRequested += this.Close;
         this.notifications.OpenRequested += this.OpenNotification;
 
         this.commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
@@ -83,7 +87,9 @@ internal sealed class EikonBootstrap : IDisposable
     public void Dispose()
     {
         this.windowController.MinimizeRequested -= this.Minimize;
+        this.windowController.CloseRequested -= this.Close;
         this.orbWindow.RestoreRequested -= this.Restore;
+        this.orbWindow.CloseRequested -= this.Close;
         this.notifications.OpenRequested -= this.OpenNotification;
         this.pluginInterface.UiBuilder.Draw -= this.windowSystem.Draw;
         this.pluginInterface.UiBuilder.Draw -= this.media.Draw;
@@ -112,6 +118,18 @@ internal sealed class EikonBootstrap : IDisposable
 
         this.mainWindow.IsOpen = false;
         this.orbWindow.IsOpen = true;
+    }
+
+    // Fully close: no window, no orb. Locks the vault under the same rule as minimize. The session
+    // persists and the relay stays connected, so message toasts still arrive (tapping one restores);
+    // closing is hiding the app, not logging out.
+    private void Close()
+    {
+        if (!this.keyVault.AutoUnlockEnabled && this.keyVault.IsUnlocked)
+            this.keyVault.Lock();
+
+        this.mainWindow.IsOpen = false;
+        this.orbWindow.IsOpen = false;
     }
 
     private void Restore()

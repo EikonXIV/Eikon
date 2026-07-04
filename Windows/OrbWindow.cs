@@ -8,10 +8,11 @@ using Eikon.UI.Theme;
 namespace Eikon.Windows;
 
 // Minimized launcher. When the main window is hidden, this small floating phone stays on screen: drag
-// it anywhere, tap it to reopen the app. It's drawn from primitives (rounded body, lit screen, speaker
-// and home-bar lines, plus an unread-count badge - or a lock symbol while the vault is locked). The window is borderless and
-// transparent so only the phone shows; it stays movable because the body (a Dummy, not a button) is
-// draggable, and a tap is told from a drag by how far the cursor moved between press and release.
+// it anywhere, tap it to reopen the app, right-click it to close the app fully (no orb). It's drawn
+// from primitives (rounded body, lit screen, speaker and home-bar lines, plus an unread-count badge -
+// or a lock symbol while the vault is locked). The window is borderless and transparent so only the
+// phone shows; it stays movable because the body (a Dummy, not a button) is draggable, and a tap is
+// told from a drag by how far the cursor moved between press and release.
 internal sealed class OrbWindow : Window
 {
     private readonly ThemeService theme;
@@ -37,6 +38,8 @@ internal sealed class OrbWindow : Window
     }
 
     public event Action? RestoreRequested;
+
+    public event Action? CloseRequested;
 
     public override void Draw()
     {
@@ -123,13 +126,18 @@ internal sealed class OrbWindow : Window
 
         drawList.PopClipRect();
 
-        // The window drags on its body; a near-stationary press/release is a tap -> reopen.
+        // The window drags on its body; a near-stationary press/release is a tap -> reopen. A
+        // right-click closes the app fully (no orb); the tooltip is what teaches that gesture.
         if (ImGui.IsWindowHovered())
         {
+            using (this.fonts.Caption.Push())
+                ImGui.SetTooltip("Tap to open. Right-click to close.");
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                 this.pressPos = ImGui.GetIO().MousePos;
             if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && Vector2.Distance(ImGui.GetIO().MousePos, this.pressPos) < Ui.Px(6f))
                 this.RestoreRequested?.Invoke();
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+                this.CloseRequested?.Invoke();
         }
     }
 }
