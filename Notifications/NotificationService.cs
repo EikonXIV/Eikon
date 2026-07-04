@@ -45,12 +45,13 @@ internal sealed class NotificationService
     private readonly Selection selection;
     private readonly MainWindow mainWindow;
     private readonly SoundService sound;
+    private readonly AlbumService albums;
     private readonly ConcurrentQueue<Guid> pending = new();
     private readonly ConcurrentQueue<(ToastKind Kind, AlbumNotice Notice)> albumPending = new();
     private readonly List<NotificationToast> toasts = new();
     private long lastSoundAt;
 
-    public NotificationService(Configuration config, RelayClient relay, ChatService chat, InboxService inbox, ScreenRouter router, Selection selection, MainWindow mainWindow, SoundService sound)
+    public NotificationService(Configuration config, RelayClient relay, ChatService chat, InboxService inbox, ScreenRouter router, Selection selection, MainWindow mainWindow, SoundService sound, AlbumService albums)
     {
         this.config = config;
         this.inbox = inbox;
@@ -58,6 +59,7 @@ internal sealed class NotificationService
         this.selection = selection;
         this.mainWindow = mainWindow;
         this.sound = sound;
+        this.albums = albums;
 
         relay.MessageReceived += m => this.pending.Enqueue(m.SenderId);
         relay.AlbumRequestReceived += n => this.albumPending.Enqueue((ToastKind.AlbumRequest, n));
@@ -101,8 +103,16 @@ internal sealed class NotificationService
 
         while (this.albumPending.TryDequeue(out var item))
         {
-            if (!this.config.NotificationsEnabled) continue;
             var (kind, notice) = item;
+
+            // An approval lands on the owner's client; this event is how the requester's client learns
+            // of it. Drop the peer's cached album list so the profile and chat sections refetch and the
+            // album unlocks live, independent of whether a toast is shown. Runs on the UI thread (Tick),
+            // the same thread PeerAlbums() is read on, so the cache stays consistent.
+            if (kind == ToastKind.AlbumApproved)
+                this.albums.InvalidatePeer(notice.PeerId);
+
+            if (!this.config.NotificationsEnabled) continue;
             if (this.IsViewingAlbums(kind, notice.AlbumId)) continue;
 
             var subtitle = kind == ToastKind.AlbumRequest ? "Requested album access" : "Unlocked an album for you";
