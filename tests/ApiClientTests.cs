@@ -134,4 +134,72 @@ public class ApiClientTests
         Assert.Equal(401, status);
         Assert.Null(until);
     }
+
+    // ---- request-shaping for more endpoints (same StubHandler seam) --------------------------------
+
+    [Fact]
+    public async Task Favorite_posts_target_and_flag()
+    {
+        var (api, handler) = Make();
+        var target = Guid.NewGuid();
+        await api.FavoriteAsync("tok", target, true, CancellationToken.None);
+        Assert.Equal(HttpMethod.Post, handler.Request!.Method);
+        Assert.Equal("/api/favorite", handler.Request!.RequestUri!.AbsolutePath);
+        using var doc = JsonDocument.Parse(handler.Body!);
+        Assert.Equal(target, doc.RootElement.GetProperty("targetId").GetGuid());
+        Assert.True(doc.RootElement.GetProperty("on").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Block_and_Unblock_post_the_target_to_their_endpoints()
+    {
+        var target = Guid.NewGuid();
+
+        var (block, hb) = Make();
+        await block.BlockAsync("tok", target, CancellationToken.None);
+        Assert.Equal(HttpMethod.Post, hb.Request!.Method);
+        Assert.Equal("/api/block", hb.Request!.RequestUri!.AbsolutePath);
+        Assert.Equal(target, JsonDocument.Parse(hb.Body!).RootElement.GetProperty("targetId").GetGuid());
+
+        var (unblock, hu) = Make();
+        await unblock.UnblockAsync("tok", target, CancellationToken.None);
+        Assert.Equal("/api/unblock", hu.Request!.RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task GrantAlbum_posts_grantee_and_source_to_the_album_path()
+    {
+        var (api, handler) = Make();
+        var grantee = Guid.NewGuid();
+        await api.GrantAlbumAsync("tok", "alb-1", grantee, "request", CancellationToken.None);
+        Assert.Equal(HttpMethod.Post, handler.Request!.Method);
+        Assert.Equal("/api/albums/alb-1/grants", handler.Request!.RequestUri!.AbsolutePath);
+        using var doc = JsonDocument.Parse(handler.Body!);
+        Assert.Equal(grantee, doc.RootElement.GetProperty("granteeId").GetGuid());
+        Assert.Equal("request", doc.RootElement.GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateAlbum_sends_only_the_supplied_fields()
+    {
+        var (api, handler) = Make();
+        await api.UpdateAlbumAsync("tok", "alb-1", "New name", null, null, CancellationToken.None);
+        Assert.Equal(HttpMethod.Patch, handler.Request!.Method);
+        Assert.Equal("/api/albums/alb-1", handler.Request!.RequestUri!.AbsolutePath);
+        using var doc = JsonDocument.Parse(handler.Body!);
+        Assert.Equal("New name", doc.RootElement.GetProperty("name").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("visibility", out _));
+        Assert.False(doc.RootElement.TryGetProperty("coverPhotoId", out _));
+    }
+
+    [Fact]
+    public async Task UpdateAlbum_includes_all_supplied_fields()
+    {
+        var (api, handler) = Make();
+        await api.UpdateAlbumAsync("tok", "alb-1", "n", "public", "cover-9", CancellationToken.None);
+        using var doc = JsonDocument.Parse(handler.Body!);
+        Assert.Equal("n", doc.RootElement.GetProperty("name").GetString());
+        Assert.Equal("public", doc.RootElement.GetProperty("visibility").GetString());
+        Assert.Equal("cover-9", doc.RootElement.GetProperty("coverPhotoId").GetString());
+    }
 }

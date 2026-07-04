@@ -39,8 +39,7 @@ public sealed class Plugin : IDalamudPlugin
 #if !DEBUG
         if (config.Version < 2)
         {
-            if (Uri.TryCreate(config.ServerBaseUrl, UriKind.Absolute, out var configured) && configured.IsLoopback)
-                config.ServerBaseUrl = "https://api.eikon.chat";
+            config.ServerBaseUrl = ServerUrl.ResetLoopbackIfNeeded(config.ServerBaseUrl);
             config.Version = 2;
             config.Save();
         }

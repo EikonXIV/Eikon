@@ -30,7 +30,8 @@ internal sealed class SessionStore
     // The signed-in member's id, read from the access token's `sub` claim (null if signed out).
     public Guid? UserId => ParseSub(this.AccessToken);
 
-    private static Guid? ParseSub(string? accessToken)
+    // internal (not private) so the pure JWT-sub parsing can be unit-tested; no behavior change.
+    internal static Guid? ParseSub(string? accessToken)
     {
         if (string.IsNullOrEmpty(accessToken))
             return null;
