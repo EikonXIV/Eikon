@@ -2,7 +2,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Dalamud.Plugin.Services;
 using Eikon.Crypto;
 using CryptoLib = Eikon.Crypto.Crypto;
 
@@ -21,7 +20,7 @@ internal enum IdentityResult
 internal sealed class IdentityService
 {
     private readonly KeyVault vault;
-    private readonly IPluginLog log;
+    private readonly ILog log;
     private readonly object gate = new();
     private readonly Dictionary<Guid, Pin> pins = new();
     private readonly HashSet<Guid> mismatched = new();   // peers whose served identity changed since pinning
@@ -29,12 +28,18 @@ internal sealed class IdentityService
     private bool loaded;
     private bool loadFailed;   // pins file exists but couldn't be read/decrypted -> fail closed
 
-    public IdentityService(KeyVault vault, IPluginLog log)
+    // pinsPath defaults to the Dalamud plugin config dir; a test supplies a temp path. The default is
+    // isolated in DefaultPinsPath() so, when a path is supplied, the ctor never JIT-resolves the Dalamud
+    // static (which is not loadable under `dotnet test`).
+    public IdentityService(KeyVault vault, ILog log, string? pinsPath = null)
     {
         this.vault = vault;
         this.log = log;
-        this.path = Path.Combine(Plugin.PluginInterface.GetPluginConfigDirectory(), "pins.bin");
+        this.path = pinsPath ?? DefaultPinsPath();
     }
+
+    private static string DefaultPinsPath() =>
+        Path.Combine(Plugin.PluginInterface.GetPluginConfigDirectory(), "pins.bin");
 
     private sealed class Pin
     {

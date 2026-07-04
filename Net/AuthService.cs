@@ -26,7 +26,7 @@ internal enum VerifyPhase
 // Drives the browser authorization-code login (ARCHITECTURE 4.2): start a transaction, open the
 // authorize URL in the browser, then poll until the server hands back a session. On startup it tries
 // to restore a session from the stored refresh token. UI reads Phase/Message each frame.
-internal sealed class AuthService : IDisposable
+internal sealed class AuthService : IDisposable, ITokenProvider
 {
     private readonly IApiClient api;
     private readonly SessionStore store;
