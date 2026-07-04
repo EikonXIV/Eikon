@@ -12,22 +12,23 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 3, 0),
+            "July 2026",
+            New:
+            [
+                "A What's new screen. See what changed after each update, and browse past releases any time from Settings.",
+            ],
+            Improved: [],
+            Fixed: []),
+        new Release(
             new Version(1, 2, 0),
             "July 2026",
             New:
             [
-                "Private albums - collect photos into sets and share them with people you trust.",
-                "Delete your account any time, with a 30-day window to change your mind.",
+                "Delete your account from Settings. It's recoverable: sign back in within 30 days to restore everything, or confirm removal right away.",
             ],
-            Improved:
-            [
-                "Pride flag themes recolor the whole app.",
-                "Message timestamps in every conversation.",
-            ],
-            Fixed:
-            [
-                "Blurred photos no longer reveal when a chat reopens.",
-            ]),
+            Improved: [],
+            Fixed: []),
     ];
 
     // Releases newer than what the member last acknowledged, newest-first. A null version (fresh install,
