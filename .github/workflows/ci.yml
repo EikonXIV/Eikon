@@ -3,8 +3,8 @@ name: ci
 on:
   push:
     branches: [main]
+  # No base-branch filter: run on every PR, including ones stacked on another feature branch.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
