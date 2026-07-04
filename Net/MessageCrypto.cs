@@ -21,9 +21,11 @@ namespace Eikon.Net;
 // This denies an active/malicious relay the ability to desync or poison sessions with forged frames.
 internal sealed class MessageCrypto
 {
-    private const byte Version = 0x02;
-    private const byte FlagInitial = 0x01;
-    private const int MaxSkip = 1000;
+    // internal (not private) so the ratchet math below can be unit-tested by the Eikon.Tests friend
+    // assembly. These stay internal: no crypto surface becomes public, and other plugins cannot reach it.
+    internal const byte Version = 0x02;
+    internal const byte FlagInitial = 0x01;
+    internal const int MaxSkip = 1000;
 
     private static readonly byte[] ChainSalt = "eikon-chain"u8.ToArray();
     private static readonly byte[] Chain0 = "chain-0"u8.ToArray();
@@ -56,7 +58,7 @@ internal sealed class MessageCrypto
     // Binds the session secret to the participant pair and protocol version (defense in depth: a
     // session can't be transplanted to a different pair or silently downgraded). Both peers compute
     // the same bytes from the canonically-ordered ids.
-    private static byte[] Context(string myId, Guid peer)
+    internal static byte[] Context(string myId, Guid peer)
     {
         var peerId = peer.ToString();
         var (lo, hi) = string.CompareOrdinal(myId, peerId) < 0 ? (myId, peerId) : (peerId, myId);
@@ -71,7 +73,7 @@ internal sealed class MessageCrypto
         return result;
     }
 
-    private sealed class Session
+    internal sealed class Session
     {
         public byte[] SendCk = Array.Empty<byte>();
         public uint SendN;
@@ -309,7 +311,7 @@ internal sealed class MessageCrypto
         }
     }
 
-    private static Session NewSession(string myId, Guid peer, byte[] sk, bool initiator)
+    internal static Session NewSession(string myId, Guid peer, byte[] sk, bool initiator)
     {
         var party0 = string.CompareOrdinal(myId, peer.ToString()) < 0;
         var ck0 = CryptoLib.Hkdf(sk, ChainSalt, Chain0, 32);
@@ -324,7 +326,7 @@ internal sealed class MessageCrypto
 
     // Verify-before-commit receive. Decrypts message `n` against `s` WITHOUT mutating it; only on a
     // successful AEAD tag does it advance the chain / consume the skipped key. Caller holds the gate.
-    private static bool TryRecv(Session s, uint n, byte[] nonce, byte[] aad, byte[] ciphertext, out string? text)
+    internal static bool TryRecv(Session s, uint n, byte[] nonce, byte[] aad, byte[] ciphertext, out string? text)
     {
         text = null;
 
@@ -405,7 +407,7 @@ internal sealed class MessageCrypto
     }
 
     // One KDF chain step for sending: derive the message key, advance (and wipe) the chain key.
-    private static byte[] StepMk(ref byte[] ck)
+    internal static byte[] StepMk(ref byte[] ck)
     {
         var (mk, next) = Kdf(ck);
         Array.Clear(ck);
@@ -414,10 +416,10 @@ internal sealed class MessageCrypto
     }
 
     // Derive (message key, next chain key) from a chain key without mutating the input.
-    private static (byte[] Mk, byte[] Next) Kdf(byte[] ck)
+    internal static (byte[] Mk, byte[] Next) Kdf(byte[] ck)
         => (CryptoLib.Hkdf(ck, StepSalt, StepMsg, 32), CryptoLib.Hkdf(ck, StepSalt, StepChain, 32));
 
-    private static byte[] BuildHeader(bool initial, uint n, byte[]? ekPub, int spkId, int opkId)
+    internal static byte[] BuildHeader(bool initial, uint n, byte[]? ekPub, int spkId, int opkId)
     {
         if (initial && ekPub is not null)
         {
@@ -437,7 +439,7 @@ internal sealed class MessageCrypto
         return head;
     }
 
-    private static bool ParseHeader(byte[] h, out bool initial, out uint n, out byte[] ekPub, out int spkId, out int opkId)
+    internal static bool ParseHeader(byte[] h, out bool initial, out uint n, out byte[] ekPub, out int spkId, out int opkId)
     {
         initial = false;
         n = 0;
