@@ -198,7 +198,8 @@ internal sealed class RelayClient : IDisposable
         }
     }
 
-    private static AlbumNotice ParseAlbumNotice(JsonElement root) => new(
+    // internal (not private) so the pure notice parsing can be unit-tested; no behavior change.
+    internal static AlbumNotice ParseAlbumNotice(JsonElement root) => new(
         root.GetProperty("from").GetGuid(),
         root.TryGetProperty("fromName", out var n) ? n.GetString() ?? "Someone" : "Someone",
         root.GetProperty("albumId").GetGuid(),
