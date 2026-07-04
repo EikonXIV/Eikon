@@ -2,6 +2,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Eikon.Navigation;
 using Eikon.Net;
+using Eikon.Screens;
 using Eikon.UI;
 using Eikon.UI.Theme;
 
@@ -69,6 +70,11 @@ internal sealed class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
+        // Once per session, when the app is usable, the What's new screen decides whether an update
+        // happened and routes to itself.
+        if (this.screensById.TryGetValue(Screen.WhatsNew, out var whatsNew) && whatsNew is WhatsNewScreen gate)
+            gate.MaybeAutoPresent();
+
         var screen = this.screensById.GetValueOrDefault(this.router.Current);
         if (screen is null || screen.Chrome)
             this.DrawWithChrome(screen);

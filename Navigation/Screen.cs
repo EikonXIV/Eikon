@@ -18,6 +18,7 @@ internal enum Screen
     Settings,
     Favorites,
     Guidelines,
+    WhatsNew,
     Blocked,
     Albums,
     AlbumDetail,

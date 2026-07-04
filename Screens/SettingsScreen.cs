@@ -2,6 +2,7 @@ using System.Threading;
 using Dalamud.Interface;
 using Dalamud.Plugin.Services;
 using Eikon.Config;
+using Eikon.Content;
 using Eikon.Crypto;
 using Eikon.Navigation;
 using Eikon.Net;
@@ -192,7 +193,9 @@ internal sealed class SettingsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         if (this.NavRow("##s_guidelines", "Community Guidelines", string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.Guidelines);
-        this.NavRow("##s_version", "Version", "1.0.0", Palette.TextSecondary, false, contentWidth);
+        if (this.NavRow("##s_whatsnew", "What's new", string.Empty, Palette.TextPrimary, true, contentWidth))
+            this.router.Navigate(Screen.WhatsNew);
+        this.NavRow("##s_version", "Version", PluginVersion.Display, Palette.TextSecondary, false, contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
 

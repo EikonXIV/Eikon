@@ -106,6 +106,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, SettingsScreen>();
         services.AddSingleton<IScreen, FavoritesScreen>();
         services.AddSingleton<IScreen, GuidelinesScreen>();
+        services.AddSingleton<IScreen, WhatsNewScreen>();
         services.AddSingleton<IScreen, BlockedUsersScreen>();
         services.AddSingleton<IScreen, AlbumsScreen>();
         services.AddSingleton<IScreen, AlbumDetailScreen>();
