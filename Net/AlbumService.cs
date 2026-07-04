@@ -118,6 +118,12 @@ internal sealed class AlbumService : IDisposable
         return Array.Empty<PeerAlbumDto>();
     }
 
+    // Drop a peer's cached album list so the next PeerAlbums() call refetches their current access
+    // state. Called when their profile is opened: an approval lands on the owner's client, not the
+    // requester's, so without this the requester's cached "requested" state never clears within a
+    // session and the now-granted album stays stuck looking locked.
+    public void InvalidatePeer(Guid userId) => this.peerByUser.Remove(userId);
+
     // Album-photo texture through the album's own grant-checked mint. Cached by album+photo so the same
     // photo viewed from different albums does not clash.
     public IDalamudTextureWrap? Texture(Guid albumId, Guid photoId)

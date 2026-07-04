@@ -12,6 +12,15 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 3, 1),
+            "July 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Albums shared with you now unlock right away, instead of sometimes staying stuck on 'Requested'.",
+            ]),
+        new Release(
             new Version(1, 3, 0),
             "July 2026",
             New:

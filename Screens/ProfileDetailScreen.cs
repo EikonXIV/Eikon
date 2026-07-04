@@ -89,6 +89,7 @@ internal sealed class ProfileDetailScreen : IScreen
             this.favFor = this.current.UserId;
             this.favorited = this.current.Favorited;   // seed from the server; toggles stay local after
             this.heroIndex = 0;                        // start a new profile's gallery on the main photo
+            this.albums.InvalidatePeer(this.current.UserId);   // refetch album access fresh: a grant may have landed since we last cached it
         }
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
         using (var content = ImRaii.Child("pd_content", new Vector2(avail.X, avail.Y - headerHeight - actionHeight)))
@@ -366,6 +367,13 @@ internal sealed class ProfileDetailScreen : IScreen
             else if (album.Access == PeerAlbumAccessEnum.Locked)
             {
                 this.albums.RequestAccess(album.Id, userId);
+            }
+            else if (album.Access == PeerAlbumAccessEnum.Requested)
+            {
+                // Re-check: if the owner has approved since we cached this, the refetch flips it to
+                // viewable. Turns the old dead-end tap into an in-app retry, so a stuck "Requested"
+                // never needs a plugin reload to clear.
+                this.albums.InvalidatePeer(userId);
             }
         }
     }
