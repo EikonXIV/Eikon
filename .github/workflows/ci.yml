@@ -35,6 +35,9 @@ jobs:
       - name: Build
         run: dotnet build Eikon.csproj -c Release --nologo
 
+      - name: Test
+        run: dotnet test tests/Eikon.Tests.csproj -c Release --nologo
+
       - name: Upload packaged plugin
         uses: actions/upload-artifact@v4
         with:
