@@ -101,7 +101,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ steps.ver.outputs.tag }}'
-          $notes = "Add to Dalamud (Settings -> Experimental -> custom plugin repositories):`n``https://github.com/EikonXIV/Eikon/releases/latest/download/repo.json```nThen install **Eikon** and type ``/eikon``."
+          $notes = "Add to Dalamud (Settings -> Experimental -> custom plugin repositories):`n``https://eikon.chat/repo.json```nThen install **Eikon** and type ``/eikon``."
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag latest.zip repo.json --clobber
