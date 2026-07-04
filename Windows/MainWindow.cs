@@ -143,20 +143,43 @@ internal sealed class MainWindow : Window, IDisposable
             new Vector2(origin.X + padX, origin.Y + ((height - titleSize.Y) * 0.5f)),
             Palette.TextPrimary.U32(), title);
 
-        // Minimize to the floating orb (top-right).
+        // Window controls (top-right): minimize to the floating orb, then close everything. Close
+        // carries a tooltip naming the slash command so the app never looks like it just vanished.
         var btn = new Vector2(Ui.Px(30f), Ui.Px(30f));
-        ImGui.SetCursorScreenPos(new Vector2(origin.X + width - padX - btn.X, origin.Y + ((height - btn.Y) * 0.5f)));
-        if (ImGui.InvisibleButton("##minimize", btn))
+        var gap = Ui.Px(4f);
+        var btnY = origin.Y + ((height - btn.Y) * 0.5f);
+
+        if (this.HeaderButton(drawList, "##close", FontAwesomeIcon.Times,
+                new Vector2(origin.X + width - padX - btn.X, btnY), btn,
+                $"Close (reopen with {BuildInfo.Command})"))
+            this.windowController.Close();
+
+        if (this.HeaderButton(drawList, "##minimize", FontAwesomeIcon.Minus,
+                new Vector2(origin.X + width - padX - (btn.X * 2f) - gap, btnY), btn, null))
             this.windowController.Minimize();
-        var hovered = ImGui.IsItemHovered();
-        var btnMin = ImGui.GetItemRectMin();
-        if (hovered)
-            drawList.AddRectFilled(btnMin, btnMin + btn, Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
-        var glyph = FontAwesomeIcon.Minus.ToIconString();
-        var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-        Ui.TextAt(drawList, this.fonts.Icon, btnMin + ((btn - glyphSize) * 0.5f), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
 
         ImGui.SetCursorPosY(startY + height);
+    }
+
+    // A title-bar icon button: faint fill and a brightened glyph on hover, optional hover tooltip.
+    private bool HeaderButton(ImDrawListPtr drawList, string id, FontAwesomeIcon icon, Vector2 pos, Vector2 size, string? tooltip)
+    {
+        ImGui.SetCursorScreenPos(pos);
+        var clicked = ImGui.InvisibleButton(id, size);
+        var hovered = ImGui.IsItemHovered();
+        var min = ImGui.GetItemRectMin();
+        if (hovered)
+        {
+            drawList.AddRectFilled(min, min + size, Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
+            if (tooltip is not null)
+                using (this.fonts.Caption.Push())
+                    ImGui.SetTooltip(tooltip);
+        }
+
+        var glyph = icon.ToIconString();
+        var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(drawList, this.fonts.Icon, min + ((size - glyphSize) * 0.5f), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
+        return clicked;
     }
 
     private void DrawBottomNav(float height)
