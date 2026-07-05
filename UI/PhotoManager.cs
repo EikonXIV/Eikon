@@ -275,11 +275,11 @@ internal sealed class PhotoManager
     // so the accent vs muted tint carries the state.
     private void DrawStar(ImDrawListPtr drawList, Vector2 center, bool isMain)
     {
-        var bg = isMain ? Palette.WithAlpha(this.theme.Accent, 0.20f) : Palette.Scrim;
+        var bg = isMain ? Palette.WithAlpha(this.theme.Secondary.Base, 0.20f) : Palette.Scrim;
         drawList.AddCircleFilled(center, Ui.Px(13f), bg.U32(), 16);
         var glyph = FontAwesomeIcon.Star.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-        var color = isMain ? this.theme.Accent : Palette.WithAlpha(Palette.White, 0.72f);
+        var color = isMain ? this.theme.Secondary.Base : Palette.WithAlpha(Palette.White, 0.72f);
         Ui.TextAt(drawList, this.fonts.Icon, center - (glyphSize * 0.5f), color.U32(), glyph);
     }
 

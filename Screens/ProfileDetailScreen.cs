@@ -351,7 +351,7 @@ internal sealed class ProfileDetailScreen : IScreen
             var pillW = ls.X + Ui.Px(20f);
             var pillH = Ui.Px(28f);
             var pillPos = new Vector2(pos.X + contentWidth - pillW, midY - (pillH * 0.5f));
-            drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(this.theme.Accent, 0.5f).U32(), Ui.Px(8f), ImDrawFlags.None, 1f);
+            drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(this.theme.Secondary.Base, 0.5f).U32(), Ui.Px(8f), ImDrawFlags.None, 1f);
             Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pillPos.X + Ui.Px(10f), pillPos.Y + ((pillH - ls.Y) * 0.5f)), this.theme.AccentText.U32(), label);
         }
 
@@ -399,7 +399,7 @@ internal sealed class ProfileDetailScreen : IScreen
         {
             var verified = FontAwesomeIcon.CheckCircle.ToIconString();
             var verifiedSize = Ui.Measure(this.fonts.Icon, verified);
-            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(nextX, pos.Y + ((nameSize.Y - verifiedSize.Y) * 0.5f)), this.theme.Accent.U32(), verified);
+            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(nextX, pos.Y + ((nameSize.Y - verifiedSize.Y) * 0.5f)), this.theme.Secondary.Base.U32(), verified);
             nextX += verifiedSize.X + Ui.Px(8f);
         }
 
@@ -515,11 +515,11 @@ internal sealed class ProfileDetailScreen : IScreen
         var rounding = Ui.Px(10f);
         if (active)
             drawList.AddRectFilled(pos, pos + new Vector2(size, size), this.theme.AccentTint.U32(), rounding);
-        var borderColor = active ? this.theme.Accent : (ImGui.IsItemHovered() ? Palette.TextMuted : Palette.Border);
+        var borderColor = active ? this.theme.Secondary.Base : (ImGui.IsItemHovered() ? Palette.TextMuted : Palette.Border);
         drawList.AddRect(pos, pos + new Vector2(size, size), borderColor.U32(), rounding, ImDrawFlags.None, 1f);
         var glyph = icon.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-        var glyphColor = active ? this.theme.Accent : Palette.TextSecondary;
+        var glyphColor = active ? this.theme.Secondary.Base : Palette.TextSecondary;
         Ui.TextAt(drawList, this.fonts.Icon, pos + new Vector2((size - glyphSize.X) * 0.5f, (size - glyphSize.Y) * 0.5f), glyphColor.U32(), glyph);
         return clicked;
     }
@@ -535,7 +535,7 @@ internal sealed class ProfileDetailScreen : IScreen
         var size = new Vector2(padX + dot + gap + textSize.X + padX, textSize.Y + (padY * 2f));
 
         drawList.AddRectFilled(pos, pos + size, Palette.Scrim.U32(), Ui.Px(8f));
-        drawList.AddCircleFilled(pos + new Vector2(padX + (dot * 0.5f), size.Y * 0.5f), dot * 0.5f, this.theme.Accent.U32(), 12);
+        drawList.AddCircleFilled(pos + new Vector2(padX + (dot * 0.5f), size.Y * 0.5f), dot * 0.5f, this.theme.Secondary.Base.U32(), 12);
         Ui.TextAt(drawList, this.fonts.Caption, pos + new Vector2(padX + dot + gap, padY), Palette.White.U32(), label);
     }
 
@@ -561,7 +561,7 @@ internal sealed class ProfileDetailScreen : IScreen
         for (var i = 0; i < count; i++)
         {
             var x = startX + (i * (dotWidth + gap));
-            var color = i == activeIndex ? this.theme.Accent : Palette.WithAlpha(Palette.White, 0.4f);
+            var color = i == activeIndex ? this.theme.Secondary.Base : Palette.WithAlpha(Palette.White, 0.4f);
             drawList.AddRectFilled(new Vector2(x, y), new Vector2(x + dotWidth, y + dotHeight), color.U32(), dotHeight * 0.5f);
         }
     }

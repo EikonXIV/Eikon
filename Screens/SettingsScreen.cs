@@ -62,9 +62,10 @@ internal sealed class SettingsScreen : IScreen
     {
         var contentWidth = ImGui.GetContentRegionAvail().X - Ui.Px(16f);
 
-        this.kit.SectionLabel("Theme color");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.DrawSwatches(contentWidth);
+        this.kit.SectionLabel("Appearance");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        if (this.NavRow("##s_appearance", "Theme", this.theme.CurrentThemeName, Palette.TextPrimary, true, contentWidth))
+            this.router.Navigate(Screen.Appearance);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Browse layout");
@@ -248,46 +249,6 @@ internal sealed class SettingsScreen : IScreen
                 this.log.Warning(ex, "Saving privacy settings failed.");
             }
         });
-    }
-
-    private void DrawSwatches(float contentWidth)
-    {
-        const int columns = 6;
-        var gap = Ui.Px(10f);
-        var cell = (contentWidth - (gap * (columns - 1))) / columns;
-        var diameter = MathF.Min(cell, Ui.Px(42f));
-        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(gap, gap)))
-        {
-            for (var i = 0; i < AccentPresets.All.Count; i++)
-            {
-                if (i % columns != 0)
-                    ImGui.SameLine();
-                this.DrawSwatch(i, cell, diameter);
-            }
-        }
-    }
-
-    private void DrawSwatch(int index, float cell, float diameter)
-    {
-        var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton("##sw" + index, new Vector2(cell, diameter));
-        var drawList = ImGui.GetWindowDrawList();
-
-        var color = Palette.Rgb(AccentPresets.All[index].Rgb);
-        var center = new Vector2(pos.X + (cell * 0.5f), pos.Y + (diameter * 0.5f));
-        drawList.AddCircleFilled(center, (diameter * 0.5f) - Ui.Px(3f), color.U32(), 24);
-
-        if (this.theme.AccentIndex == index)
-        {
-            drawList.AddCircle(center, (diameter * 0.5f) - Ui.Px(1f), Palette.White.U32(), 24, Ui.Px(2f));
-            var check = FontAwesomeIcon.Check.ToIconString();
-            var checkSize = Ui.Measure(this.fonts.Icon, check);
-            var onColor = Palette.Luminance(color) > 0.6f ? Palette.Bg : Palette.White;
-            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (checkSize.X * 0.5f), center.Y - (checkSize.Y * 0.5f)), onColor.U32(), check);
-        }
-
-        if (clicked)
-            this.theme.SetAccent(index);
     }
 
     // Two selectable cards (Expanded / Compact), each with a mini grid-preview, a title and a

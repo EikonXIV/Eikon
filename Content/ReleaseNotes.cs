@@ -12,6 +12,18 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 5, 0),
+            "July 2026",
+            New:
+            [
+                "Pride flag themes: Pride, MLM, Bisexual, Trans, Ace, and Non-binary. Each one recolors the app and shows its flag as a stripe under the header.",
+            ],
+            Improved:
+            [
+                "Your theme now lives in a dedicated Appearance screen in Settings, with the classic colors and the new flags together.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(1, 4, 0),
             "July 2026",
             New:

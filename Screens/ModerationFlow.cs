@@ -527,9 +527,9 @@ internal sealed class ModerationFlow
         }
 
         var center = new Vector2(pos.X + Ui.Px(20f), pos.Y + (rowHeight * 0.5f));
-        drawList.AddCircle(center, Ui.Px(9f), (selected ? this.theme.Accent : Palette.TextMuted).U32(), 16, Ui.Px(1.5f));
+        drawList.AddCircle(center, Ui.Px(9f), (selected ? this.theme.Secondary.Base : Palette.TextMuted).U32(), 16, Ui.Px(1.5f));
         if (selected)
-            drawList.AddCircleFilled(center, Ui.Px(4.5f), this.theme.Accent.U32(), 12);
+            drawList.AddCircleFilled(center, Ui.Px(4.5f), this.theme.Secondary.Base.U32(), 12);
 
         var labelSize = Ui.Measure(this.fonts.Body, Reasons[index]);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(38f), center.Y - (labelSize.Y * 0.5f)), Palette.TextPrimary.U32(), Reasons[index]);

@@ -199,7 +199,7 @@ internal sealed class Lightbox
                 var startX = origin.X + (avail.X * 0.5f) - (total * 0.5f);
                 var y = origin.Y + img.Y + (dotsHeight * 0.5f);
                 for (var i = 0; i < count; i++)
-                    drawList.AddCircleFilled(new Vector2(startX + (i * dotGap), y), Ui.Px(3.5f), (i == this.index ? this.theme.Accent : Palette.Border).U32(), 12);
+                    drawList.AddCircleFilled(new Vector2(startX + (i * dotGap), y), Ui.Px(3.5f), (i == this.index ? this.theme.Secondary.Base : Palette.Border).U32(), 12);
             }
 
             // Click to grow / shrink. The hit area is the centre band for a gallery (edges page) or the

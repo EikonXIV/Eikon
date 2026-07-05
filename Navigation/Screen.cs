@@ -20,6 +20,7 @@ internal enum Screen
     Guidelines,
     WhatsNew,
     Blocked,
+    Appearance,
     Albums,
     AlbumDetail,
     AlbumRequests,

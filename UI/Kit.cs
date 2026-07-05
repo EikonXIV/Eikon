@@ -193,7 +193,7 @@ internal sealed class Kit
         for (var i = 0; i < total; i++)
         {
             var x = pos.X + (i * (segment + gap));
-            var color = i < current ? this.theme.Accent : Palette.Rgb(0x2A3346);
+            var color = i < current ? this.theme.Secondary.Base : Palette.Rgb(0x2A3346);
             drawList.AddRectFilled(new Vector2(x, pos.Y), new Vector2(x + segment, pos.Y + height), color.U32(), height * 0.5f);
         }
 
@@ -315,7 +315,7 @@ internal sealed class Kit
         var knobY = pos.Y + (rowHeight * 0.5f);
 
         drawList.AddRectFilled(trackMin, trackMax, Palette.Surface2.U32(), track * 0.5f);
-        drawList.AddRectFilled(trackMin, new Vector2(knobX, trackMax.Y), this.theme.Accent.U32(), track * 0.5f);
+        drawList.AddRectFilled(trackMin, new Vector2(knobX, trackMax.Y), this.theme.Secondary.Base.U32(), track * 0.5f);
         drawList.AddCircleFilled(new Vector2(knobX, knobY), knobRadius, Palette.White.U32(), 16);
         drawList.AddCircle(new Vector2(knobX, knobY), knobRadius, Palette.Border.U32(), 16, 1f);
 
@@ -330,7 +330,7 @@ internal sealed class Kit
         var pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
         drawList.AddRectFilled(pos, pos + new Vector2(w, height), Palette.Surface2.U32(), height * 0.5f);
-        drawList.AddRectFilled(pos, pos + new Vector2(w * Math.Clamp(fraction, 0f, 1f), height), this.theme.Accent.U32(), height * 0.5f);
+        drawList.AddRectFilled(pos, pos + new Vector2(w * Math.Clamp(fraction, 0f, 1f), height), this.theme.Secondary.Base.U32(), height * 0.5f);
         ImGui.Dummy(new Vector2(w, height));
     }
 
