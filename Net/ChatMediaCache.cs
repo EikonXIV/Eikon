@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Plugin.Services;
@@ -13,16 +14,18 @@ internal sealed class ChatMediaCache : IDisposable
 {
     private readonly KeyVault vault;
     private readonly IPluginLog log;
+    private readonly CancellationToken lifetime;
     private readonly string dir;
     private readonly object gate = new();
     private readonly Dictionary<string, IDalamudTextureWrap> textures = new();   // only successes are cached
     private readonly HashSet<string> loading = new();
     private readonly Dictionary<string, DateTime> retryAfter = new();   // throttle reloads of not-yet-ready images
 
-    public ChatMediaCache(KeyVault vault, IPluginLog log)
+    public ChatMediaCache(KeyVault vault, IPluginLog log, AppLifetime lifetime)
     {
         this.vault = vault;
         this.log = log;
+        this.lifetime = lifetime.Token;
         this.dir = Path.Combine(Plugin.PluginInterface.GetPluginConfigDirectory(), "chatmedia");
         Directory.CreateDirectory(this.dir);
     }
@@ -71,7 +74,7 @@ internal sealed class ChatMediaCache : IDisposable
                 {
                     var bytes = this.vault.OpenLocal(File.ReadAllBytes(path));
                     if (bytes != null)
-                        wrap = await Plugin.TextureProvider.CreateFromImageAsync(bytes);
+                        wrap = await Plugin.TextureProvider.CreateFromImageAsync(bytes, cancellationToken: this.lifetime);
                 }
             }
             catch (Exception ex)

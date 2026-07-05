@@ -16,6 +16,7 @@ internal sealed class AlbumService : IDisposable
     private readonly AuthService auth;
     private readonly IPluginLog log;
     private readonly HttpClient http = new();
+    private readonly CancellationToken lifetime;
 
     private readonly Dictionary<Guid, List<AlbumPhotoDto>> photosByAlbum = new();
     private readonly Dictionary<Guid, List<AlbumGranteeDto>> grantsByAlbum = new();
@@ -29,11 +30,12 @@ internal sealed class AlbumService : IDisposable
     private bool requestsLoading;
     private bool requestsLoaded;
 
-    public AlbumService(IApiClient api, AuthService auth, IPluginLog log)
+    public AlbumService(IApiClient api, AuthService auth, IPluginLog log, AppLifetime lifetime)
     {
         this.api = api;
         this.auth = auth;
         this.log = log;
+        this.lifetime = lifetime.Token;
     }
 
     public bool Loaded { get; private set; }
@@ -241,9 +243,9 @@ internal sealed class AlbumService : IDisposable
                 return;
             }
 
-            var url = await this.api.AlbumPhotoViewUrlAsync(token, albumId.ToString(), photoId.ToString(), CancellationToken.None);
-            var bytes = await this.http.GetByteArrayAsync(url);
-            this.textures[key] = await Plugin.TextureProvider.CreateFromImageAsync(bytes);
+            var url = await this.api.AlbumPhotoViewUrlAsync(token, albumId.ToString(), photoId.ToString(), this.lifetime);
+            var bytes = await this.http.GetByteArrayAsync(url, this.lifetime);
+            this.textures[key] = await Plugin.TextureProvider.CreateFromImageAsync(bytes, cancellationToken: this.lifetime);
         }
         catch (Exception ex)
         {

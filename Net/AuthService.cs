@@ -36,6 +36,8 @@ internal sealed class AuthService : IDisposable, ITokenProvider
     private readonly SemaphoreSlim refreshLock = new(1, 1);   // single-flight the token refresh
     private CancellationTokenSource? cts;
     private CancellationTokenSource? verifyCts;
+    private Task? loginTask;     // handle to the login poll loop, joined on dispose
+    private Task? verifyTask;    // handle to the verify poll loop, joined on dispose
 
     public AuthService(IApiClient api, SessionStore store, IPluginLog log, Eikon.Crypto.KeyVault vault, ScreenRouter router)
     {
@@ -83,7 +85,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         this.Phase = AuthPhase.Authorizing;
         this.AuthorizeUrl = null;
         this.Message = "Connecting...";
-        _ = Task.Run(() => this.RunLoginAsync(this.cts.Token));
+        this.loginTask = Task.Run(() => this.RunLoginAsync(this.cts.Token));
     }
 
     public void Cancel()
@@ -174,7 +176,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         this.VerifyState = VerifyPhase.Authorizing;
         this.AuthorizeUrl = null;
         this.VerifyMessage = "Connecting...";
-        _ = Task.Run(() => this.RunVerifyAsync(this.verifyCts.Token));
+        this.verifyTask = Task.Run(() => this.RunVerifyAsync(this.verifyCts.Token));
     }
 
     public void CancelVerify()
@@ -493,9 +495,15 @@ internal sealed class AuthService : IDisposable, ITokenProvider
 
     public void Dispose()
     {
-        this.cts?.Cancel();
+        // Cancel both poll loops, then block briefly on their task handles so neither is still running
+        // when Dalamud unloads the assembly (an un-joined loop keeps the load context alive and makes
+        // the unload fail). Bounded so a stuck poll can't hang the game on exit. Dispose the token
+        // sources only after the loops have stopped touching them.
+        try { this.cts?.Cancel(); } catch (ObjectDisposedException) { /* already torn down */ }
+        try { this.verifyCts?.Cancel(); } catch (ObjectDisposedException) { /* already torn down */ }
+        try { this.loginTask?.Wait(TimeSpan.FromSeconds(2)); } catch { /* cancellation faults are expected */ }
+        try { this.verifyTask?.Wait(TimeSpan.FromSeconds(2)); } catch { /* cancellation faults are expected */ }
         this.cts?.Dispose();
-        this.verifyCts?.Cancel();
         this.verifyCts?.Dispose();
         this.refreshLock.Dispose();
     }

@@ -128,19 +128,29 @@ internal interface IApiClient
 internal sealed class ApiClient : IApiClient, IDisposable
 {
     private readonly HttpClient http;
+    private readonly CancellationToken lifetime;
 
-    public ApiClient(Configuration config)
+    public ApiClient(Configuration config, AppLifetime lifetime)
     {
         this.http = new HttpClient
         {
             BaseAddress = new Uri(config.ServerBaseUrl),
             Timeout = TimeSpan.FromSeconds(30),
         };
+        this.lifetime = lifetime.Token;
     }
 
     // Test seam: inject a preconfigured HttpClient (e.g. over a stub handler) so request shaping can be
-    // asserted without a live server. Production always uses the Configuration constructor above.
+    // asserted without a live server. Production always uses the Configuration constructor above. The
+    // lifetime token stays default (never cancelled), so request behavior is unchanged under test.
     internal ApiClient(HttpClient http) => this.http = http;
+
+    // Test seam variant that also wires a lifetime token, so cancellation-on-unload can be asserted.
+    internal ApiClient(HttpClient http, AppLifetime lifetime)
+    {
+        this.http = http;
+        this.lifetime = lifetime.Token;
+    }
 
     public async Task<LoginStartResponse> LoginStartAsync(CancellationToken ct)
     {
@@ -397,9 +407,10 @@ internal sealed class ApiClient : IApiClient, IDisposable
     // Fetch raw bytes from an absolute URL (a signed storage URL); the chat-media blob is E2E ciphertext.
     public async Task<byte[]> DownloadBytesAsync(string url, CancellationToken ct)
     {
-        using var res = await this.http.GetAsync(url, ct);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, this.lifetime);
+        using var res = await this.http.GetAsync(url, linked.Token);
         res.EnsureSuccessStatusCode();
-        return await res.Content.ReadAsByteArrayAsync(ct);
+        return await res.Content.ReadAsByteArrayAsync(linked.Token);
     }
 
     public async Task BlockAsync(string accessToken, Guid targetId, CancellationToken ct)
@@ -592,8 +603,11 @@ internal sealed class ApiClient : IApiClient, IDisposable
         if (bearer != null)
             req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearer);
 
-        using var res = await this.http.SendAsync(req, ct);
-        return ((int)res.StatusCode, await res.Content.ReadAsStringAsync(ct));
+        // Link the caller's token with the plugin-lifetime token so a request in flight at unload is
+        // cancelled at once rather than running out its 30s timeout while rooting the load context.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, this.lifetime);
+        using var res = await this.http.SendAsync(req, linked.Token);
+        return ((int)res.StatusCode, await res.Content.ReadAsStringAsync(linked.Token));
     }
 
     public void Dispose() => this.http.Dispose();
