@@ -67,9 +67,17 @@ jobs:
           $m = Get-Content 'bin/Release/Eikon/Eikon.json' -Raw | ConvertFrom-Json
           $zip = 'https://github.com/EikonXIV/Eikon/releases/latest/download/latest.zip'
           # The changelog Dalamud shows for the update comes from the annotated tag message
-          # (git tag -a vX.Y.Z -m "..."), so cutting the release also writes the changelog. A
-          # lightweight tag leaves it empty and the field is simply omitted.
-          $changelog = (git tag -l --format='%(contents)' '${{ steps.ver.outputs.tag }}' | Out-String).Trim()
+          # (git tag -a vX.Y.Z -m "..."), so cutting the release also writes the changelog.
+          # actions/checkout's shallow fetch leaves the triggering tag as a lightweight ref
+          # pointing at the commit, whose message would otherwise leak in here, so re-fetch the
+          # tag object from origin and only read it when it is genuinely annotated. A lightweight
+          # tag (or a manual run with no matching tag on origin) yields no changelog and the
+          # field is simply omitted.
+          $tag = '${{ steps.ver.outputs.tag }}'
+          git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}" 2>$null
+          $changelog = if ((git cat-file -t $tag 2>$null) -eq 'tag') {
+            (git tag -l --format='%(contents)' $tag | Out-String).Trim()
+          } else { '' }
           $manifest = [ordered]@{
             Author              = $m.Author
             Name                = $m.Name
