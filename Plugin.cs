@@ -26,6 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
 
     private readonly ServiceProvider provider;
+    private readonly AppLifetime lifetime;
 
     public Plugin()
     {
@@ -55,6 +56,9 @@ public sealed class Plugin : IDalamudPlugin
 
         // Config, theme, fonts, and the widget kit.
         services.AddSingleton(config);
+        // Plugin-wide shutdown signal. Registered first so it is disposed last; cancelled at the very
+        // start of Dispose so background work stops before the services that own it are torn down.
+        services.AddSingleton<AppLifetime>();
         services.AddSingleton<ThemeService>();
         services.AddSingleton<UiFonts>();
         services.AddSingleton<Kit>();
@@ -129,8 +133,16 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<EikonBootstrap>();
 
         this.provider = services.BuildServiceProvider();
+        this.lifetime = this.provider.GetRequiredService<AppLifetime>();
         this.provider.GetRequiredService<EikonBootstrap>();
     }
 
-    public void Dispose() => this.provider.Dispose();
+    public void Dispose()
+    {
+        // Signal shutdown before tearing down services, so any in-flight background work cancels and
+        // unwinds rather than lingering past unload (a lingering task keeps the assembly's load context
+        // alive and makes Dalamud's unload fail). The provider then disposes services in reverse order.
+        this.lifetime.Cancel();
+        this.provider.Dispose();
+    }
 }

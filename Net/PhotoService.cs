@@ -14,15 +14,17 @@ internal sealed class PhotoService : IDisposable
     private readonly AuthService auth;
     private readonly IPluginLog log;
     private readonly HttpClient http = new();
+    private readonly CancellationToken lifetime;
     private readonly Dictionary<Guid, IDalamudTextureWrap?> textures = new();
     private readonly HashSet<Guid> loadingTextures = new();
     private bool listLoading;
 
-    public PhotoService(IApiClient api, AuthService auth, IPluginLog log)
+    public PhotoService(IApiClient api, AuthService auth, IPluginLog log, AppLifetime lifetime)
     {
         this.api = api;
         this.auth = auth;
         this.log = log;
+        this.lifetime = lifetime.Token;
     }
 
     public bool Loaded { get; private set; }
@@ -138,9 +140,9 @@ internal sealed class PhotoService : IDisposable
                 return;
             }
 
-            var url = await this.api.PhotoViewUrlAsync(token, id.ToString(), CancellationToken.None);
-            var bytes = await this.http.GetByteArrayAsync(url);
-            this.textures[id] = await Plugin.TextureProvider.CreateFromImageAsync(bytes);
+            var url = await this.api.PhotoViewUrlAsync(token, id.ToString(), this.lifetime);
+            var bytes = await this.http.GetByteArrayAsync(url, this.lifetime);
+            this.textures[id] = await Plugin.TextureProvider.CreateFromImageAsync(bytes, cancellationToken: this.lifetime);
         }
         catch (Exception ex)
         {

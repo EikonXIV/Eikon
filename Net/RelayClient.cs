@@ -4,7 +4,6 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using Dalamud.Plugin.Services;
 using Eikon.Config;
 using Eikon.Contracts;
 
@@ -18,22 +17,36 @@ internal readonly record struct AlbumNotice(Guid PeerId, string PeerName, Guid A
 // fire on the receive task; handlers must tolerate that.
 internal sealed class RelayClient : IDisposable
 {
-    private readonly Configuration config;
-    private readonly AuthService auth;
-    private readonly IPluginLog log;
+    private readonly string serverBaseUrl;
+    private readonly ITokenProvider auth;
+    private readonly ILog log;
     private readonly SemaphoreSlim sendLock = new(1, 1);
     private readonly ConcurrentQueue<string> outbox = new();
     private ClientWebSocket? socket;
     private CancellationTokenSource? cts;
+    private Task? runner;
 
-    public RelayClient(Configuration config, AuthService auth, IPluginLog log)
+    // Depends on the ITokenProvider and ILog seams (both resolve to the same singletons the plugin
+    // registers) rather than AuthService/IPluginLog directly, so the loop can be driven under test.
+    public RelayClient(Configuration config, ITokenProvider auth, ILog log)
+        : this(config.ServerBaseUrl, auth, log)
     {
-        this.config = config;
+    }
+
+    // Test seam: takes the relay base URL directly so the loop can be constructed without a
+    // Configuration, which pulls in the Dalamud runtime. Production uses the Configuration ctor above.
+    internal RelayClient(string serverBaseUrl, ITokenProvider auth, ILog log)
+    {
+        this.serverBaseUrl = serverBaseUrl;
         this.auth = auth;
         this.log = log;
     }
 
     public bool Connected { get; private set; }
+
+    // The receive/reconnect loop task, exposed to tests so they can assert Dispose joined it (the loop
+    // is fully stopped on return) rather than only signalling cancellation.
+    internal Task? Runner => this.runner;
 
     public event Action<EncryptedMessageDto>? MessageReceived;
 
@@ -55,7 +68,9 @@ internal sealed class RelayClient : IDisposable
         if (this.cts != null)
             return;
         this.cts = new CancellationTokenSource();
-        _ = this.RunAsync(this.cts.Token);
+        // Keep the handle so Dispose can join the loop; a fire-and-forget task that outlives Dispose
+        // roots the plugin's load context and makes Dalamud's unload fail.
+        this.runner = this.RunAsync(this.cts.Token);
     }
 
     public void SendMessage(string recipientId, string ciphertext, string header, string nonce, string clientMsgId)
@@ -236,7 +251,7 @@ internal sealed class RelayClient : IDisposable
 
     private Uri BuildUri()
     {
-        var baseUrl = this.config.ServerBaseUrl.TrimEnd('/');
+        var baseUrl = this.serverBaseUrl.TrimEnd('/');
         var ws = baseUrl.StartsWith("https", StringComparison.OrdinalIgnoreCase)
             ? "wss" + baseUrl[5..]
             : "ws" + baseUrl[4..];
@@ -245,8 +260,15 @@ internal sealed class RelayClient : IDisposable
 
     public void Dispose()
     {
-        this.cts?.Cancel();
-        this.cts?.Dispose();
+        // Order matters. Cancel the loop, then dispose the socket so any in-flight ReceiveAsync /
+        // ConnectAsync throws and unwinds at once instead of waiting out the keep-alive. Then block
+        // briefly on the loop task: when Dalamud unloads the plugin it must be able to collect the
+        // assembly's load context, and a still-running loop rooted in it makes the unload fail with
+        // "Failed to unload plugin". The bounded wait means a wedged socket can't hang the game on exit.
+        try { this.cts?.Cancel(); } catch (ObjectDisposedException) { /* already torn down */ }
         try { this.socket?.Dispose(); } catch { /* ignore */ }
+        try { this.runner?.Wait(TimeSpan.FromSeconds(2)); } catch { /* cancellation faults are expected */ }
+        this.cts?.Dispose();
+        this.cts = null;
     }
 }
