@@ -35,9 +35,11 @@ internal sealed class MyProfileScreen : IScreen
     private int editDc = -1;
     private int editWorldId;
 
-    // Profile state (mock defaults).
-    private string displayName = "Akos";
-    private string bio = "Balmung. Raid nerd by day, softer after dark. Say hi.";
+    // Profile state. Empty until the server profile hydrates: Draw renders a loading state and no
+    // editable rows before then, so a Save can never serialize these placeholders over the real
+    // profile (POST /api/profile is a full-row overwrite).
+    private string displayName = string.Empty;
+    private string bio = string.Empty;
     private int pronoun;
     private string pronounCustom = string.Empty;
     private int gender;
@@ -91,6 +93,26 @@ internal sealed class MyProfileScreen : IScreen
     public void Draw()
     {
         var contentWidth = ImGui.GetContentRegionAvail().X - Ui.Px(16f);
+
+        // Hydrate from the server before anything is editable. Until the profile has loaded we show a
+        // loading state and render no rows, so the user can't open an editor and Save placeholder
+        // state over their real profile (POST /api/profile is a full-row overwrite). A 404 (no profile
+        // yet) loads as null: we still mark applied and start from empty defaults, correct for setup.
+        this.profiles.EnsureLoaded();
+        if (!this.applied)
+        {
+            if (!this.profiles.Loaded)
+            {
+                ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
+                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading...");
+                return;
+            }
+
+            if (this.profiles.Mine is { } mine)
+                this.ApplyFromServer(mine);
+            this.applied = true;
+        }
+
         if (this.photos.IsCropping)
         {
             this.photos.Draw(contentWidth);
@@ -110,13 +132,7 @@ internal sealed class MyProfileScreen : IScreen
             this.restoreListScroll = false;
         }
 
-        this.profiles.EnsureLoaded();
         this.catalog.EnsureLoaded();
-        if (!this.applied && this.profiles.Mine is { } mine)
-        {
-            this.ApplyFromServer(mine);
-            this.applied = true;
-        }
 
         this.DrawPreviewButton(contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
