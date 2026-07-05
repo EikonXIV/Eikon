@@ -12,6 +12,15 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 5, 1),
+            "July 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Eikon now unloads cleanly when you disable or update it, fixing the occasional 'Failed to unload plugin' error that asked you to restart the game.",
+            ]),
+        new Release(
             new Version(1, 5, 0),
             "July 2026",
             New:
