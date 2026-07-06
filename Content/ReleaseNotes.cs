@@ -12,6 +12,18 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 6, 0),
+            "July 2026",
+            New:
+            [
+                "Scroll the grid to load more people. It no longer stops after the first screen, so you can browse everyone in your World, Data Center, or Region.",
+            ],
+            Improved:
+            [
+                "Online members show first now, and the order refreshes each day so you're not always seeing the same profiles.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(1, 5, 1),
             "July 2026",
             New: [],
