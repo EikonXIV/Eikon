@@ -3,7 +3,7 @@
   <!-- Eikon Dalamud plugin. The Dalamud.NET.Sdk wires the TFM, all Dalamud/ImGui references,
        and the plugin manifest automatically (it finds the dev Dalamud under %AppData%\XIVLauncher). -->
   <PropertyGroup>
-    <Version>1.5.1</Version>
+    <Version>1.6.0</Version>
     <Description>Eikon: in-game, end-to-end-encrypted dating &amp; social for FFXIV.</Description>
     <Authors>Rian M☆</Authors>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
