@@ -69,7 +69,19 @@ internal sealed class GridScreen : IScreen
         var compact = this.config.GridLayout == 1;
         var shown = this.DrawGrid(contentWidth, compact);
         if (shown == 0)
+        {
             this.DrawEmpty(contentWidth);
+            return;
+        }
+
+        // Infinite scroll: pull the next page as the viewer nears the bottom of the body scroll region.
+        if (this.discovery.HasMore)
+        {
+            if (this.discovery.Loading)
+                this.DrawStatus(contentWidth, "Loading more...");
+            else if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - Ui.Px(240f))
+                this.discovery.LoadMore();
+        }
     }
 
     private int DrawGrid(float contentWidth, bool compact)
