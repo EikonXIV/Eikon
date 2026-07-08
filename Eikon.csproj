@@ -60,4 +60,13 @@
     <EmbeddedResource Include="Assets\message-chime.wav" LogicalName="Eikon.message-chime.wav" />
   </ItemGroup>
 
+  <!-- Warm-editorial UI fonts (OFL), bundled into the assembly and loaded via the managed font atlas.
+       Instrument Serif (display, + italic), Inter Tight (UI/body), JetBrains Mono (eyebrows/counters). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Fonts\InstrumentSerif-Regular.ttf" LogicalName="Eikon.Fonts.InstrumentSerif-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\InstrumentSerif-Italic.ttf" LogicalName="Eikon.Fonts.InstrumentSerif-Italic.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\InterTight.ttf" LogicalName="Eikon.Fonts.InterTight.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\JetBrainsMono.ttf" LogicalName="Eikon.Fonts.JetBrainsMono.ttf" />
+  </ItemGroup>
+
 </Project>

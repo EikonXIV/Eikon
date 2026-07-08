@@ -14,16 +14,21 @@ internal sealed class ThemeService
     private readonly Configuration config;
     private ThemeSpec active = ThemeSpec.Solid(0);
 
+    // The single warm-editorial theme (Lovable port): one restrained cream-gold signal across all
+    // three role channels. Backgrounds are fixed in Palette; the preset/flag engine is left intact
+    // but dormant for now.
+    private static readonly ThemeSpec Editorial = new(
+        "editorial", "Editorial",
+        PrimaryHue: Palette.Signal, SecondaryHue: Palette.Signal, TertiaryHue: Palette.Signal,
+        TintHue: Palette.Signal, Stripes: Array.Empty<Vector4>(), NearestSolidIndex: 0);
+
     public ThemeService(Configuration config)
     {
         this.config = config;
 
-        // A known flag id wins; anything else (null, or a flag from a newer build) falls back to the
-        // solid at AccentPresetIndex, so an unreadable ThemeId degrades gracefully.
-        if (config.ThemeId is { } id && FlagPresets.ById(id) is { } flag)
-            this.ApplySpec(flag, id);
-        else
-            this.ApplySpec(ThemeSpec.Solid(config.AccentPresetIndex), null);
+        // Warm-editorial is the single active theme for the port. The preset/flag engine stays intact
+        // but dormant; SetAccent/SetTheme still function if the (now vestigial) picker is opened.
+        this.ApplySpec(Editorial, null);
     }
 
     // Nearest solid index (the flag's fallback while a flag is active). Drives the solid picker's
