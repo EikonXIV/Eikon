@@ -30,23 +30,23 @@ internal sealed class UiFonts : IDisposable
         this.SerifItalicTitle = this.Make(atlas, SerifItalicFile, 28f);
         this.Body = this.Make(atlas, SansFile, 18f);
         this.Caption = this.Make(atlas, SansFile, 15f);
-        this.Label = this.Make(atlas, SansFile, 13f);
-        this.LabelSmall = this.Make(atlas, SansFile, 11f);
-        this.Eyebrow = this.Make(atlas, MonoFile, 11f);
+        this.Label = this.Make(atlas, SansFile, 15f);
+        this.LabelSmall = this.Make(atlas, SansFile, 13f);
+        this.Eyebrow = this.Make(atlas, MonoFile, 15f);
         this.Mono = this.Make(atlas, MonoFile, 12f);
-        this.Count = this.Make(atlas, MonoFile, 15f);
+        this.Count = this.Make(atlas, MonoFile, 18f);
     }
 
     public IFontHandle Title { get; }             // Instrument Serif 22 — wordmark, legacy headers
     public IFontHandle SerifTitle { get; }        // Instrument Serif 28 — screen titles
     public IFontHandle SerifItalicTitle { get; }  // Instrument Serif Italic 28 — two-tone titles
-    public IFontHandle Body { get; }              // Inter Tight 18 — body, tile names
+    public IFontHandle Body { get; }              // Inter Tight 18 — tile names, prominent content
     public IFontHandle Caption { get; }           // Inter Tight 15 — small content
-    public IFontHandle Label { get; }             // Inter Tight 13 — nav, values
-    public IFontHandle LabelSmall { get; }        // Inter Tight 11 — chips
-    public IFontHandle Eyebrow { get; }           // JetBrains Mono 11 — eyebrows, tags, tabs
-    public IFontHandle Mono { get; }              // JetBrains Mono 12 — meta, version, values
-    public IFontHandle Count { get; }             // JetBrains Mono 15 — counters
+    public IFontHandle Label { get; }             // Inter Tight 15 — nav, chips, values
+    public IFontHandle LabelSmall { get; }        // Inter Tight 13 — dense labels
+    public IFontHandle Eyebrow { get; }           // JetBrains Mono 15 — eyebrows, tabs, meta
+    public IFontHandle Mono { get; }              // JetBrains Mono 12 — version tag (locked)
+    public IFontHandle Count { get; }             // JetBrains Mono 18 — counters
 
     // The shared FontAwesome icon font. Owned by Dalamud, so it is not disposed here.
     public IFontHandle Icon => this.pluginInterface.UiBuilder.IconFontHandle;
