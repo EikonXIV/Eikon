@@ -8,9 +8,9 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Windows;
 
-// The single Eikon window. It applies the dark skin to the window frame, then routes to the
-// current screen. Chrome screens render between the header and the bottom nav; non chrome screens
-// (the invite gate, onboarding) take the whole window.
+// The single Eikon window. It applies the warm-editorial skin to the frame, then routes to the current
+// screen. Chrome screens render between the title bar and the bottom nav; non-chrome screens (invite
+// gate, onboarding) take the whole window. Screens own their own padding.
 internal sealed class MainWindow : Window, IDisposable
 {
     private readonly ScreenRouter router;
@@ -19,6 +19,7 @@ internal sealed class MainWindow : Window, IDisposable
     private readonly InboxService inbox;
     private readonly WindowController windowController;
     private readonly Dictionary<Screen, IScreen> screensById;
+    private readonly string versionTag;
 
     private int pushedColors;
     private int pushedVars;
@@ -35,6 +36,9 @@ internal sealed class MainWindow : Window, IDisposable
         this.inbox = inbox;
         this.windowController = windowController;
         this.screensById = screens.ToDictionary(s => s.Id);
+
+        var v = typeof(BuildInfo).Assembly.GetName().Version;
+        this.versionTag = (v is null ? "v0" : $"v{v.Major}·{v.Minor}") + (BuildInfo.IsLocal ? " · local" : string.Empty);
 
         this.SizeConstraints = new WindowSizeConstraints
         {
@@ -56,7 +60,8 @@ internal sealed class MainWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Text, Palette.TextPrimary);
         this.pushedColors = 3;
 
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, Ui.Px(12f));
+        // Editorial is square: no window rounding, a hairline border, zero padding (screens self-pad).
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         this.pushedVars = 3;
@@ -95,17 +100,16 @@ internal sealed class MainWindow : Window, IDisposable
         }
 
         var avail = ImGui.GetContentRegionAvail();
-        var headerHeight = Ui.Px(46f);
-        var navHeight = Ui.Px(56f);
+        var headerHeight = Ui.Px(48f);
+        var navHeight = Ui.Px(54f);
         var stripes = this.theme.Stripes;
-        var barHeight = stripes.Count > 0 ? Ui.Px(4f) : 0f;
+        var barHeight = stripes.Count > 0 ? Ui.Px(3f) : 0f;
         var bodyHeight = avail.Y - headerHeight - barHeight - navHeight;
 
         this.DrawHeader(headerHeight, avail.X);
 
-        // A flag theme paints its full stripe set as a thin band under the header (chrome screens only,
-        // which is exactly where this method runs). Solid themes expose no stripes, so no bar shows and
-        // the body keeps its original height.
+        // A flag theme paints its stripe set as a thin ribbon under the header. Editorial exposes no
+        // stripes, so the ribbon is the transparent 3px slot the design leaves for future flag themes.
         if (barHeight > 0f)
         {
             Ui.FlagBar(ImGui.GetWindowDrawList(), ImGui.GetCursorScreenPos(), avail.X, stripes, barHeight);
@@ -115,12 +119,7 @@ internal sealed class MainWindow : Window, IDisposable
         using (var body = ImRaii.Child("body", new Vector2(avail.X, bodyHeight)))
         {
             if (body.Success)
-            {
-                ImGui.SetCursorPosY(Ui.Px(14f));
-                ImGui.Indent(Ui.Px(16f));
                 screen?.Draw();
-                ImGui.Unindent(Ui.Px(16f));
-            }
         }
 
         this.DrawBottomNav(navHeight);
@@ -141,56 +140,72 @@ internal sealed class MainWindow : Window, IDisposable
         var startY = ImGui.GetCursorPosY();
         var origin = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
-        var padX = Ui.Px(16f);
+        var padX = Ui.Px(20f);
+
+        // Wordmark: "Eikon" in ink, a signal-gold period, then a mono version tag baseline-aligned.
+        const string word = "Eikon";
+        var wordSize = Ui.Measure(this.fonts.Title, word);
+        var wordY = origin.Y + ((height - wordSize.Y) * 0.5f);
+        var wordX = origin.X + padX;
+        Ui.TextAt(drawList, this.fonts.Title, new Vector2(wordX, wordY), Palette.TextPrimary.U32(), word);
+
+        var dotX = wordX + wordSize.X;
+        Ui.TextAt(drawList, this.fonts.Title, new Vector2(dotX, wordY), Palette.Signal.U32(), ".");
+        var dotWidth = Ui.Measure(this.fonts.Title, ".").X;
+
+        var tagSize = Ui.Measure(this.fonts.Mono, this.versionTag);
+        Ui.TextAt(drawList, this.fonts.Mono,
+            new Vector2(dotX + dotWidth + Ui.Px(8f), (wordY + wordSize.Y) - tagSize.Y - Ui.Px(1f)),
+            Palette.TextSecondary.U32(), this.versionTag);
 
         drawList.AddLine(
             new Vector2(origin.X, origin.Y + height),
             new Vector2(origin.X + width, origin.Y + height),
             Palette.Border.U32(), 1f);
 
-        const string title = BuildInfo.DisplayName;
-        var titleSize = Ui.Measure(this.fonts.Title, title);
-        Ui.TextAt(drawList, this.fonts.Title,
-            new Vector2(origin.X + padX, origin.Y + ((height - titleSize.Y) * 0.5f)),
-            Palette.TextPrimary.U32(), title);
-
-        // Window controls (top-right): minimize to the floating orb, then close everything. Close
-        // carries a tooltip naming the slash command so the app never looks like it just vanished.
-        var btn = new Vector2(Ui.Px(30f), Ui.Px(30f));
+        // Window controls (top-right): minimize to the floating orb, then close. Drawn as crisp line
+        // glyphs so they stay sharp and legible at this size. Close names the slash command in its
+        // tooltip so the app never looks like it just vanished.
+        var btn = new Vector2(Ui.Px(28f), Ui.Px(28f));
         var gap = Ui.Px(4f);
         var btnY = origin.Y + ((height - btn.Y) * 0.5f);
+        var closeX = (origin.X + width - padX) - btn.X;
+        var minX = closeX - btn.X - gap;
 
-        if (this.HeaderButton(drawList, "##close", FontAwesomeIcon.Times,
-                new Vector2(origin.X + width - padX - btn.X, btnY), btn,
-                $"Close (reopen with {BuildInfo.Command})"))
+        ImGui.SetCursorScreenPos(new Vector2(closeX, btnY));
+        if (ImGui.InvisibleButton("##close", btn))
             this.windowController.Close();
+        var closeHovered = ImGui.IsItemHovered();
+        if (closeHovered)
+            using (this.fonts.Caption.Push())
+                ImGui.SetTooltip($"Close (reopen with {BuildInfo.Command})");
+        DrawCloseGlyph(drawList, ImGui.GetItemRectMin(), btn, closeHovered);
 
-        if (this.HeaderButton(drawList, "##minimize", FontAwesomeIcon.Minus,
-                new Vector2(origin.X + width - padX - (btn.X * 2f) - gap, btnY), btn, null))
+        ImGui.SetCursorScreenPos(new Vector2(minX, btnY));
+        if (ImGui.InvisibleButton("##minimize", btn))
             this.windowController.Minimize();
+        DrawMinimizeGlyph(drawList, ImGui.GetItemRectMin(), btn, ImGui.IsItemHovered());
 
         ImGui.SetCursorPosY(startY + height);
     }
 
-    // A title-bar icon button: faint fill and a brightened glyph on hover, optional hover tooltip.
-    private bool HeaderButton(ImDrawListPtr drawList, string id, FontAwesomeIcon icon, Vector2 pos, Vector2 size, string? tooltip)
+    // Crisp line glyphs for the title-bar controls: muted, brightening to ink on hover.
+    private static void DrawCloseGlyph(ImDrawListPtr drawList, Vector2 min, Vector2 size, bool hovered)
     {
-        ImGui.SetCursorScreenPos(pos);
-        var clicked = ImGui.InvisibleButton(id, size);
-        var hovered = ImGui.IsItemHovered();
-        var min = ImGui.GetItemRectMin();
-        if (hovered)
-        {
-            drawList.AddRectFilled(min, min + size, Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
-            if (tooltip is not null)
-                using (this.fonts.Caption.Push())
-                    ImGui.SetTooltip(tooltip);
-        }
+        var c = min + (size * 0.5f);
+        var r = Ui.Px(5f);
+        var col = (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32();
+        var th = Ui.Px(1.5f);
+        drawList.AddLine(new Vector2(c.X - r, c.Y - r), new Vector2(c.X + r, c.Y + r), col, th);
+        drawList.AddLine(new Vector2(c.X + r, c.Y - r), new Vector2(c.X - r, c.Y + r), col, th);
+    }
 
-        var glyph = icon.ToIconString();
-        var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-        Ui.TextAt(drawList, this.fonts.Icon, min + ((size - glyphSize) * 0.5f), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
-        return clicked;
+    private static void DrawMinimizeGlyph(ImDrawListPtr drawList, Vector2 min, Vector2 size, bool hovered)
+    {
+        var c = min + (size * 0.5f);
+        var r = Ui.Px(5f);
+        var col = (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32();
+        drawList.AddLine(new Vector2(c.X - r, c.Y), new Vector2(c.X + r, c.Y), col, Ui.Px(1.5f));
     }
 
     private void DrawBottomNav(float height)
@@ -204,19 +219,18 @@ internal sealed class MainWindow : Window, IDisposable
             new Vector2(winPos.X, bandTop), new Vector2(winPos.X + winSize.X, bandTop),
             Palette.Border.U32(), 1f);
 
-        var items = new (Screen Screen, FontAwesomeIcon Icon, string Label)[]
+        var items = new (Screen Screen, string Label)[]
         {
-            (Screen.Grid, FontAwesomeIcon.Th, "Grid"),
-            (Screen.Messages, FontAwesomeIcon.CommentDots, "Messages"),
-            (Screen.MyProfile, FontAwesomeIcon.User, "Profile"),
-            (Screen.Settings, FontAwesomeIcon.Cog, "Settings"),
+            (Screen.Grid, "Grid"),
+            (Screen.Messages, "Messages"),
+            (Screen.MyProfile, "Profile"),
+            (Screen.Settings, "Settings"),
         };
 
         long unread = 0;
         foreach (var c in this.inbox.Conversations)
             unread += c.Unread;
 
-        var gap = Ui.Px(3f);
         var cellWidth = winSize.X / items.Length;
         for (var i = 0; i < items.Length; i++)
         {
@@ -226,38 +240,43 @@ internal sealed class MainWindow : Window, IDisposable
                 this.router.Navigate(items[i].Screen);
 
             var active = this.router.Current == items[i].Screen;
-            var color = (active
-                ? this.theme.Accent
-                : ImGui.IsItemHovered() ? Palette.TextSecondary : Palette.TextMuted).U32();
+            var hovered = ImGui.IsItemHovered();
+            var color = (active || hovered ? Palette.TextPrimary : Palette.TextSecondary).U32();
 
-            var glyph = items[i].Icon.ToIconString();
-            var iconSize = Ui.Measure(this.fonts.Icon, glyph);
-            var labelSize = Ui.Measure(this.fonts.Caption, items[i].Label);
-            var blockHeight = iconSize.Y + gap + labelSize.Y;
-            var top = bandTop + ((height - blockHeight) * 0.5f);
+            var label = items[i].Label;
+            var labelSize = Ui.Measure(this.fonts.Label, label);
             var centerX = x + (cellWidth * 0.5f);
+            var labelPos = new Vector2(centerX - (labelSize.X * 0.5f), bandTop + ((height - labelSize.Y) * 0.5f));
 
-            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(centerX - (iconSize.X * 0.5f), top), color, glyph);
-            Ui.TextAt(drawList, this.fonts.Caption,
-                new Vector2(centerX - (labelSize.X * 0.5f), top + iconSize.Y + gap), color, items[i].Label);
+            // Active tab: a hairline ink tick pinned to the top of the cell, inset from the edges.
+            if (active)
+            {
+                var inset = Ui.Px(16f);
+                drawList.AddLine(
+                    new Vector2(x + inset, bandTop + 1f),
+                    new Vector2((x + cellWidth) - inset, bandTop + 1f),
+                    Palette.TextPrimary.U32(), 1f);
+            }
 
-            // Unread badge on the Messages tab, mirroring the minimized orb's count.
+            Ui.TextAt(drawList, this.fonts.Label, labelPos, color, label);
+
+            // Signal unread badge on the Messages tab, mirroring the minimized orb's count.
             if (items[i].Screen == Screen.Messages && unread > 0)
-                this.DrawNavBadge(drawList, new Vector2(centerX + (iconSize.X * 0.5f) + Ui.Px(3f), top - Ui.Px(1f)), unread);
+                this.DrawNavBadge(drawList, new Vector2(labelPos.X + labelSize.X + Ui.Px(6f), labelPos.Y + (labelSize.Y * 0.5f)), unread);
         }
     }
 
-    // Small red count badge anchored at the top-right of a nav icon (the Messages unread indicator).
-    private void DrawNavBadge(ImDrawListPtr drawList, Vector2 anchor, long count)
+    // Small cream-gold (signal) count badge, anchored at a left-center point (the Messages unread pill).
+    private void DrawNavBadge(ImDrawListPtr drawList, Vector2 leftCenter, long count)
     {
-        var label = count > 99 ? "99+" : count.ToString();
-        var labelSize = Ui.Measure(this.fonts.Caption, label);
+        var text = count > 99 ? "99+" : count.ToString();
+        var textSize = Ui.Measure(this.fonts.Eyebrow, text);
         var badgeH = Ui.Px(15f);
-        var badgeW = MathF.Max(badgeH, labelSize.X + Ui.Px(7f));
-        var min = new Vector2(anchor.X - (badgeW * 0.5f), anchor.Y - (badgeH * 0.5f));
-        var max = min + new Vector2(badgeW, badgeH);
-        drawList.AddRectFilled(min, max, Palette.Danger.U32(), badgeH * 0.5f);
-        drawList.AddRect(min, max, Palette.Bg.U32(), badgeH * 0.5f, ImDrawFlags.None, Ui.Px(1.5f));
-        Ui.TextAt(drawList, this.fonts.Caption, min + ((new Vector2(badgeW, badgeH) - labelSize) * 0.5f), Palette.White.U32(), label);
+        var badgeW = MathF.Max(badgeH, textSize.X + Ui.Px(8f));
+        var min = new Vector2(leftCenter.X, leftCenter.Y - (badgeH * 0.5f));
+        drawList.AddRectFilled(min, min + new Vector2(badgeW, badgeH), Palette.Signal.U32(), badgeH * 0.5f);
+        Ui.TextAt(drawList, this.fonts.Eyebrow,
+            new Vector2(min.X + ((badgeW - textSize.X) * 0.5f), min.Y + ((badgeH - textSize.Y) * 0.5f)),
+            Palette.Paper.U32(), text);
     }
 }

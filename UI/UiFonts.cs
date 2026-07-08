@@ -33,6 +33,7 @@ internal sealed class UiFonts : IDisposable
         this.Label = this.Make(atlas, SansFile, 13f);
         this.LabelSmall = this.Make(atlas, SansFile, 11f);
         this.Eyebrow = this.Make(atlas, MonoFile, 11f);
+        this.Mono = this.Make(atlas, MonoFile, 12f);
         this.Count = this.Make(atlas, MonoFile, 15f);
     }
 
@@ -43,7 +44,8 @@ internal sealed class UiFonts : IDisposable
     public IFontHandle Caption { get; }           // Inter Tight 15 — small content
     public IFontHandle Label { get; }             // Inter Tight 13 — nav, values
     public IFontHandle LabelSmall { get; }        // Inter Tight 11 — chips
-    public IFontHandle Eyebrow { get; }           // JetBrains Mono 11 — eyebrows, tags, tabs, meta
+    public IFontHandle Eyebrow { get; }           // JetBrains Mono 11 — eyebrows, tags, tabs
+    public IFontHandle Mono { get; }              // JetBrains Mono 12 — meta, version, values
     public IFontHandle Count { get; }             // JetBrains Mono 15 — counters
 
     // The shared FontAwesome icon font. Owned by Dalamud, so it is not disposed here.
