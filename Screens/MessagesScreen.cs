@@ -1,4 +1,5 @@
 using Dalamud.Interface;
+using Dalamud.Interface.ManagedFontAtlas;
 using Eikon.Contracts;
 using Eikon.Navigation;
 using Eikon.Net;
@@ -7,23 +8,21 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Screens;
 
-// Messages inbox. A list of conversation rows backed by /api/conversations (metadata only; the relay
-// can't read contents). The preview line comes from the locally decrypted thread. Tapping a row opens
-// the chat with that peer. An online-now strip appears once presence is wired.
+// Messages inbox (warm-editorial). An "Inbox / Messages" header over conversation rows backed by
+// /api/conversations (metadata only; the relay can't read contents). Previews come from the locally
+// decrypted thread. Message requests get their own labelled group. Tapping a row opens the chat.
 internal sealed class MessagesScreen : IScreen
 {
     private readonly ScreenRouter router;
-    private readonly ThemeService theme;
     private readonly Kit kit;
     private readonly UiFonts fonts;
     private readonly InboxService inbox;
     private readonly Selection selection;
     private readonly PhotoService photoSvc;
 
-    public MessagesScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, InboxService inbox, Selection selection, PhotoService photoSvc)
+    public MessagesScreen(ScreenRouter router, Kit kit, UiFonts fonts, InboxService inbox, Selection selection, PhotoService photoSvc)
     {
         this.router = router;
-        this.theme = theme;
         this.kit = kit;
         this.fonts = fonts;
         this.inbox = inbox;
@@ -37,54 +36,77 @@ internal sealed class MessagesScreen : IScreen
 
     public void Draw()
     {
-        var contentWidth = ImGui.GetContentRegionAvail().X - Ui.Px(16f);
+        var fullWidth = ImGui.GetContentRegionAvail().X;
         this.inbox.EnsureLoaded();
         var conversations = this.inbox.Conversations;
+        var threads = conversations.Where(c => !c.IsRequest).ToList();
+        var requests = conversations.Where(c => c.IsRequest).ToList();
+
+        this.DrawHeader(fullWidth, threads.Count);
 
         if (conversations.Count == 0)
         {
             if (!this.inbox.Loaded)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading...");
+                Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, "Loading…");
                 return;
             }
 
-            ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
-            this.kit.EmptyState(FontAwesomeIcon.CommentDots.ToIconString(), "No messages yet", "Say hi to someone from the grid.", contentWidth);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(48f)));
+            this.kit.EmptyState(FontAwesomeIcon.CommentDots.ToIconString(), "No messages yet", "Say hi to someone from the grid.", fullWidth);
             var buttonWidth = Ui.Px(180f);
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((contentWidth - buttonWidth) * 0.5f));
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((fullWidth - buttonWidth) * 0.5f));
             if (this.kit.PrimaryButton("##empty_browse", "Browse the grid", buttonWidth))
                 this.router.Navigate(Screen.Grid);
             return;
         }
 
-        var requests = conversations.Where(c => c.IsRequest).ToList();
-        var threads = conversations.Where(c => !c.IsRequest).ToList();
+        using var scroll = ImRaii.Child("inbox_scroll", ImGui.GetContentRegionAvail(), false, ImGuiWindowFlags.NoScrollbar);
+        if (!scroll.Success)
+            return;
 
-        // Message requests: people you haven't replied to yet. Replying accepts; you can also block.
+        var pad = Ui.Px(20f);
         if (requests.Count > 0)
         {
-            this.kit.SectionLabel($"Requests ({requests.Count})");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+            this.SectionEyebrow($"Requests · {requests.Count}", pad);
             foreach (var request in requests)
-                if (this.DrawRow(request, contentWidth))
+                if (this.DrawRow(request, fullWidth, pad))
                     this.Open(request);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        }
-
-        var online = threads.Where(c => c.Online).ToList();
-        if (online.Count > 0)
-        {
-            this.kit.SectionLabel("Online now");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            this.DrawOnlineStrip(online);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         }
 
         foreach (var conversation in threads)
-            if (this.DrawRow(conversation, contentWidth))
+            if (this.DrawRow(conversation, fullWidth, pad))
                 this.Open(conversation);
+    }
+
+    private void DrawHeader(float fullWidth, int count)
+    {
+        var pad = Ui.Px(20f);
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+
+        var y = origin.Y + Ui.Px(18f);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, y), Palette.TextSecondary.U32(), "INBOX");
+        y += Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(4f);
+
+        var titleSize = Ui.Measure(this.fonts.SerifTitle, "Messages");
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(origin.X + pad, y), Palette.TextPrimary.U32(), "Messages");
+        var countStr = count.ToString("D2");
+        var countSize = Ui.Measure(this.fonts.Mono, countStr);
+        Ui.TextAt(dl, this.fonts.Mono, new Vector2((origin.X + fullWidth - pad) - countSize.X, (y + titleSize.Y) - countSize.Y), Palette.TextMuted.U32(), countStr);
+
+        var bottom = y + titleSize.Y + Ui.Px(16f);
+        dl.AddLine(new Vector2(origin.X, bottom), new Vector2(origin.X + fullWidth, bottom), Palette.Border.U32(), 1f);
+        ImGui.SetCursorScreenPos(new Vector2(origin.X, bottom + 1f));
+    }
+
+    private void SectionEyebrow(string text, float pad)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y + Ui.Px(16f)), Palette.TextSecondary.U32(), text.ToUpperInvariant());
+        ImGui.Dummy(new Vector2(0f, Ui.Px(16f) + Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(8f)));
     }
 
     private void Open(ConversationSummaryDto conversation)
@@ -94,108 +116,57 @@ internal sealed class MessagesScreen : IScreen
         this.router.Navigate(Screen.Chat);
     }
 
-    private void DrawOnlineStrip(IReadOnlyList<ConversationSummaryDto> online)
+    private bool DrawRow(ConversationSummaryDto conversation, float fullWidth, float pad)
     {
-        var first = true;
-        foreach (var conversation in online)
-        {
-            if (!first)
-                ImGui.SameLine(0f, Ui.Px(12f));
-            first = false;
-            if (this.DrawAvatarChip(conversation))
-                this.Open(conversation);
-        }
-    }
-
-    private bool DrawAvatarChip(ConversationSummaryDto conversation)
-    {
-        var avatar = Ui.Px(44f);
-        var name = conversation.DisplayName;
-        var nameSize = Ui.Measure(this.fonts.Caption, name);
-        var width = MathF.Max(avatar, nameSize.X);
-        var size = new Vector2(width, avatar + Ui.Px(4f) + nameSize.Y);
-
+        var rowHeight = Ui.Px(72f);
         var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton("##on_" + conversation.UserId, size);
-        var drawList = ImGui.GetWindowDrawList();
-        var centerX = pos.X + (width * 0.5f);
-        var avatarCenter = new Vector2(centerX, pos.Y + (avatar * 0.5f));
+        var clicked = ImGui.InvisibleButton("##conv_" + conversation.UserId, new Vector2(fullWidth, rowHeight));
+        var dl = ImGui.GetWindowDrawList();
+        if (ImGui.IsItemHovered())
+            dl.AddRectFilled(pos, pos + new Vector2(fullWidth, rowHeight), Palette.WithAlpha(Palette.White, 0.04f).U32());
 
-        this.DrawAvatar(drawList, avatarCenter, avatar * 0.5f, conversation.MainPhotoId, Initial(name));
+        var av = Ui.Px(48f);
+        var amin = new Vector2(pos.X + pad, pos.Y + ((rowHeight - av) * 0.5f));
+        this.DrawAvatar(dl, amin, av, conversation.MainPhotoId, Initial(conversation.DisplayName));
+        var dotColor = (conversation.Online ? Palette.Online : Palette.Afk).U32();
+        var dotCenter = new Vector2((amin.X + av) - Ui.Px(4f), (amin.Y + av) - Ui.Px(4f));
+        dl.AddCircleFilled(dotCenter, Ui.Px(5f), dotColor, 12);
+        dl.AddCircle(dotCenter, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(2f));
 
-        var dot = new Vector2(centerX + (avatar * 0.5f) - Ui.Px(5f), pos.Y + avatar - Ui.Px(6f));
-        drawList.AddCircleFilled(dot, Ui.Px(5f), this.theme.Secondary.Base.U32(), 12);
-        drawList.AddCircle(dot, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(1.5f));
-
-        Ui.TextAt(drawList, this.fonts.Caption,
-            new Vector2(centerX - (nameSize.X * 0.5f), pos.Y + avatar + Ui.Px(4f)),
-            Palette.TextSecondary.U32(), name);
-
-        return clicked;
-    }
-
-    private bool DrawRow(ConversationSummaryDto conversation, float width)
-    {
-        var rowHeight = Ui.Px(60f);
-        var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton("##conv_" + conversation.UserId, new Vector2(width, rowHeight));
-        var hovered = ImGui.IsItemHovered();
-        var drawList = ImGui.GetWindowDrawList();
-
-        // Faint rounded fill on hover, painted behind the avatar and text, so the list reads as tappable
-        // rows to match the hover feedback elsewhere (header controls, the chat peer tap).
-        if (hovered)
-            drawList.AddRectFilled(pos, pos + new Vector2(width, rowHeight), Palette.WithAlpha(Palette.White, 0.045f).U32(), Ui.Px(12f));
-
-        var radius = Ui.Px(23f);
-        var avatarCenter = new Vector2(pos.X + radius, pos.Y + (rowHeight * 0.5f));
-        this.DrawAvatar(drawList, avatarCenter, radius, conversation.MainPhotoId, Initial(conversation.DisplayName));
-        if (conversation.Online)
-        {
-            var dot = new Vector2(avatarCenter.X + radius - Ui.Px(4f), avatarCenter.Y + radius - Ui.Px(4f));
-            drawList.AddCircleFilled(dot, Ui.Px(5f), this.theme.Secondary.Base.U32(), 12);
-            drawList.AddCircle(dot, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(1.5f));
-        }
-
-        var textX = pos.X + (radius * 2f) + Ui.Px(12f);
-        var nameSize = Ui.Measure(this.fonts.Body, conversation.DisplayName);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(12f)), Palette.TextPrimary.U32(), conversation.DisplayName);
-        if (conversation.Verified)
-        {
-            var glyph = FontAwesomeIcon.CheckCircle.ToIconString();
-            var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-            Ui.TextAt(drawList, this.fonts.Icon,
-                new Vector2(textX + nameSize.X + Ui.Px(6f), pos.Y + Ui.Px(12f) + ((nameSize.Y - glyphSize.Y) * 0.5f)),
-                this.theme.Secondary.Base.U32(), glyph);
-        }
-
-        var unread = conversation.Unread > 0;
-        var previewColor = (unread ? Palette.TextSecondary : Palette.TextMuted).U32();
-        var preview = this.Fit(this.Preview(conversation), (pos.X + width) - textX - Ui.Px(44f));
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(34f)), previewColor, preview);
+        var textX = amin.X + av + Ui.Px(14f);
+        var textRight = (pos.X + fullWidth) - pad;
 
         var time = Ago(conversation.LastMessageAt);
+        var timeWidth = 0f;
         if (time.Length > 0)
         {
-            var timeSize = Ui.Measure(this.fonts.Caption, time);
-            var timeColor = (unread ? this.theme.Secondary.Text : Palette.TextMuted).U32();
-            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + width - timeSize.X, pos.Y + Ui.Px(12f)), timeColor, time);
+            var timeSize = Ui.Measure(this.fonts.Mono, time);
+            timeWidth = timeSize.X + Ui.Px(10f);
+            Ui.TextAt(dl, this.fonts.Mono, new Vector2(textRight - timeSize.X, pos.Y + Ui.Px(18f)), Palette.TextMuted.U32(), time);
         }
 
+        var name = this.Fit(conversation.DisplayName, textRight - textX - timeWidth, this.fonts.SerifName);
+        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(textX, pos.Y + Ui.Px(15f)), Palette.TextPrimary.U32(), name);
+
+        var unread = conversation.Unread > 0;
+        var badgeRight = textRight;
         if (unread)
         {
-            var badge = conversation.Unread.ToString();
-            var badgeTextSize = Ui.Measure(this.fonts.Caption, badge);
-            var badgeWidth = MathF.Max(Ui.Px(18f), badgeTextSize.X + Ui.Px(8f));
-            var badgeHeight = Ui.Px(18f);
-            var badgePos = new Vector2(pos.X + width - badgeWidth, pos.Y + Ui.Px(34f));
-            drawList.AddRectFilled(badgePos, badgePos + new Vector2(badgeWidth, badgeHeight), this.theme.AccentDeep.U32(), badgeHeight * 0.5f);
-            Ui.TextAt(drawList, this.fonts.Caption,
-                new Vector2(badgePos.X + ((badgeWidth - badgeTextSize.X) * 0.5f), badgePos.Y + ((badgeHeight - badgeTextSize.Y) * 0.5f)),
-                this.theme.OnAccent.U32(), badge);
+            var badge = conversation.Unread > 99 ? "99+" : conversation.Unread.ToString();
+            var badgeText = Ui.Measure(this.fonts.Mono, badge);
+            var badgeWidth = MathF.Max(Ui.Px(16f), badgeText.X + Ui.Px(8f));
+            var badgeHeight = Ui.Px(16f);
+            var badgePos = new Vector2(textRight - badgeWidth, pos.Y + Ui.Px(42f));
+            dl.AddRectFilled(badgePos, badgePos + new Vector2(badgeWidth, badgeHeight), Palette.Signal.U32(), badgeHeight * 0.5f);
+            Ui.TextAt(dl, this.fonts.Mono, new Vector2(badgePos.X + ((badgeWidth - badgeText.X) * 0.5f), badgePos.Y + ((badgeHeight - badgeText.Y) * 0.5f)), Palette.Paper.U32(), badge);
+            badgeRight = badgePos.X - Ui.Px(8f);
         }
 
-        drawList.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + width, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        var previewColor = (unread ? Palette.TextPrimary : Palette.TextMuted).U32();
+        var preview = this.Fit(this.Preview(conversation), badgeRight - textX, this.fonts.LabelSmall);
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, pos.Y + Ui.Px(41f)), previewColor, preview);
+
+        dl.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + fullWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
         return clicked;
     }
 
@@ -207,37 +178,34 @@ internal sealed class MessagesScreen : IScreen
         return conversation.Unread > 0 ? "New message" : "Say hi";
     }
 
-    // Flatten newlines/whitespace runs to single spaces so a multi-line message previews on one line.
     private static string OneLine(string text) => string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-    // Truncate with an ellipsis to fit the row, so a long preview doesn't run under the time and badge.
-    private string Fit(string text, float maxWidth)
+    private string Fit(string text, float maxWidth, IFontHandle font)
     {
-        if (maxWidth <= 0f || Ui.Measure(this.fonts.Caption, text).X <= maxWidth)
+        if (maxWidth <= 0f || Ui.Measure(font, text).X <= maxWidth)
             return text;
-        const string ellipsis = "...";
-        var ellipsisWidth = Ui.Measure(this.fonts.Caption, ellipsis).X;
+        const string ellipsis = "…";
+        var ellipsisWidth = Ui.Measure(font, ellipsis).X;
         var n = text.Length;
-        while (n > 0 && Ui.Measure(this.fonts.Caption, text[..n]).X + ellipsisWidth > maxWidth)
+        while (n > 0 && Ui.Measure(font, text[..n]).X + ellipsisWidth > maxWidth)
             n--;
         return text[..n].TrimEnd() + ellipsis;
     }
 
-    private void DrawAvatar(ImDrawListPtr drawList, Vector2 center, float radius, Guid? photoId, string initial)
+    private void DrawAvatar(ImDrawListPtr dl, Vector2 min, float size, Guid? photoId, string initial)
     {
+        var max = min + new Vector2(size, size);
         var texture = photoId is { } id ? this.photoSvc.Texture(id) : null;
         if (texture != null)
         {
             var (uvMin, uvMax) = Ui.CoverUv(texture.Width, texture.Height, 1f);
-            drawList.AddImageRounded(texture.Handle, center - new Vector2(radius, radius), center + new Vector2(radius, radius), uvMin, uvMax, 0xFFFFFFFFu, radius);
+            dl.AddImage(texture.Handle, min, max, uvMin, uvMax);
             return;
         }
 
-        drawList.AddCircleFilled(center, radius, Palette.Surface2.U32(), 24);
-        var initialSize = Ui.Measure(this.fonts.Body, initial);
-        Ui.TextAt(drawList, this.fonts.Body,
-            new Vector2(center.X - (initialSize.X * 0.5f), center.Y - (initialSize.Y * 0.5f)),
-            Palette.TextSecondary.U32(), initial);
+        dl.AddRectFilled(min, max, Palette.Surface2.U32());
+        var initialSize = Ui.Measure(this.fonts.SerifName, initial);
+        Ui.TextAt(dl, this.fonts.SerifName, ((min + max) * 0.5f) - (initialSize * 0.5f), Palette.TextSecondary.U32(), initial);
     }
 
     private static string Initial(string name) => name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
