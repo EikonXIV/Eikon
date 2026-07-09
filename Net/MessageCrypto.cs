@@ -301,6 +301,11 @@ internal sealed class MessageCrypto
         }
     }
 
+    // Whether the peer's served identity no longer matches our pin (a reinstall, or a possible MITM). An
+    // undecryptable initial in this state can't be recovered by a re-handshake; the caller acks it to
+    // stop endless redelivery and lets the "identity changed" banner drive re-verification.
+    public bool Mismatched(Guid peer) => this.identity.Mismatched(peer);
+
     // Whether a (base64) header carries the X3DH initial handshake. A non-initial header from a peer we
     // have no session for is a desync (vs a forged initial); the caller can request a re-handshake.
     public static bool IsInitialHeader(string headerBase64)
