@@ -12,6 +12,16 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 6, 1),
+            "July 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Albums shared with you in a chat now open right away, instead of showing an empty folder or nothing when opened from a profile.",
+                "A 'New message' notice no longer keeps coming back with nothing behind it, which could happen after the other person reinstalled Eikon.",
+            ]),
+        new Release(
             new Version(1, 6, 0),
             "July 2026",
             New:
