@@ -14,7 +14,6 @@ namespace Eikon.Screens;
 internal sealed class ChatScreen : IScreen
 {
     private readonly ScreenRouter router;
-    private readonly ThemeService theme;
     private readonly Kit kit;
     private readonly UiFonts fonts;
     private readonly ModerationFlow moderation;
@@ -48,10 +47,9 @@ internal sealed class ChatScreen : IScreen
     private Guid threadPeer;         // the open thread's peer, for resolving album covers in received cards
     private bool openAlbumPicker;    // "Share an album" was tapped in the overflow menu
 
-    public ChatScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, Configuration config, WindowController windowController)
+    public ChatScreen(ScreenRouter router, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, Configuration config, WindowController windowController)
     {
         this.router = router;
-        this.theme = theme;
         this.kit = kit;
         this.fonts = fonts;
         this.moderation = moderation;
@@ -314,23 +312,7 @@ internal sealed class ChatScreen : IScreen
                     this.openAlbumPicker = true;
                 });
 
-        var radius = Ui.Px(16f);
-
-        // Avatar and name double as a tap target that opens the profile (also offered in the overflow
-        // menu). Submitted before the avatar/name are painted so its hover highlight sits behind them.
-        var tapX = origin.X + pad + backSize.X + Ui.Px(6f);
-        var tapRight = moreTL.X - Ui.Px(6f);
-        var tapW = tapRight - tapX;
-        var tapClicked = false;
-        if (tapW > Ui.Px(40f))
-        {
-            ImGui.SetCursorScreenPos(new Vector2(tapX, midY - Ui.Px(18f)));
-            tapClicked = ImGui.InvisibleButton("##chat_peer", new Vector2(tapW, Ui.Px(36f)));
-            if (ImGui.IsItemHovered())
-                drawList.AddRectFilled(new Vector2(tapX, midY - Ui.Px(18f)), new Vector2(tapRight, midY + Ui.Px(18f)), Palette.WithAlpha(Palette.White, 0.04f).U32(), Ui.Px(10f));
-        }
-
-        var avatarCenter = new Vector2(origin.X + pad + backSize.X + Ui.Px(12f) + radius, midY);
+        var avatarSize = Ui.Px(36f);
 
         // Photo and presence both come from the cached inbox row (the chat keeps the inbox loaded).
         var online = false;
@@ -338,30 +320,42 @@ internal sealed class ChatScreen : IScreen
         foreach (var c in this.inbox.Conversations)
             if (c.UserId == peer) { online = c.Online; photoId = c.MainPhotoId; break; }
 
+        // Avatar and name/status double as a tap target that opens the profile (also offered in the
+        // overflow menu). Submitted before they are painted so its hover highlight sits behind them.
+        var tapX = origin.X + pad + backSize.X + Ui.Px(6f);
+        var tapRight = moreTL.X - Ui.Px(6f);
+        var tapClicked = false;
+        if (tapRight - tapX > Ui.Px(40f))
+        {
+            ImGui.SetCursorScreenPos(new Vector2(tapX, midY - Ui.Px(20f)));
+            tapClicked = ImGui.InvisibleButton("##chat_peer", new Vector2(tapRight - tapX, Ui.Px(40f)));
+            if (ImGui.IsItemHovered())
+                drawList.AddRectFilled(new Vector2(tapX, midY - Ui.Px(20f)), new Vector2(tapRight, midY + Ui.Px(20f)), Palette.WithAlpha(Palette.White, 0.04f).U32());
+        }
+
+        var avatarMin = new Vector2(origin.X + pad + backSize.X + Ui.Px(12f), midY - (avatarSize * 0.5f));
+        var avatarMax = avatarMin + new Vector2(avatarSize, avatarSize);
         var avatarTex = photoId is { } pid ? this.photoSvc.Texture(pid) : null;
         if (avatarTex != null)
         {
             var (uvMin, uvMax) = Ui.CoverUv(avatarTex.Width, avatarTex.Height, 1f);
-            drawList.AddImageRounded(avatarTex.Handle, avatarCenter - new Vector2(radius, radius), avatarCenter + new Vector2(radius, radius), uvMin, uvMax, 0xFFFFFFFFu, radius);
+            drawList.AddImage(avatarTex.Handle, avatarMin, avatarMax, uvMin, uvMax);
         }
         else
         {
-            drawList.AddCircleFilled(avatarCenter, radius, Palette.Surface2.U32(), 24);
+            drawList.AddRectFilled(avatarMin, avatarMax, Palette.Surface2.U32());
             var initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
-            var initialSize = Ui.Measure(this.fonts.Caption, initial);
-            Ui.TextAt(drawList, this.fonts.Caption,
-                new Vector2(avatarCenter.X - (initialSize.X * 0.5f), avatarCenter.Y - (initialSize.Y * 0.5f)),
-                Palette.TextSecondary.U32(), initial);
+            var initialSize = Ui.Measure(this.fonts.SerifName, initial);
+            Ui.TextAt(drawList, this.fonts.SerifName, ((avatarMin + avatarMax) * 0.5f) - (initialSize * 0.5f), Palette.TextSecondary.U32(), initial);
         }
 
-        // Presence dot on the avatar: accent when online, muted when offline.
-        var dot = avatarCenter + new Vector2(radius - Ui.Px(3f), radius - Ui.Px(3f));
-        drawList.AddCircleFilled(dot, Ui.Px(4.5f), (online ? this.theme.Secondary.Base : Palette.TextMuted).U32(), 12);
-        drawList.AddCircle(dot, Ui.Px(4.5f), Palette.Bg.U32(), 12, Ui.Px(1.5f));
+        var textX = avatarMax.X + Ui.Px(11f);
+        Ui.TextAt(drawList, this.fonts.SerifName, new Vector2(textX, origin.Y + Ui.Px(15f)), Palette.TextPrimary.U32(), name);
 
-        var nameX = avatarCenter.X + radius + Ui.Px(10f);
-        var nameSize = Ui.Measure(this.fonts.Body, name);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(nameX, midY - (nameSize.Y * 0.5f)), Palette.TextPrimary.U32(), name);
+        // Status line under the name: a presence dot and a word, mirroring the inbox rows.
+        var statusY = origin.Y + Ui.Px(35f);
+        drawList.AddCircleFilled(new Vector2(textX + Ui.Px(3f), statusY + Ui.Px(6f)), Ui.Px(3.5f), (online ? Palette.Online : Palette.Afk).U32(), 12);
+        Ui.TextAt(drawList, this.fonts.Mono, new Vector2(textX + Ui.Px(12f), statusY), Palette.TextMuted.U32(), online ? "ONLINE" : "OFFLINE");
 
         if (tapClicked)
         {
@@ -398,19 +392,19 @@ internal sealed class ChatScreen : IScreen
         uint color;
         if (mismatched)
         {
-            note = "Safety identity changed - tap to review";
+            note = "Safety identity changed · tap to review";
             glyphIcon = FontAwesomeIcon.ExclamationTriangle;
             color = Palette.Danger.U32();
         }
         else if (verified)
         {
-            note = "Encrypted - identity verified";
+            note = "Encrypted · identity verified";
             glyphIcon = FontAwesomeIcon.CheckCircle;
-            color = this.theme.Secondary.Text.U32();
+            color = Palette.Online.U32();
         }
         else
         {
-            note = "Encrypted - tap to verify";
+            note = "Encrypted · tap to verify";
             glyphIcon = FontAwesomeIcon.Lock;
             color = Palette.TextMuted.U32();
         }
@@ -459,7 +453,7 @@ internal sealed class ChatScreen : IScreen
             ImGui.Dummy(new Vector2(width, 0f));   // lock the width; height auto-fits the grid
 
             var mismatched = this.identity.Mismatched(peer);
-            this.IconBadge(width, mismatched ? FontAwesomeIcon.ExclamationTriangle : FontAwesomeIcon.ShieldAlt, mismatched ? Palette.Danger : this.theme.Accent);
+            this.IconBadge(width, mismatched ? FontAwesomeIcon.ExclamationTriangle : FontAwesomeIcon.ShieldAlt, mismatched ? Palette.Danger : Palette.Signal);
             ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
             Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Safety number");
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
@@ -472,7 +466,7 @@ internal sealed class ChatScreen : IScreen
                 ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
                 using (this.fonts.Caption.Push())
                 using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-                    ImGui.TextWrapped("This person's safety identity changed since you last saw it. That can be a new device - or someone intercepting. Re-verify the number below out of band before trusting it.");
+                    ImGui.TextWrapped("This person's safety identity changed since you last saw it. That can be a new device, or someone intercepting. Re-verify the number below out of band before trusting it.");
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
@@ -561,8 +555,8 @@ internal sealed class ChatScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var x = pos.X + ((width - total) * 0.5f);
         var drawList = ImGui.GetWindowDrawList();
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(x, pos.Y), this.theme.Secondary.Base.U32(), glyph);
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(x + glyphSize.X + Ui.Px(7f), pos.Y + ((glyphSize.Y - labelSize.Y) * 0.5f)), this.theme.Secondary.Base.U32(), label);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(x, pos.Y), Palette.Online.U32(), glyph);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(x + glyphSize.X + Ui.Px(7f), pos.Y + ((glyphSize.Y - labelSize.Y) * 0.5f)), Palette.Online.U32(), label);
         ImGui.Dummy(new Vector2(width, glyphSize.Y));
     }
 
@@ -594,8 +588,8 @@ internal sealed class ChatScreen : IScreen
         var pos = new Vector2(x, top);
 
         var drawList = ImGui.GetWindowDrawList();
-        var background = (message.Mine ? this.theme.AccentDeep : Palette.Surface2).U32();
-        var foreground = (message.Mine ? this.theme.OnAccent : Palette.TextPrimary).U32();
+        var background = (message.Mine ? Palette.TextPrimary : Palette.Surface2).U32();
+        var foreground = (message.Mine ? Palette.Paper : Palette.TextPrimary).U32();
 
         // Tail tuck: the bubble's bottom corner on its own side is tightened (14 -> 4) so it reads as
         // "coming from" that side. Mine (right) tucks bottom-right; the peer's (left) tucks bottom-left.
@@ -709,7 +703,7 @@ internal sealed class ChatScreen : IScreen
         var clicked = ImGui.InvisibleButton("##album_" + id, new Vector2(width, height));
         ImGui.SetItemAllowOverlap();
 
-        drawList.AddRectFilled(pos, pos + new Vector2(width, height), (mine ? this.theme.AccentDeep : Palette.Surface2).U32(), Ui.Px(14f));
+        drawList.AddRectFilled(pos, pos + new Vector2(width, height), (mine ? Palette.TextPrimary : Palette.Surface2).U32(), Ui.Px(14f));
 
         // Cover tile.
         var thumb = Ui.Px(44f);
@@ -723,15 +717,15 @@ internal sealed class ChatScreen : IScreen
         }
         else
         {
-            drawList.AddRectFilled(tpos, tpos + new Vector2(thumb, thumb), (mine ? Palette.WithAlpha(Palette.White, 0.12f) : Palette.Surface1).U32(), Ui.Px(9f));
+            drawList.AddRectFilled(tpos, tpos + new Vector2(thumb, thumb), (mine ? Palette.WithAlpha(Palette.Paper, 0.10f) : Palette.Surface1).U32(), Ui.Px(9f));
             var glyph = FontAwesomeIcon.LayerGroup.ToIconString();
             var gs = Ui.Measure(this.fonts.Icon, glyph);
-            Ui.TextAt(drawList, this.fonts.Icon, tpos + (new Vector2(thumb, thumb) * 0.5f) - (gs * 0.5f), (mine ? this.theme.OnAccent : Palette.TextSecondary).U32(), glyph);
+            Ui.TextAt(drawList, this.fonts.Icon, tpos + (new Vector2(thumb, thumb) * 0.5f) - (gs * 0.5f), (mine ? Palette.Paper : Palette.TextSecondary).U32(), glyph);
         }
 
         var textX = tpos.X + thumb + Ui.Px(11f);
-        var kickerColor = (mine ? Palette.WithAlpha(this.theme.OnAccent, 0.72f) : Palette.TextMuted).U32();
-        var nameColor = (mine ? this.theme.OnAccent : Palette.TextPrimary).U32();
+        var kickerColor = (mine ? Palette.WithAlpha(Palette.Paper, 0.6f) : Palette.TextMuted).U32();
+        var nameColor = (mine ? Palette.Paper : Palette.TextPrimary).U32();
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(12f)), kickerColor, mine ? "Shared album" : "Shared an album");
 
         var albumName = message.AlbumName ?? "Album";
@@ -793,7 +787,7 @@ internal sealed class ChatScreen : IScreen
         };
         if (message.SentAt is { } sa && label.Length > 0)
             label = $"{sa.ToLocalTime():t} · {label}";
-        var color = message.State == MessageState.Failed ? new Vector4(0.91f, 0.36f, 0.36f, 1f) : Palette.TextMuted;
+        var color = message.State == MessageState.Failed ? Palette.Danger : Palette.TextMuted;
         var size = Ui.Measure(this.fonts.Caption, label);
         var pos = ImGui.GetCursorScreenPos();
         Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(pos.X + contentWidth - size.X, pos.Y + Ui.Px(2f)), color.U32(), label);
@@ -830,19 +824,15 @@ internal sealed class ChatScreen : IScreen
 
     private void DrawEarlierDivider(float contentWidth) => this.DrawSeparator("earlier messages", Palette.TextMuted, contentWidth);
 
-    // Centered label with a hairline to each side: the day markers and the pre-timestamp boundary.
+    // Centered eyebrow (tracked mono caps): the day markers and the pre-timestamp boundary.
     private void DrawSeparator(string label, Vector4 textColor, float contentWidth)
     {
-        var blockHeight = Ui.Px(26f);
+        var blockHeight = Ui.Px(30f);
         var pos = ImGui.GetCursorScreenPos();
-        var drawList = ImGui.GetWindowDrawList();
-        var ls = Ui.Measure(this.fonts.Caption, label);
+        var text = label.ToUpperInvariant();
+        var ls = Ui.Measure(this.fonts.Eyebrow, text);
         var midY = pos.Y + (blockHeight * 0.5f);
-        var cx = pos.X + (contentWidth * 0.5f);
-        var halfLabel = (ls.X * 0.5f) + Ui.Px(10f);
-        drawList.AddLine(new Vector2(pos.X + Ui.Px(6f), midY), new Vector2(cx - halfLabel, midY), Palette.Border.U32(), 1f);
-        drawList.AddLine(new Vector2(cx + halfLabel, midY), new Vector2(pos.X + contentWidth - Ui.Px(6f), midY), Palette.Border.U32(), 1f);
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(cx - (ls.X * 0.5f), midY - (ls.Y * 0.5f)), textColor.U32(), label);
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + ((contentWidth - ls.X) * 0.5f), midY - (ls.Y * 0.5f)), textColor.U32(), text);
         ImGui.Dummy(new Vector2(contentWidth, blockHeight));
     }
 
@@ -955,14 +945,14 @@ internal sealed class ChatScreen : IScreen
             this.refocusComposer = true;
         }
 
-        // Send reflects whether there is anything to send: a muted disc when the field is empty (tapping
-        // it does nothing), the solid accent once there is text, brightening further on hover.
+        // Send reflects whether there is anything to send: a muted square when the field is empty (tapping
+        // it does nothing), the solid cream ink once there is text, brightening to white on hover.
         var sendCenter = sendPos + new Vector2(sendDiameter * 0.5f, sendDiameter * 0.5f);
-        var sendFill = actionable ? (sendHover ? this.theme.Accent : this.theme.AccentDeep) : Palette.Surface2;
-        drawList.AddCircleFilled(sendCenter, sendDiameter * 0.5f, sendFill.U32(), 24);
+        var sendFill = actionable ? (sendHover ? Palette.White : Palette.TextPrimary) : Palette.Surface2;
+        drawList.AddRectFilled(sendPos, sendPos + new Vector2(sendDiameter, sendDiameter), sendFill.U32(), Ui.Px(4f));
         var sendGlyph = FontAwesomeIcon.PaperPlane.ToIconString();
         var sendSize = Ui.Measure(this.fonts.Icon, sendGlyph);
-        var sendGlyphColor = actionable ? this.theme.OnAccent : Palette.TextMuted;
+        var sendGlyphColor = actionable ? Palette.Paper : Palette.TextMuted;
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(sendCenter.X - (sendSize.X * 0.5f), sendCenter.Y - (sendSize.Y * 0.5f)), sendGlyphColor.U32(), sendGlyph);
     }
 
