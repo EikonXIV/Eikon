@@ -81,13 +81,12 @@ internal sealed class MainWindow : Window, IDisposable
             gate.MaybeAutoPresent();
 
         var screen = this.screensById.GetValueOrDefault(this.router.Current);
-        if (screen is null || screen.Chrome)
-            this.DrawWithChrome(screen);
-        else
-            this.DrawFull(screen);
+        // The title bar always stays. Only top-level tabs (Chrome) show the bottom nav; sub-views like
+        // profile detail and chat load into the body below the title bar rather than taking it over.
+        this.DrawShell(screen, screen is null || screen.Chrome);
     }
 
-    private void DrawWithChrome(IScreen? screen)
+    private void DrawShell(IScreen? screen, bool showNav)
     {
         // Keep the inbox warm while the app is open so the Messages tab's unread badge stays live
         // (the orb does the same while minimized). EnsureLoaded refetches when a new message lands.
@@ -101,7 +100,7 @@ internal sealed class MainWindow : Window, IDisposable
 
         var avail = ImGui.GetContentRegionAvail();
         var headerHeight = Ui.Px(48f);
-        var navHeight = Ui.Px(54f);
+        var navHeight = showNav ? Ui.Px(54f) : 0f;
         var stripes = this.theme.Stripes;
         var barHeight = stripes.Count > 0 ? Ui.Px(3f) : 0f;
         var bodyHeight = avail.Y - headerHeight - barHeight - navHeight;
@@ -122,17 +121,8 @@ internal sealed class MainWindow : Window, IDisposable
                 screen?.Draw();
         }
 
-        this.DrawBottomNav(navHeight);
-    }
-
-    private void DrawFull(IScreen screen)
-    {
-        var avail = ImGui.GetContentRegionAvail();
-        using (var body = ImRaii.Child("full", avail))
-        {
-            if (body.Success)
-                screen.Draw();
-        }
+        if (showNav)
+            this.DrawBottomNav(navHeight);
     }
 
     private void DrawHeader(float height, float width)
