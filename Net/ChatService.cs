@@ -226,17 +226,17 @@ internal sealed class ChatService
             var text = await this.crypto.DecryptAsync(dto.SenderId, dto, CancellationToken.None);
             if (text is null)
             {
-                // A non-initial message we can't decrypt and hold no session for is a desync (our peer
-                // and we are out of sync). Ack it so it stops redelivering, and ask the sender to
-                // re-handshake; their client will resend on a fresh session. (An undecryptable *initial*
-                // is likely forged, so we leave it queued and stay quiet.)
-                if (!this.crypto.HasSession(dto.SenderId) && !MessageCrypto.IsInitialHeader(dto.Header))
-                {
+                // We couldn't decrypt it. What to do depends on why (see DecideUndecryptable): a ratchet
+                // desync recovers via ack + re-handshake; a changed peer identity (a reinstall) is acked
+                // only, so it stops redelivering forever while the "identity changed" banner drives
+                // re-verification (a rekey can't help, and we must never silently re-pin); a forged or
+                // concurrent-handshake initial is left queued and quiet.
+                var action = DecideUndecryptable(MessageCrypto.IsInitialHeader(dto.Header), this.crypto.Mismatched(dto.SenderId));
+                if (action.Ack)
                     this.relay.Ack(dto.Id);
+                if (action.Rekey)
                     this.RequestRekey(dto.SenderId);
-                }
-
-                return;   // otherwise leave it queued for redelivery, don't ack
+                return;
             }
 
             // An image message carries an envelope (storage key + blob key) we must fetch + decrypt
@@ -361,6 +361,31 @@ internal sealed class ChatService
             if (changed)
                 this.Save();
         }
+    }
+
+    // What to do with a message we couldn't decrypt, given whether it carries the X3DH initial bit and
+    // whether the peer's identity no longer matches our pin. Split out (and internal) so the branching
+    // is unit-testable without constructing ChatService.
+    internal readonly record struct UndecryptableAction(bool Ack, bool Rekey);
+
+    internal static UndecryptableAction DecideUndecryptable(bool isInitial, bool identityMismatched)
+    {
+        // A reinstalled peer's greeting fails our identity pin before X3DH even runs. Acking stops the
+        // relay redelivering it forever (the phantom "New message" with nothing behind it). A rekey is
+        // useless because the resend carries the same changed identity, and re-pinning must stay a user
+        // gesture after a safety-number review, so we only ack.
+        if (identityMismatched)
+            return new UndecryptableAction(Ack: true, Rekey: false);
+
+        // Any non-initial we can't read is a ratchet desync (out of sync, or the session was lost). Ack
+        // to stop redelivery and ask the peer to re-handshake; their client resends on a fresh session.
+        if (!isInitial)
+            return new UndecryptableAction(Ack: true, Rekey: true);
+
+        // An undecryptable initial whose identity still matches the pin is a forged/garbage frame or a
+        // concurrent-handshake tie-break the peer will supersede. Leave it queued and stay quiet; the
+        // server's stale-'sent' expiry reaps a genuinely dead one.
+        return new UndecryptableAction(Ack: false, Rekey: false);
     }
 
     // Ask a peer to re-handshake (debounced), because we can't decrypt their messages.
