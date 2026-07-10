@@ -142,11 +142,11 @@ internal sealed class MessagesScreen : IScreen
         {
             var timeSize = Ui.Measure(this.fonts.Mono, time);
             timeWidth = timeSize.X + Ui.Px(10f);
-            Ui.TextAt(dl, this.fonts.Mono, new Vector2(textRight - timeSize.X, pos.Y + Ui.Px(18f)), Palette.TextMuted.U32(), time);
+            Ui.TextAt(dl, this.fonts.Mono, new Vector2(textRight - timeSize.X, pos.Y + Ui.Px(17f)), Palette.TextMuted.U32(), time);
         }
 
         var name = this.Fit(conversation.DisplayName, textRight - textX - timeWidth, this.fonts.SerifName);
-        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(textX, pos.Y + Ui.Px(15f)), Palette.TextPrimary.U32(), name);
+        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(textX, pos.Y + Ui.Px(13f)), Palette.TextPrimary.U32(), name);
 
         var unread = conversation.Unread > 0;
         var badgeRight = textRight;
@@ -156,15 +156,15 @@ internal sealed class MessagesScreen : IScreen
             var badgeText = Ui.Measure(this.fonts.Mono, badge);
             var badgeWidth = MathF.Max(Ui.Px(16f), badgeText.X + Ui.Px(8f));
             var badgeHeight = Ui.Px(16f);
-            var badgePos = new Vector2(textRight - badgeWidth, pos.Y + Ui.Px(42f));
+            var badgePos = new Vector2(textRight - badgeWidth, pos.Y + Ui.Px(44f));
             dl.AddRectFilled(badgePos, badgePos + new Vector2(badgeWidth, badgeHeight), Palette.Signal.U32(), badgeHeight * 0.5f);
             Ui.TextAt(dl, this.fonts.Mono, new Vector2(badgePos.X + ((badgeWidth - badgeText.X) * 0.5f), badgePos.Y + ((badgeHeight - badgeText.Y) * 0.5f)), Palette.Paper.U32(), badge);
             badgeRight = badgePos.X - Ui.Px(8f);
         }
 
         var previewColor = (unread ? Palette.TextPrimary : Palette.TextMuted).U32();
-        var preview = this.Fit(this.Preview(conversation), badgeRight - textX, this.fonts.LabelSmall);
-        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, pos.Y + Ui.Px(41f)), previewColor, preview);
+        var preview = this.Fit(this.Preview(conversation), badgeRight - textX, this.fonts.Caption);
+        Ui.TextAt(dl, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(44f)), previewColor, preview);
 
         dl.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + fullWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
         return clicked;

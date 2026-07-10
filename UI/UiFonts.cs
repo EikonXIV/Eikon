@@ -27,7 +27,7 @@ internal sealed class UiFonts : IDisposable
 
         this.Title = this.Make(atlas, SerifFile, 22f);
         this.SerifTitle = this.Make(atlas, SerifFile, 28f);
-        this.SerifName = this.Make(atlas, SerifFile, 16f);
+        this.SerifName = this.Make(atlas, SerifFile, 22f);
         this.SerifItalicTitle = this.Make(atlas, SerifItalicFile, 28f);
         this.Body = this.Make(atlas, SansFile, 18f);
         this.Caption = this.Make(atlas, SansFile, 15f);
@@ -40,7 +40,7 @@ internal sealed class UiFonts : IDisposable
 
     public IFontHandle Title { get; }             // Instrument Serif 22 — wordmark, legacy headers
     public IFontHandle SerifTitle { get; }        // Instrument Serif 28 — screen titles
-    public IFontHandle SerifName { get; }         // Instrument Serif 16 — list and message names
+    public IFontHandle SerifName { get; }         // Instrument Serif 22 — list and message names
     public IFontHandle SerifItalicTitle { get; }  // Instrument Serif Italic 28 — two-tone titles
     public IFontHandle Body { get; }              // Inter Tight 18 — tile names, prominent content
     public IFontHandle Caption { get; }           // Inter Tight 15 — small content

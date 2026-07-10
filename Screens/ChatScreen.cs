@@ -350,10 +350,10 @@ internal sealed class ChatScreen : IScreen
         }
 
         var textX = avatarMax.X + Ui.Px(11f);
-        Ui.TextAt(drawList, this.fonts.SerifName, new Vector2(textX, origin.Y + Ui.Px(15f)), Palette.TextPrimary.U32(), name);
+        Ui.TextAt(drawList, this.fonts.SerifName, new Vector2(textX, origin.Y + Ui.Px(12f)), Palette.TextPrimary.U32(), name);
 
         // Status line under the name: a presence dot and a word, mirroring the inbox rows.
-        var statusY = origin.Y + Ui.Px(35f);
+        var statusY = origin.Y + Ui.Px(37f);
         drawList.AddCircleFilled(new Vector2(textX + Ui.Px(3f), statusY + Ui.Px(6f)), Ui.Px(3.5f), (online ? Palette.Online : Palette.Afk).U32(), 12);
         Ui.TextAt(drawList, this.fonts.Mono, new Vector2(textX + Ui.Px(12f), statusY), Palette.TextMuted.U32(), online ? "ONLINE" : "OFFLINE");
 
