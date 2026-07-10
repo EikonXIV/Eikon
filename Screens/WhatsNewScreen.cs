@@ -9,29 +9,27 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Screens;
 
-// "What's new" release notes, grouped-changelog style. Shows once automatically after an update
-// (MaybeAutoPresent, driven each frame from MainWindow) and is openable any time from Settings. Reuses
-// the Guidelines scaffold: own header, scrollable body, footer. Content is the bundled ReleaseNotes.
+// "What's new" release notes (warm-editorial), grouped-changelog style. Shows once automatically after
+// an update (MaybeAutoPresent, driven each frame from MainWindow) and is openable any time from
+// Settings. Own header, scrollable body, footer. Content is the bundled ReleaseNotes.
 internal sealed class WhatsNewScreen : IScreen
 {
     private const string ChangelogUrl = "https://eikon.chat/changelog";
 
     private readonly ScreenRouter router;
-    private readonly ThemeService theme;
     private readonly UiFonts fonts;
     private readonly Kit kit;
     private readonly Configuration config;
     private readonly KeyVault keyVault;
 
-    // updateMode: shown by an update (version pill, Got it footer, only unseen releases). Otherwise the
-    // screen was opened from Settings (back chevron, full history, no footer, no version write).
+    // updateMode: shown by an update (Got it footer, only unseen releases). Otherwise the screen was
+    // opened from Settings (back chevron, full history, no footer, no version write).
     private bool updateMode;
     private bool checkedThisSession;
 
-    public WhatsNewScreen(ScreenRouter router, ThemeService theme, UiFonts fonts, Kit kit, Configuration config, KeyVault keyVault)
+    public WhatsNewScreen(ScreenRouter router, UiFonts fonts, Kit kit, Configuration config, KeyVault keyVault)
     {
         this.router = router;
-        this.theme = theme;
         this.fonts = fonts;
         this.kit = kit;
         this.config = config;
@@ -71,7 +69,7 @@ internal sealed class WhatsNewScreen : IScreen
         var avail = ImGui.GetContentRegionAvail();
         var pad = Ui.Px(16f);
         var headerHeight = Ui.Px(52f);
-        var footerHeight = this.updateMode ? Ui.Px(76f) : 0f;
+        var footerHeight = this.updateMode ? Ui.Px(92f) : 0f;
 
         this.DrawHeader(avail.X, pad, headerHeight);
 
@@ -119,96 +117,95 @@ internal sealed class WhatsNewScreen : IScreen
             textX = origin.X + pad + backSize.X + Ui.Px(12f);
         }
 
-        const string title = "What's new";
-        var titleSize = Ui.Measure(this.fonts.Body, title);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), title);
+        const string eyebrow = "WHAT'S NEW";
+        var eyebrowSize = Ui.Measure(this.fonts.Eyebrow, eyebrow);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(textX, midY - (eyebrowSize.Y * 0.5f)), Palette.TextSecondary.U32(), eyebrow);
 
-        var pill = "v" + PluginVersion.Display;
-        var pillText = Ui.Measure(this.fonts.Caption, pill);
-        var pillPad = new Vector2(Ui.Px(9f), Ui.Px(3f));
-        var pillSize = pillText + (pillPad * 2f);
-        var pillPos = new Vector2(origin.X + fullWidth - pad - pillSize.X, midY - (pillSize.Y * 0.5f));
-        drawList.AddRectFilled(pillPos, pillPos + pillSize, this.theme.AccentTint.U32(), Ui.Px(7f));
-        Ui.TextAt(drawList, this.fonts.Caption, pillPos + pillPad, this.theme.AccentText.U32(), pill);
+        var version = "V" + PluginVersion.Display;
+        var versionSize = Ui.Measure(this.fonts.Mono, version);
+        Ui.TextAt(drawList, this.fonts.Mono, new Vector2(origin.X + fullWidth - pad - versionSize.X, midY - (versionSize.Y * 0.5f)), Palette.TextMuted.U32(), version);
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + height), new Vector2(origin.X + fullWidth, origin.Y + height), Palette.Border.U32(), 1f);
     }
 
     private void DrawRelease(float width, Release release, bool latest, bool divider)
     {
-        ImGui.Dummy(new Vector2(0f, Ui.Px(latest ? 6f : 2f)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(latest ? 8f : 6f)));
 
         var drawList = ImGui.GetWindowDrawList();
         var rowPos = ImGui.GetCursorScreenPos();
         var v = release.Version;
         var header = v.Build == 0 ? $"Version {v.Major}.{v.Minor}" : $"Version {v.Major}.{v.Minor}.{v.Build}";
-        var headerSize = Ui.Measure(this.fonts.Body, header);
-        Ui.TextAt(drawList, this.fonts.Body, rowPos, Palette.TextPrimary.U32(), header);
+        var headerSize = Ui.Measure(this.fonts.SerifTitle, header);
+        Ui.TextAt(drawList, this.fonts.SerifTitle, rowPos, Palette.TextPrimary.U32(), header);
 
-        var dateSize = Ui.Measure(this.fonts.Caption, release.Date);
-        Ui.TextAt(drawList, this.fonts.Caption,
-            new Vector2(rowPos.X + headerSize.X + Ui.Px(9f), rowPos.Y + headerSize.Y - dateSize.Y - Ui.Px(2f)),
+        var dateSize = Ui.Measure(this.fonts.Mono, release.Date);
+        Ui.TextAt(drawList, this.fonts.Mono,
+            new Vector2(rowPos.X + headerSize.X + Ui.Px(10f), rowPos.Y + headerSize.Y - dateSize.Y - Ui.Px(4f)),
             Palette.TextMuted.U32(), release.Date);
 
         if (latest)
         {
-            const string tag = "Latest";
-            var tagText = Ui.Measure(this.fonts.Caption, tag);
-            var tagPad = new Vector2(Ui.Px(7f), Ui.Px(2f));
+            const string tag = "LATEST";
+            var tagText = Ui.Measure(this.fonts.Eyebrow, tag);
+            var tagPad = new Vector2(Ui.Px(8f), Ui.Px(3f));
             var tagSize = tagText + (tagPad * 2f);
             var tagPos = new Vector2(rowPos.X + width - tagSize.X, rowPos.Y + ((headerSize.Y - tagSize.Y) * 0.5f));
-            drawList.AddRectFilled(tagPos, tagPos + tagSize, this.theme.AccentTint.U32(), Ui.Px(6f));
-            Ui.TextAt(drawList, this.fonts.Caption, tagPos + tagPad, this.theme.AccentText.U32(), tag);
+            drawList.AddRect(tagPos, tagPos + tagSize, Palette.Signal.U32(), Ui.Px(4f), ImDrawFlags.None, 1f);
+            Ui.TextAt(drawList, this.fonts.Eyebrow, tagPos + tagPad, Palette.Signal.U32(), tag);
         }
 
         ImGui.Dummy(new Vector2(width, headerSize.Y));
 
-        this.Group(width, "New", release.New, this.theme.Accent);
-        this.Group(width, "Improved", release.Improved, this.theme.Accent);
+        this.Group(width, "New", release.New, Palette.Signal);
+        this.Group(width, "Improved", release.Improved, Palette.Signal);
         this.Group(width, "Fixed", release.Fixed, Palette.TextMuted);
 
         if (divider)
         {
-            ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
             var dividerPos = ImGui.GetCursorScreenPos();
             drawList.AddLine(dividerPos, new Vector2(dividerPos.X + width, dividerPos.Y), Palette.Border.U32(), 1f);
             ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
         }
     }
 
-    private void Group(float width, string label, string[] items, Vector4 bulletColor)
+    private void Group(float width, string label, string[] items, Vector4 markerColor)
     {
         if (items.Length == 0)
             return;
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel(label);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+        var pos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, pos, Palette.TextSecondary.U32(), label.ToUpperInvariant());
+        ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, label).Y + Ui.Px(8f)));
 
         foreach (var item in items)
-            this.Bullet(width, item, bulletColor);
+            this.Bullet(width, item, markerColor);
     }
 
-    private void Bullet(float width, string text, Vector4 bulletColor)
+    private void Bullet(float width, string text, Vector4 markerColor)
     {
         var startX = ImGui.GetCursorPosX();
-        var indent = Ui.Px(16f);
+        var indent = Ui.Px(18f);
 
+        // Small filled square marker, aligned to the first text line; the text wraps beside it.
+        var markPos = ImGui.GetCursorScreenPos();
+        var square = Ui.Px(4f);
+        var markY = markPos.Y + Ui.Px(6f);
+        ImGui.GetWindowDrawList().AddRectFilled(
+            new Vector2(markPos.X + Ui.Px(2f), markY), new Vector2(markPos.X + Ui.Px(2f) + square, markY + square), markerColor.U32());
+
+        ImGui.SetCursorPosX(startX + indent);
         using (this.fonts.Caption.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, bulletColor))
-                ImGui.TextUnformatted("•");
-            ImGui.SameLine(0f, 0f);
-            ImGui.SetCursorPosX(startX + indent);
-            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            {
-                ImGui.PushTextWrapPos(startX + width);
-                ImGui.TextWrapped(text);
-                ImGui.PopTextWrapPos();
-            }
+            ImGui.PushTextWrapPos(startX + width);
+            ImGui.TextWrapped(text);
+            ImGui.PopTextWrapPos();
         }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(7f)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
     }
 
     private void CaughtUp(float width)
@@ -227,17 +224,28 @@ internal sealed class WhatsNewScreen : IScreen
     {
         var width = avail.X - (pad * 2f);
         var top = avail.Y - height + Ui.Px(12f);
+        var drawList = ImGui.GetWindowDrawList();
 
+        // Gold "Got it" CTA: a solid signal fill with a near-black tracked-caps label.
         ImGui.SetCursorPos(new Vector2(pad, top));
-        if (this.kit.PrimaryButton("##wn_got", "Got it", width))
+        var buttonPos = ImGui.GetCursorScreenPos();
+        var buttonSize = new Vector2(width, Ui.Px(48f));
+        if (ImGui.InvisibleButton("##wn_got", buttonSize))
             this.Dismiss();
+        drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.Signal.U32());
+        if (ImGui.IsItemHovered())
+            drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.WithAlpha(Palette.White, 0.10f).U32());
+        const string gotIt = "GOT IT";
+        var gotSize = Ui.Measure(this.fonts.Eyebrow, gotIt);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, buttonPos + ((buttonSize - gotSize) * 0.5f), Palette.Paper.U32(), gotIt);
 
-        const string link = "Full changelog";
-        var linkSize = Ui.Measure(this.fonts.Caption, link);
-        ImGui.SetCursorPos(new Vector2(pad + ((width - linkSize.X) * 0.5f), top + Ui.Px(48f)));
+        const string link = "FULL CHANGELOG  →";
+        var linkSize = Ui.Measure(this.fonts.Eyebrow, link);
+        ImGui.SetCursorPos(new Vector2(pad + ((width - linkSize.X) * 0.5f), top + Ui.Px(60f)));
         if (ImGui.InvisibleButton("##wn_changelog", linkSize))
             OpenChangelog();
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, ImGui.GetItemRectMin(), Palette.TextMuted.U32(), link);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, ImGui.GetItemRectMin(),
+            (ImGui.IsItemHovered() ? Palette.TextSecondary : Palette.TextMuted).U32(), link);
     }
 
     private void Dismiss()
