@@ -28,7 +28,7 @@ internal sealed class MainWindow : Window, IDisposable
     public MainWindow(ScreenRouter router, ThemeService theme, UiFonts fonts, InboxService inbox, WindowController windowController, IEnumerable<IScreen> screens)
         : base("Eikon##main",
             ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
-            ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoTitleBar)
+            ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize)
     {
         this.router = router;
         this.theme = theme;
@@ -40,13 +40,12 @@ internal sealed class MainWindow : Window, IDisposable
         var v = typeof(BuildInfo).Assembly.GetName().Version;
         this.versionTag = (v is null ? "v0" : $"v{v.Major}·{v.Minor}") + (BuildInfo.IsLocal ? " · local" : string.Empty);
 
-        this.SizeConstraints = new WindowSizeConstraints
-        {
-            MinimumSize = new Vector2(340, 560),
-            MaximumSize = new Vector2(560, 1100),
-        };
-        this.Size = new Vector2(360, 660);
-        this.SizeCondition = ImGuiCond.FirstUseEver;
+        // A fixed, non-resizable, mobile-shaped frame (scaled with the UI). Min == max locks the size and
+        // NoResize drops the grip; Always re-applies it so a size saved by an older build is overridden.
+        var size = new Vector2(Ui.Px(400f), Ui.Px(780f));
+        this.Size = size;
+        this.SizeCondition = ImGuiCond.Always;
+        this.SizeConstraints = new WindowSizeConstraints { MinimumSize = size, MaximumSize = size };
     }
 
     public void Dispose()
