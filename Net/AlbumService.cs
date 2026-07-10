@@ -120,11 +120,20 @@ internal sealed class AlbumService : IDisposable
         return Array.Empty<PeerAlbumDto>();
     }
 
-    // Drop a peer's cached album list so the next PeerAlbums() call refetches their current access
-    // state. Called when their profile is opened: an approval lands on the owner's client, not the
-    // requester's, so without this the requester's cached "requested" state never clears within a
-    // session and the now-granted album stays stuck looking locked.
-    public void InvalidatePeer(Guid userId) => this.peerByUser.Remove(userId);
+    // Refetch a peer's album list, but keep the current (stale) list visible until the new one lands.
+    // Called when their profile is opened: an approval lands on the owner's client, not the requester's,
+    // so without this the requester's cached "requested" state never clears within a session and the
+    // now-granted album stays stuck looking locked. Dropping the entry instead would make PeerAlbums()
+    // return an empty list for a few frames, collapsing the profile's Albums section and jumping the
+    // scroll to the top.
+    public void InvalidatePeer(Guid userId)
+    {
+        if (this.loadingPeers.Add(userId))
+            this.Fire(async token =>
+            {
+                this.peerByUser[userId] = await this.api.ListPeerAlbumsAsync(token, userId.ToString(), CancellationToken.None);
+            }, "Refreshing peer albums failed.", () => this.loadingPeers.Remove(userId));
+    }
 
     // Album-photo texture through the album's own grant-checked mint. Cached by album+photo so the same
     // photo viewed from different albums does not clash.
@@ -186,6 +195,28 @@ internal sealed class AlbumService : IDisposable
             this.Reload();
         }, "Granting album access failed.");
 
+    // Grant and report whether it landed, so a chat share can withhold the album card when it doesn't:
+    // a card without a matching grant is exactly the "blank/locked folder" the recipient sees. Failures
+    // are logged, never thrown.
+    public async Task<bool> GrantAsync(Guid albumId, Guid granteeId, string source)
+    {
+        try
+        {
+            var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
+            if (string.IsNullOrEmpty(token))
+                return false;
+            await this.api.GrantAlbumAsync(token, albumId.ToString(), granteeId, source, CancellationToken.None);
+            await this.RefreshGrants(token, albumId);
+            this.Reload();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.log.Warning(ex, "Granting album access failed.");
+            return false;
+        }
+    }
+
     public void Revoke(Guid albumId, Guid granteeId) =>
         this.Fire(async token =>
         {
@@ -198,7 +229,10 @@ internal sealed class AlbumService : IDisposable
         this.Fire(async token =>
         {
             await this.api.RequestAlbumAccessAsync(token, albumId.ToString(), CancellationToken.None);
-            this.peerByUser.Remove(ownerId);   // the album's access state flips to "requested"
+            // Refetch in place (the album's access flips to "requested"). Replacing the entry rather than
+            // removing it keeps the profile's Albums list from collapsing to empty for a frame, which
+            // would jump the scroll to the top right after the tap.
+            this.peerByUser[ownerId] = await this.api.ListPeerAlbumsAsync(token, ownerId.ToString(), CancellationToken.None);
         }, "Requesting album access failed.");
 
     public void Approve(Guid requestId) =>

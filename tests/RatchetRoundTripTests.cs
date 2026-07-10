@@ -189,4 +189,48 @@ public class RatchetRoundTripTests : IDisposable
         var real = await Send(alice, bob, "still the real me");
         Assert.Equal("still the real me", await bob.Crypto.DecryptAsync(alice.Id, real, default));
     }
+
+    // The recovery contract the phantom-unread fix depends on: when a peer reinstalls (new identity under
+    // the same id), their greeting is undecryptable AND flagged as a mismatch (the signal the chat layer
+    // reads to ACK the message instead of nagging forever). TOFU holds until the user re-verifies, and
+    // only then does the reinstalled peer's message decrypt.
+    [Fact]
+    public async Task A_reinstalled_peer_recovers_only_after_the_pin_is_forgotten()
+    {
+        var alice = NewPeer("alice");
+        var bob = NewPeer("bob");
+
+        var m0 = await Send(alice, bob, "hello");
+        Assert.Equal("hello", await bob.Crypto.DecryptAsync(alice.Id, m0, default));   // Bob pins Alice (TOFU)
+
+        // Alice reinstalls: a brand-new identity + vault (new prekeys, no session) under the same user id.
+        var reDir = Path.Combine(this.root, "alice-reinstalled");
+        Directory.CreateDirectory(reDir);
+        var reVault = new KeyVault(Path.Combine(reDir, "vault.json"));
+        reVault.CreateIdentity("pw-alice-2");
+        var reIdentity = new IdentityService(reVault, this.log, Path.Combine(reDir, "pins.bin"));
+        var reAlice = new MessageCrypto(this.api, new StubTokenProvider(alice.Id), reVault, reIdentity, this.log, Path.Combine(reDir, "sessions.bin"));
+        this.api.Set(alice.Id, reVault);
+
+        var greeting = await reAlice.EncryptAsync(bob.Id, "it's me, i reinstalled", default);
+        Assert.NotNull(greeting);
+        var greetingDto = Dto(greeting!.Value);
+        Assert.True(MessageCrypto.IsInitialHeader(greetingDto.Header));
+
+        // Bob can't decrypt it, and crucially records the mismatch — this is exactly what OnMessage reads
+        // to decide "ack (stop the endless redelivery), don't rekey".
+        Assert.Null(await bob.Crypto.DecryptAsync(alice.Id, greetingDto, default));
+        Assert.True(bob.Crypto.Mismatched(alice.Id));
+
+        // TOFU holds: without an explicit re-verification the reinstalled identity stays rejected no matter
+        // how often the frame is retried (no silent re-pin -> no silent MITM).
+        Assert.Null(await bob.Crypto.DecryptAsync(alice.Id, greetingDto, default));
+
+        // Bob reviews the safety number and accepts the change ("identity changed - tap to review").
+        bob.Identity.ForgetPin(alice.Id);
+
+        // Now, and only now, the reinstalled peer's greeting decrypts and the mismatch clears.
+        Assert.Equal("it's me, i reinstalled", await bob.Crypto.DecryptAsync(alice.Id, greetingDto, default));
+        Assert.False(bob.Crypto.Mismatched(alice.Id));
+    }
 }

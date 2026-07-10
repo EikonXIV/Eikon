@@ -1076,8 +1076,14 @@ internal sealed class ChatScreen : IScreen
                         {
                             if (this.DrawAlbumPickRow(album, width))
                             {
-                                this.albums.Grant(album.Id, peer, "chat");
-                                this.chat.SendAlbumCard(peer, album.Id, album.Name, (int)album.PhotoCount);
+                                var (id, albumName, count) = (album.Id, album.Name, (int)album.PhotoCount);
+                                _ = Task.Run(async () =>
+                                {
+                                    // Send the card only once access actually lands: a card whose grant
+                                    // failed shows the recipient a blank/locked album.
+                                    if (await this.albums.GrantAsync(id, peer, "chat"))
+                                        this.chat.SendAlbumCard(peer, id, albumName, count);
+                                });
                                 ImGui.CloseCurrentPopup();
                             }
                         }
