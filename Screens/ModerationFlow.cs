@@ -164,21 +164,23 @@ internal sealed class ModerationFlow
     {
         var key = this.targetId.ToString();
         var hasBackground = this.chatActions && this.config.ChatBackgrounds.ContainsKey(key);
+        var groupA = this.onViewProfile != null || this.onSharedMedia != null || this.onShareAlbum != null;
         var width = Ui.Px(206f);
         var row = Ui.Px(40f);
+        var div = Ui.Px(9f);
         var height = Ui.Px(12f)                                  // window padding (top + bottom)
             + (this.onViewProfile != null ? row : 0f)
             + (this.onSharedMedia != null ? row : 0f)
             + (this.onShareAlbum != null ? row : 0f)
-            + (this.chatActions ? Ui.Px(24f) : 0f)              // "Preferences" section label
+            + (groupA ? div : 0f)                                // divider after the view / share group
             + row                                                // mute / unmute
             + (this.chatActions ? row : 0f)                     // set / change chat background
             + (hasBackground ? row : 0f)                        // clear chat background
+            + div                                                // divider before safety / block / report
             + (this.onSafetyNumber != null ? row : 0f)
-            + Ui.Px(9f)                                          // divider
             + row                                                // block
             + row;                                               // report
-        var rounding = Ui.Px(14f);
+        var rounding = Ui.Px(4f);
         var winMin = ImGui.GetWindowPos();
         var winMax = winMin + ImGui.GetWindowSize();
         var x = Math.Clamp(this.menuAnchor.X - width, winMin.X + Ui.Px(8f), winMax.X - width - Ui.Px(12f));
@@ -216,9 +218,8 @@ internal sealed class ModerationFlow
             dl.AddRectFilled(min, max, Palette.Surface1.U32(), rounding);
             dl.AddRect(min, max, Palette.Border.U32(), rounding, ImDrawFlags.None, 1f);
 
-            // Top group: the things you look at (the person, the media you've shared). Self-evident, so
-            // no section label.
-            if (this.onViewProfile is { } view && this.MenuRow("##mm_view", FontAwesomeIcon.User, "View profile", false, width))
+            // Group 1: the things you look at (the person, the media, the albums you can share).
+            if (this.onViewProfile is { } view && this.MenuRow("##mm_view", FontAwesomeIcon.UserCircle, "View profile", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 view();
@@ -230,17 +231,16 @@ internal sealed class ModerationFlow
                 sharedMedia();
             }
 
-            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.LayerGroup, "Share an album", false, width))
+            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.ShareAlt, "Share an album", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 shareAlbum();
             }
 
-            // Preferences group: the per-conversation settings. Only the chat overflow carries the fuller
-            // set, so the label appears there; the profile overflow just shows mute on its own.
-            if (this.chatActions)
-                this.MenuLabel("Preferences", width);
+            if (groupA)
+                this.MenuDivider(width);
 
+            // Group 2: per-conversation preferences.
             var muted = this.config.MutedConversations.Contains(this.targetId.ToString());
             if (this.MenuRow("##mm_mute", muted ? FontAwesomeIcon.Bell : FontAwesomeIcon.BellSlash, muted ? "Unmute notifications" : "Mute notifications", false, width))
             {
@@ -275,21 +275,22 @@ internal sealed class ModerationFlow
                 }
             }
 
+            this.MenuDivider(width);
+
+            // Group 3: safety and moderation.
             if (this.onSafetyNumber is { } verify && this.MenuRow("##mm_verify", FontAwesomeIcon.ShieldAlt, "Safety number", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 verify();
             }
 
-            this.MenuDivider(width);
-
-            if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, "Block", true, width))
+            if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, "Block", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 this.openBlock = true;
             }
 
-            if (this.MenuRow("##mm_report", FontAwesomeIcon.Flag, "Report", true, width))
+            if (this.MenuRow("##mm_report", FontAwesomeIcon.Flag, "Report", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 this.ResetReport();
@@ -312,7 +313,7 @@ internal sealed class ModerationFlow
         if (ImGui.IsItemHovered())
         {
             var tint = destructive ? Palette.WithAlpha(Palette.Danger, 0.12f) : Palette.WithAlpha(Palette.White, 0.06f);
-            drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), Ui.Px(8f));
+            drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), Ui.Px(3f));
         }
 
         var iconColor = (destructive ? Palette.Danger : Palette.TextSecondary).U32();
@@ -332,17 +333,6 @@ internal sealed class ModerationFlow
         var y = pos.Y + Ui.Px(4f);
         ImGui.GetWindowDrawList().AddLine(new Vector2(pos.X + Ui.Px(12f), y), new Vector2(pos.X + width - Ui.Px(12f), y), Palette.Border.U32(), 1f);
         ImGui.Dummy(new Vector2(width, Ui.Px(8f)));
-    }
-
-    // A muted section heading inside the overflow menu, aligned with the rows below and sitting near the
-    // baseline so it reads as a group header rather than a row.
-    private void MenuLabel(string label, float width)
-    {
-        var height = Ui.Px(24f);
-        var pos = ImGui.GetCursorScreenPos();
-        var size = Ui.Measure(this.fonts.Caption, label);
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(pos.X + Ui.Px(16f), pos.Y + height - size.Y - Ui.Px(3f)), Palette.TextMuted.U32(), label);
-        ImGui.Dummy(new Vector2(width, height));
     }
 
     private void DrawBlock()
