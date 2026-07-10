@@ -27,7 +27,6 @@ internal sealed class ChatScreen : IScreen
     private readonly PhotoService photoSvc;
     private readonly AlbumService albums;
     private readonly Configuration config;
-    private readonly WindowController windowController;
 
     private Guid markReadFor;       // peer we last marked read
     private int markReadCount = -1; // thread length at that point, so new messages while open re-mark
@@ -47,7 +46,7 @@ internal sealed class ChatScreen : IScreen
     private Guid threadPeer;         // the open thread's peer, for resolving album covers in received cards
     private bool openAlbumPicker;    // "Share an album" was tapped in the overflow menu
 
-    public ChatScreen(ScreenRouter router, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, Configuration config, WindowController windowController)
+    public ChatScreen(ScreenRouter router, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, Configuration config)
     {
         this.router = router;
         this.kit = kit;
@@ -63,7 +62,6 @@ internal sealed class ChatScreen : IScreen
         this.photoSvc = photoSvc;
         this.albums = albums;
         this.config = config;
-        this.windowController = windowController;
     }
 
     public Screen Id => Screen.Chat;
@@ -278,18 +276,10 @@ internal sealed class ChatScreen : IScreen
             this.router.Navigate(Screen.Messages);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), backGlyph);
 
-        // Right side, from the corner inward: minimize (the same control as the main window's title bar,
-        // collapsing the app to the orb), then the overflow menu, with a hairline between them so the
-        // window control reads apart from the chat actions.
+        // Right side: the overflow menu at the corner. The window minimize lives in the title bar, so it
+        // is not repeated here.
         var btn = Ui.Px(30f);
-        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
-        if (this.HeaderIconButton(drawList, "##chat_min", FontAwesomeIcon.Minus, minTL, btn))
-            this.windowController.Minimize();
-
-        var divX = minTL.X - Ui.Px(8f);
-        drawList.AddLine(new Vector2(divX, midY - Ui.Px(9f)), new Vector2(divX, midY + Ui.Px(9f)), Palette.Border.U32(), 1f);
-
-        var moreTL = new Vector2(divX - Ui.Px(8f) - btn, midY - (btn * 0.5f));
+        var moreTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
         if (this.HeaderIconButton(drawList, "##chat_more", FontAwesomeIcon.EllipsisH, moreTL, btn))
             this.moderation.Open(peer, name, new Vector2(moreTL.X + btn, moreTL.Y + btn),
                 () =>
@@ -891,44 +881,45 @@ internal sealed class ChatScreen : IScreen
 
     private void DrawComposer(float pad, Vector2 avail, float composerHeight, float fieldHeight, Guid peer)
     {
-        var sendDiameter = Ui.Px(38f);
-        var attachBox = Ui.Px(38f);
-        var gap = Ui.Px(8f);
-
-        var attachGlyph = FontAwesomeIcon.Image.ToIconString();
-        var attachSize = Ui.Measure(this.fonts.Icon, attachGlyph);
-        var fieldWidth = (avail.X - (pad * 2f)) - attachBox - gap - sendDiameter - gap;
+        var control = Ui.Px(34f);   // attach + send hit boxes, inset inside the bar
+        var edge = Ui.Px(4f);
+        var drawList = ImGui.GetWindowDrawList();
 
         var fieldTop = avail.Y - composerHeight + Ui.Px(9f);
         var fieldBottom = fieldTop + fieldHeight;
-        var drawList = ImGui.GetWindowDrawList();
 
         // Hairline across the top of the composer band, mirroring the header's divider, so the input
-        // reads as anchored chrome rather than floating over the scrolling thread. It rides up with the
-        // band as the field grows.
+        // reads as anchored chrome rather than floating over the scrolling thread.
         ImGui.SetCursorPos(new Vector2(0f, avail.Y - composerHeight));
-        var barTop = ImGui.GetCursorScreenPos();
-        drawList.AddLine(barTop, new Vector2(barTop.X + avail.X, barTop.Y), Palette.Border.U32(), 1f);
+        var hairline = ImGui.GetCursorScreenPos();
+        drawList.AddLine(hairline, new Vector2(hairline.X + avail.X, hairline.Y), Palette.Border.U32(), 1f);
 
-        // Attach + send sit on the field's bottom line, so they stay put as it grows upward. Both carry a
-        // header-style hover state so the two most-used controls feel as live as the header chrome.
-        ImGui.SetCursorPos(new Vector2(pad, fieldBottom - attachBox));
+        // One unified bar: a single surface holding the attach icon, the (transparent) field, and the
+        // send square. Attach + send sit on the bar's bottom line so they stay put as the field grows.
+        ImGui.SetCursorPos(new Vector2(pad, fieldTop));
+        var barMin = ImGui.GetCursorScreenPos();
+        var barSize = new Vector2(avail.X - (pad * 2f), fieldHeight);
+        drawList.AddRectFilled(barMin, barMin + barSize, Palette.Surface2.U32(), Ui.Px(4f));
+        drawList.AddRect(barMin, barMin + barSize, Palette.Border.U32(), Ui.Px(4f), ImDrawFlags.None, 1f);
+
+        ImGui.SetCursorPos(new Vector2(pad + edge, fieldBottom - control));
         var attachPos = ImGui.GetCursorScreenPos();
-        var attachClicked = ImGui.InvisibleButton("##chat_attach", new Vector2(attachBox, attachBox));
-        var attachHover = ImGui.IsItemHovered();
-        if (attachClicked)
+        if (ImGui.InvisibleButton("##chat_attach", new Vector2(control, control)))
             this.media.PickImage(p => { this.pendingImagePath = p; this.pendingNsfw = false; this.openImagePopup = true; });
-        if (attachHover)
-            drawList.AddRectFilled(attachPos, attachPos + new Vector2(attachBox, attachBox), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(10f));
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(attachPos.X + ((attachBox - attachSize.X) * 0.5f), attachPos.Y + ((attachBox - attachSize.Y) * 0.5f)), (attachHover ? Palette.TextPrimary : Palette.TextSecondary).U32(), attachGlyph);
+        var attachHover = ImGui.IsItemHovered();
+        var attachGlyph = FontAwesomeIcon.Plus.ToIconString();
+        var attachSize = Ui.Measure(this.fonts.Icon, attachGlyph);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(attachPos.X + ((control - attachSize.X) * 0.5f), attachPos.Y + ((control - attachSize.Y) * 0.5f)), (attachHover ? Palette.TextPrimary : Palette.TextSecondary).U32(), attachGlyph);
 
-        ImGui.SetCursorPos(new Vector2(pad + attachBox + gap, fieldTop));
-        var enterSend = this.kit.ComposerField("##chat_draft", ref this.draft, "Message", fieldWidth, fieldHeight, this.refocusComposer);
+        var fieldX = pad + edge + control;
+        var sendX = (avail.X - pad) - edge - control;
+        ImGui.SetCursorPos(new Vector2(fieldX, fieldTop));
+        var enterSend = this.kit.ComposerField("##chat_draft", ref this.draft, "Write a message", (sendX - Ui.Px(6f)) - fieldX, fieldHeight, this.refocusComposer);
         this.refocusComposer = false;
 
-        ImGui.SetCursorPos(new Vector2(avail.X - pad - sendDiameter, fieldBottom - sendDiameter));
+        ImGui.SetCursorPos(new Vector2(sendX, fieldBottom - control));
         var sendPos = ImGui.GetCursorScreenPos();
-        var clickSend = ImGui.InvisibleButton("##chat_send", new Vector2(sendDiameter, sendDiameter));
+        var clickSend = ImGui.InvisibleButton("##chat_send", new Vector2(control, control));
         var sendHover = ImGui.IsItemHovered();
         var text = this.draft.Trim();
         var actionable = text.Length > 0;
@@ -945,14 +936,14 @@ internal sealed class ChatScreen : IScreen
             this.refocusComposer = true;
         }
 
-        // Send reflects whether there is anything to send: a muted square when the field is empty (tapping
-        // it does nothing), the solid cream ink once there is text, brightening to white on hover.
-        var sendCenter = sendPos + new Vector2(sendDiameter * 0.5f, sendDiameter * 0.5f);
-        var sendFill = actionable ? (sendHover ? Palette.White : Palette.TextPrimary) : Palette.Surface2;
-        drawList.AddRectFilled(sendPos, sendPos + new Vector2(sendDiameter, sendDiameter), sendFill.U32(), Ui.Px(4f));
+        // Send reflects whether there is anything to send: a faint raised square while the field is empty
+        // (tapping it does nothing), the solid cream ink once there is text, brightening to white on hover.
+        var sendCenter = sendPos + new Vector2(control * 0.5f, control * 0.5f);
+        var sendFill = actionable ? (sendHover ? Palette.White : Palette.TextPrimary) : Palette.WithAlpha(Palette.White, 0.06f);
+        drawList.AddRectFilled(sendPos, sendPos + new Vector2(control, control), sendFill.U32(), Ui.Px(3f));
         var sendGlyph = FontAwesomeIcon.PaperPlane.ToIconString();
         var sendSize = Ui.Measure(this.fonts.Icon, sendGlyph);
-        var sendGlyphColor = actionable ? Palette.Paper : Palette.TextMuted;
+        var sendGlyphColor = actionable ? Palette.Paper : Palette.TextSecondary;
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(sendCenter.X - (sendSize.X * 0.5f), sendCenter.Y - (sendSize.Y * 0.5f)), sendGlyphColor.U32(), sendGlyph);
     }
 

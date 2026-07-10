@@ -358,11 +358,16 @@ internal sealed class Kit
         var shift = ImGui.GetIO().KeyShift;
         var empty = value.Length == 0;
 
+        // Transparent frame: the chat composer draws a single surface bar behind the field, the attach
+        // icon and the send square, so the input itself must not paint its own background in any state.
+        var clear = new Vector4(0f, 0f, 0f, 0f);
         bool submitted;
-        using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
+        using (ImRaii.PushColor(ImGuiCol.FrameBg, clear))
+        using (ImRaii.PushColor(ImGuiCol.FrameBgHovered, clear))
+        using (ImRaii.PushColor(ImGuiCol.FrameBgActive, clear))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, Ui.Px(10f)))
-        using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(4f), Ui.Px(10f))))
         using (this.fonts.Body.Push())
         {
             if (refocus)
@@ -374,7 +379,7 @@ internal sealed class Kit
             if (empty)
             {
                 var min = ImGui.GetItemRectMin();
-                Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Body, new Vector2(min.X + Ui.Px(12f), min.Y + Ui.Px(10f)), Palette.TextMuted.U32(), hint);
+                Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Body, new Vector2(min.X + Ui.Px(4f), min.Y + Ui.Px(10f)), Palette.TextMuted.U32(), hint);
             }
         }
 
