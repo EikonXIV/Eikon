@@ -10,7 +10,7 @@ namespace Eikon.Screens;
 
 // Messages inbox (warm-editorial). An "Inbox / Messages" header over conversation rows backed by
 // /api/conversations (metadata only; the relay can't read contents). Previews come from the locally
-// decrypted thread. Message requests get their own labelled group. Tapping a row opens the chat.
+// decrypted thread. A Messages/Requests segmented toggle splits accepted threads from message requests.
 internal sealed class MessagesScreen : IScreen
 {
     private readonly ScreenRouter router;
@@ -19,6 +19,8 @@ internal sealed class MessagesScreen : IScreen
     private readonly InboxService inbox;
     private readonly Selection selection;
     private readonly PhotoService photoSvc;
+
+    private bool showRequests;   // the Requests tab is active (else the Messages / threads tab)
 
     public MessagesScreen(ScreenRouter router, Kit kit, UiFonts fonts, InboxService inbox, Selection selection, PhotoService photoSvc)
     {
@@ -62,21 +64,22 @@ internal sealed class MessagesScreen : IScreen
             return;
         }
 
+        this.DrawTabs(fullWidth, threads.Count, requests.Count);
+
         using var scroll = ImRaii.Child("inbox_scroll", ImGui.GetContentRegionAvail(), false, ImGuiWindowFlags.NoScrollbar);
         if (!scroll.Success)
             return;
 
         var pad = Ui.Px(20f);
-        if (requests.Count > 0)
+        var list = this.showRequests ? requests : threads;
+        if (list.Count == 0)
         {
-            this.SectionEyebrow($"Requests · {requests.Count}", pad);
-            foreach (var request in requests)
-                if (this.DrawRow(request, fullWidth, pad))
-                    this.Open(request);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
+            Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, this.showRequests ? "No requests right now." : "No messages yet.");
+            return;
         }
 
-        foreach (var conversation in threads)
+        foreach (var conversation in list)
             if (this.DrawRow(conversation, fullWidth, pad))
                 this.Open(conversation);
     }
@@ -102,11 +105,51 @@ internal sealed class MessagesScreen : IScreen
         ImGui.SetCursorScreenPos(new Vector2(origin.X, bottom + 1f));
     }
 
-    private void SectionEyebrow(string text, float pad)
+    // Segmented Messages / Requests toggle under the header. The active segment is a filled cream pill;
+    // the Requests segment carries a gold dot while any request is still pending.
+    private void DrawTabs(float fullWidth, int messageCount, int requestCount)
     {
-        var pos = ImGui.GetCursorScreenPos();
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y + Ui.Px(16f)), Palette.TextSecondary.U32(), text.ToUpperInvariant());
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f) + Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(8f)));
+        var pad = Ui.Px(20f);
+        var height = Ui.Px(42f);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));   // gap under the header
+        var origin = ImGui.GetCursorScreenPos();
+        var left = origin.X + pad;
+        var barWidth = fullWidth - (pad * 2f);
+        var segWidth = barWidth * 0.5f;
+        var dl = ImGui.GetWindowDrawList();
+
+        if (this.Segment(dl, "##tab_messages", new Vector2(left, origin.Y), new Vector2(segWidth, height), "MESSAGES", messageCount, !this.showRequests, false))
+            this.showRequests = false;
+        if (this.Segment(dl, "##tab_requests", new Vector2(left + segWidth, origin.Y), new Vector2(segWidth, height), "REQUESTS", requestCount, this.showRequests, requestCount > 0))
+            this.showRequests = true;
+
+        dl.AddRect(new Vector2(left, origin.Y), new Vector2(left + barWidth, origin.Y + height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
+        ImGui.SetCursorScreenPos(new Vector2(origin.X, origin.Y + height + Ui.Px(14f)));
+    }
+
+    private bool Segment(ImDrawListPtr dl, string id, Vector2 pos, Vector2 size, string label, int count, bool active, bool dot)
+    {
+        ImGui.SetCursorScreenPos(pos);
+        var clicked = ImGui.InvisibleButton(id, size);
+        var hovered = ImGui.IsItemHovered();
+
+        if (active)
+        {
+            var inset = Ui.Px(3f);
+            dl.AddRectFilled(pos + new Vector2(inset, inset), (pos + size) - new Vector2(inset, inset), Palette.TextPrimary.U32(), 0f);
+        }
+
+        var text = $"{label} {count:D2}";
+        var textColor = active ? Palette.Paper : (hovered ? Palette.TextSecondary : Palette.TextMuted);
+        var textSize = Ui.Measure(this.fonts.Eyebrow, text);
+        var dotSpace = dot ? Ui.Px(12f) : 0f;
+        var textX = pos.X + ((size.X - textSize.X - dotSpace) * 0.5f);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX, pos.Y + ((size.Y - textSize.Y) * 0.5f)), textColor.U32(), text);
+        if (dot)
+            dl.AddCircleFilled(new Vector2(textX + textSize.X + Ui.Px(7f), pos.Y + (size.Y * 0.5f)), Ui.Px(3f), Palette.Signal.U32(), 12);
+
+        return clicked;
     }
 
     private void Open(ConversationSummaryDto conversation)

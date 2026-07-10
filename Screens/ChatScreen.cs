@@ -899,8 +899,8 @@ internal sealed class ChatScreen : IScreen
         ImGui.SetCursorPos(new Vector2(pad, fieldTop));
         var barMin = ImGui.GetCursorScreenPos();
         var barSize = new Vector2(avail.X - (pad * 2f), fieldHeight);
-        drawList.AddRectFilled(barMin, barMin + barSize, Palette.Surface2.U32(), Ui.Px(4f));
-        drawList.AddRect(barMin, barMin + barSize, Palette.Border.U32(), Ui.Px(4f), ImDrawFlags.None, 1f);
+        drawList.AddRectFilled(barMin, barMin + barSize, Palette.Surface2.U32(), 0f);
+        drawList.AddRect(barMin, barMin + barSize, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
         ImGui.SetCursorPos(new Vector2(pad + edge, fieldBottom - control));
         var attachPos = ImGui.GetCursorScreenPos();
@@ -940,7 +940,7 @@ internal sealed class ChatScreen : IScreen
         // (tapping it does nothing), the solid cream ink once there is text, brightening to white on hover.
         var sendCenter = sendPos + new Vector2(control * 0.5f, control * 0.5f);
         var sendFill = actionable ? (sendHover ? Palette.White : Palette.TextPrimary) : Palette.WithAlpha(Palette.White, 0.06f);
-        drawList.AddRectFilled(sendPos, sendPos + new Vector2(control, control), sendFill.U32(), Ui.Px(3f));
+        drawList.AddRectFilled(sendPos, sendPos + new Vector2(control, control), sendFill.U32(), 0f);
         var sendGlyph = FontAwesomeIcon.PaperPlane.ToIconString();
         var sendSize = Ui.Measure(this.fonts.Icon, sendGlyph);
         var sendGlyphColor = actionable ? Palette.Paper : Palette.TextSecondary;

@@ -151,7 +151,7 @@ internal sealed class WhatsNewScreen : IScreen
             var tagPad = new Vector2(Ui.Px(8f), Ui.Px(3f));
             var tagSize = tagText + (tagPad * 2f);
             var tagPos = new Vector2(rowPos.X + width - tagSize.X, rowPos.Y + ((headerSize.Y - tagSize.Y) * 0.5f));
-            drawList.AddRect(tagPos, tagPos + tagSize, Palette.Signal.U32(), Ui.Px(4f), ImDrawFlags.None, 1f);
+            drawList.AddRect(tagPos, tagPos + tagSize, Palette.Signal.U32(), 0f, ImDrawFlags.None, 1f);
             Ui.TextAt(drawList, this.fonts.Eyebrow, tagPos + tagPad, Palette.Signal.U32(), tag);
         }
 

@@ -180,7 +180,7 @@ internal sealed class ModerationFlow
             + (this.onSafetyNumber != null ? row : 0f)
             + row                                                // block
             + row;                                               // report
-        var rounding = Ui.Px(4f);
+        var rounding = 0f;
         var winMin = ImGui.GetWindowPos();
         var winMax = winMin + ImGui.GetWindowSize();
         var x = Math.Clamp(this.menuAnchor.X - width, winMin.X + Ui.Px(8f), winMax.X - width - Ui.Px(12f));
@@ -313,7 +313,7 @@ internal sealed class ModerationFlow
         if (ImGui.IsItemHovered())
         {
             var tint = destructive ? Palette.WithAlpha(Palette.Danger, 0.12f) : Palette.WithAlpha(Palette.White, 0.06f);
-            drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), Ui.Px(3f));
+            drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), 0f);
         }
 
         var iconColor = (destructive ? Palette.Danger : Palette.TextSecondary).U32();
