@@ -1,3 +1,4 @@
+using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin;
@@ -8,8 +9,9 @@ namespace Eikon.UI;
 // for the wordmark, titles and names (with an italic cut for the two-tone treatment), Inter Tight for
 // UI and body, JetBrains Mono for eyebrows, counters and meta. Each handle is built at its real
 // on-screen pixel size so text stays crisp. Fonts are bundled as embedded resources (see the csproj).
-// NOTE: CJK is not yet merged in, so non-Latin names render as tofu for now — merge Noto Sans CJK into
-// the sans/serif families as a follow-up.
+// The member-text handles additionally merge the game's Axis glyphs (see Make's cjk flag) so non-Latin
+// names and bios fall back to the game font rather than rendering as tofu. On a global client Axis
+// covers Japanese; full Chinese/Korean would need a bundled Noto CJK face, left out to keep this small.
 internal sealed class UiFonts : IDisposable
 {
     private const string SerifFile = "Eikon.Fonts.InstrumentSerif-Regular.ttf";
@@ -26,12 +28,12 @@ internal sealed class UiFonts : IDisposable
         var atlas = pluginInterface.UiBuilder.FontAtlas;
 
         this.Title = this.Make(atlas, SerifFile, 22f);
-        this.SerifTitle = this.Make(atlas, SerifFile, 28f);
-        this.SerifName = this.Make(atlas, SerifFile, 22f);
-        this.SerifItalicTitle = this.Make(atlas, SerifItalicFile, 28f);
-        this.Body = this.Make(atlas, SansFile, 18f);
-        this.Caption = this.Make(atlas, SansFile, 15f);
-        this.Label = this.Make(atlas, SansFile, 15f);
+        this.SerifTitle = this.Make(atlas, SerifFile, 28f, cjk: true);
+        this.SerifName = this.Make(atlas, SerifFile, 22f, cjk: true);
+        this.SerifItalicTitle = this.Make(atlas, SerifItalicFile, 28f, cjk: true);
+        this.Body = this.Make(atlas, SansFile, 18f, cjk: true);
+        this.Caption = this.Make(atlas, SansFile, 15f, cjk: true);
+        this.Label = this.Make(atlas, SansFile, 15f, cjk: true);
         this.LabelSmall = this.Make(atlas, SansFile, 13f);
         this.Eyebrow = this.Make(atlas, MonoFile, 15f);
         this.Mono = this.Make(atlas, MonoFile, 12f);
@@ -53,15 +55,23 @@ internal sealed class UiFonts : IDisposable
     // The shared FontAwesome icon font. Owned by Dalamud, so it is not disposed here.
     public IFontHandle Icon => this.pluginInterface.UiBuilder.IconFontHandle;
 
-    private IFontHandle Make(IFontAtlas atlas, string resource, float designPx)
+    private IFontHandle Make(IFontAtlas atlas, string resource, float designPx, bool cjk = false)
     {
         var handle = atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk =>
-            tk.AddFontFromStream(
+        {
+            var px = designPx * ImGuiHelpers.GlobalScale;
+            var font = tk.AddFontFromStream(
                 typeof(UiFonts).Assembly.GetManifestResourceStream(resource)
                     ?? throw new InvalidOperationException($"Missing embedded font resource: {resource}"),
-                new SafeFontConfig { SizePx = designPx * ImGuiHelpers.GlobalScale },
+                new SafeFontConfig { SizePx = px },
                 false,
-                resource)));
+                resource);
+
+            // Fall back to the game's Axis glyphs (Latin + Japanese kana/kanji) for member-entered text,
+            // so a non-Latin name or bio renders in the game font instead of as tofu. Zero bundle cost.
+            if (cjk)
+                tk.AddGameGlyphs(new GameFontStyle(GameFontFamily.Axis, px), null, font);
+        }));
         this.owned.Add(handle);
         return handle;
     }
