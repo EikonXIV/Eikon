@@ -158,7 +158,9 @@ internal sealed class MainWindow : Window, IDisposable
         // tooltip so the app never looks like it just vanished.
         var btn = new Vector2(Ui.Px(28f), Ui.Px(28f));
         var gap = Ui.Px(4f);
-        var btnY = origin.Y + ((height - btn.Y) * 0.5f);
+        // Nudge up to optically match the wordmark: "Eikon" sits high in its serif line box (empty
+        // descender space below it), so a geometrically centered control reads slightly low beside it.
+        var btnY = (origin.Y + ((height - btn.Y) * 0.5f)) - Ui.Px(2f);
         var closeX = (origin.X + width - padX) - btn.X;
         var minX = closeX - btn.X - gap;
 
