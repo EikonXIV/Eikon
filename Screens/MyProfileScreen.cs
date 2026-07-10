@@ -19,6 +19,7 @@ internal sealed class MyProfileScreen : IScreen
     private readonly ProfileService profiles;
     private readonly WorldCatalog catalog;
     private readonly PhotoManager photos;
+    private readonly PhotoService photoSvc;
     private readonly Selection selection;
     private readonly SessionStore session;
     private readonly ProfileDetailService details;
@@ -46,7 +47,7 @@ internal sealed class MyProfileScreen : IScreen
     private readonly bool[] meet = new bool[Options.Meet.Length];
     private readonly bool[] kinks = new bool[Options.Kinks.Length];
 
-    public MyProfileScreen(ScreenRouter router, Kit kit, UiFonts fonts, Lightbox lightbox, ProfileService profiles, WorldCatalog catalog, PhotoManager photos, Selection selection, SessionStore session, ProfileDetailService details)
+    public MyProfileScreen(ScreenRouter router, Kit kit, UiFonts fonts, Lightbox lightbox, ProfileService profiles, WorldCatalog catalog, PhotoManager photos, PhotoService photoSvc, Selection selection, SessionStore session, ProfileDetailService details)
     {
         this.router = router;
         this.kit = kit;
@@ -55,6 +56,7 @@ internal sealed class MyProfileScreen : IScreen
         this.profiles = profiles;
         this.catalog = catalog;
         this.photos = photos;
+        this.photoSvc = photoSvc;
         this.selection = selection;
         this.session = session;
         this.details = details;
@@ -125,14 +127,26 @@ internal sealed class MyProfileScreen : IScreen
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
-        // Portrait + summary
+        // Portrait + summary. Show the main approved photo (what the grid shows); fall back to a monogram
+        // tile until a photo exists and clears review.
         var thumb = new Vector2(Ui.Px(88f), Ui.Px(112f));
         var tpos = ImGui.GetCursorScreenPos();
-        dl.AddRectFilled(tpos, tpos + thumb, Palette.Surface2.U32());
+        this.photoSvc.EnsureLoaded();
+        var main = this.photoSvc.Mine.FirstOrDefault(p => p.State == PhotoStateEnum.Approved);
+        var portrait = main is null ? null : this.photoSvc.Texture(main.Id);
+        if (portrait != null)
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(portrait.Width, portrait.Height, thumb.X / thumb.Y);
+            dl.AddImage(portrait.Handle, tpos, tpos + thumb, uvMin, uvMax);
+        }
+        else
+        {
+            dl.AddRectFilled(tpos, tpos + thumb, Palette.Surface2.U32());
+            var initial = this.displayName.Length > 0 ? this.displayName[..1].ToUpperInvariant() : "?";
+            var initSize = Ui.Measure(this.fonts.SerifTitle, initial);
+            Ui.TextAt(dl, this.fonts.SerifTitle, tpos + ((thumb - initSize) * 0.5f), Palette.TextMuted.U32(), initial);
+        }
         dl.AddRect(tpos, tpos + thumb, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
-        var initial = this.displayName.Length > 0 ? this.displayName[..1].ToUpperInvariant() : "?";
-        var initSize = Ui.Measure(this.fonts.SerifTitle, initial);
-        Ui.TextAt(dl, this.fonts.SerifTitle, tpos + ((thumb - initSize) * 0.5f), Palette.TextMuted.U32(), initial);
 
         var textX = tpos.X + thumb.X + Ui.Px(16f);
         dl.AddCircleFilled(new Vector2(textX + Ui.Px(3f), tpos.Y + Ui.Px(9f)), Ui.Px(3f), Palette.Online.U32(), 12);
