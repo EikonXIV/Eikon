@@ -234,6 +234,7 @@ internal sealed class GridScreen : IScreen
                 {
                     this.selection.ProfileUserId = profile.UserId;
                     this.selection.ProfileDisplayName = profile.DisplayName;
+                    this.selection.ProfileReturn = Screen.Grid;
                     this.router.Navigate(Screen.ProfileDetail);
                 }
 

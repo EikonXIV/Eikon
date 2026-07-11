@@ -74,6 +74,7 @@ internal sealed class FavoritesScreen : IScreen
                 {
                     this.selection.ProfileUserId = profiles[i].UserId;
                     this.selection.ProfileDisplayName = profiles[i].DisplayName;
+                    this.selection.ProfileReturn = Screen.Favorites;
                     this.router.Navigate(Screen.ProfileDetail);
                 }
             }

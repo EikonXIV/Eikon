@@ -162,6 +162,7 @@ internal sealed class EikonBootstrap : IDisposable
                 this.selection.AlbumId = toast.AlbumId;
                 this.selection.AlbumName = toast.AlbumName ?? string.Empty;
                 this.selection.AlbumReturn = Screen.ProfileDetail;
+                this.selection.ProfileReturn = Screen.Grid;   // viewer backs into the profile; give it a return
                 this.router.Navigate(Screen.AlbumViewer);
                 break;
             default:

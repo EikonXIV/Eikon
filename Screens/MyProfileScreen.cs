@@ -194,6 +194,7 @@ internal sealed class MyProfileScreen : IScreen
         {
             this.selection.ProfileUserId = me;
             this.selection.ProfileDisplayName = this.displayName;
+            this.selection.ProfileReturn = Screen.MyProfile;
             this.details.Invalidate();
             this.router.Navigate(Screen.ProfileDetail);
         }

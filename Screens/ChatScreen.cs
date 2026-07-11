@@ -286,6 +286,7 @@ internal sealed class ChatScreen : IScreen
                 {
                     this.selection.ProfileUserId = peer;
                     this.selection.ProfileDisplayName = name;
+                    this.selection.ProfileReturn = Screen.Chat;
                     this.router.Navigate(Screen.ProfileDetail);
                 },
                 () => this.openSafety = true,
@@ -351,6 +352,7 @@ internal sealed class ChatScreen : IScreen
         {
             this.selection.ProfileUserId = peer;
             this.selection.ProfileDisplayName = name;
+            this.selection.ProfileReturn = Screen.Chat;
             this.router.Navigate(Screen.ProfileDetail);
         }
 

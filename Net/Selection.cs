@@ -10,6 +10,10 @@ internal sealed class Selection
 
     public string ProfileDisplayName { get; set; } = string.Empty;
 
+    // Where profile detail returns on back, captured at entry: a profile opened from a chat goes back
+    // to that chat, from favorites back to favorites, from the grid back to the grid.
+    public Screen ProfileReturn { get; set; } = Screen.Grid;
+
     // The album being viewed or edited (album detail, viewer, access sheet). Name is a snapshot for the
     // header before the album list loads.
     public Guid? AlbumId { get; set; }
