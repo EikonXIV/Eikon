@@ -11,8 +11,9 @@ using Eikon.UI.Theme;
 namespace Eikon.Screens;
 
 // Discovery grid (warm-editorial). An editorial header (Discover / Nearby adventurers / scope count),
-// underline scope tabs with density + filter tools, a pill filter row, then a scrolling grid of square
-// portrait tiles backed by /api/discover. Job/age tags await a server field; tiles show name + world.
+// underline scope tabs with density + filter tools, an Online now / Favorites pill row (full filtering
+// lives behind the header's filter tool), then a scrolling grid of square portrait tiles backed by
+// /api/discover. Job/age tags await a server field; tiles show name + world.
 internal sealed class GridScreen : IScreen
 {
     private readonly ScreenRouter router;
@@ -170,8 +171,6 @@ internal sealed class GridScreen : IScreen
 
         if (this.PillChip(dl, "##chip_online", "Online now", this.discovery.OnlineOnly, true, ref x, y, chipH))
             this.discovery.SetOnline(!this.discovery.OnlineOnly);
-        if (this.PillChip(dl, "##chip_tags", "Tags", false, false, ref x, y, chipH))
-            this.router.Navigate(Screen.Filter);
         if (this.PillChip(dl, "##chip_favs", "Favorites", false, false, ref x, y, chipH))
             this.router.Navigate(Screen.Favorites);
 
