@@ -16,15 +16,16 @@ internal sealed class Kit
         this.fonts = fonts;
     }
 
-    // A rounded pill. Selected pills use the accent tint with accent text; unselected pills use a
-    // hairline outline with secondary text. Returns true on click.
+    // An editorial tag chip: hard-square, hairline outline with secondary text; selected chips fill
+    // with ink, flip the text to paper, and gain a small drawn check. Returns true on click.
     public bool Chip(string id, string label, bool selected)
     {
-        var padX = Ui.Px(11f);
-        var padY = Ui.Px(6f);
-        var rounding = Ui.Px(8f);
-        var textSize = Ui.Measure(this.fonts.Caption, label);
-        var size = new Vector2(textSize.X + (padX * 2f), textSize.Y + (padY * 2f));
+        var padX = Ui.Px(12f);
+        var height = Ui.Px(32f);
+        var check = selected ? Ui.Px(14f) : 0f;
+        var textSize = Ui.Measure(this.fonts.LabelSmall, label);
+        var size = new Vector2(check + textSize.X + (padX * 2f), height);
+        var padY = (height - textSize.Y) * 0.5f;
 
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton(id, size);
@@ -33,14 +34,19 @@ internal sealed class Kit
 
         if (selected)
         {
-            drawList.AddRectFilled(pos, pos + size, this.theme.AccentTint.U32(), rounding);
-            Ui.TextAt(drawList, this.fonts.Caption, pos + new Vector2(padX, padY), this.theme.AccentText.U32(), label);
+            drawList.AddRectFilled(pos, pos + size, Palette.TextPrimary.U32(), 0f);
+            var tick = Palette.Paper.U32();
+            var cx = pos.X + padX;
+            var cy = pos.Y + (height * 0.5f);
+            drawList.AddLine(new Vector2(cx, cy), new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3.5f)), tick, Ui.Px(1.5f));
+            drawList.AddLine(new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3.5f)), new Vector2(cx + Ui.Px(9f), cy - Ui.Px(4f)), tick, Ui.Px(1.5f));
+            Ui.TextAt(drawList, this.fonts.LabelSmall, pos + new Vector2(padX + check, padY), Palette.Paper.U32(), label);
         }
         else
         {
-            var border = hovered ? Palette.TextMuted : Palette.Border;
-            drawList.AddRect(pos, pos + size, border.U32(), rounding, ImDrawFlags.None, 1f);
-            Ui.TextAt(drawList, this.fonts.Caption, pos + new Vector2(padX, padY), Palette.TextSecondary.U32(), label);
+            var border = hovered ? Palette.BorderStrong : Palette.Border;
+            drawList.AddRect(pos, pos + size, border.U32(), 0f, ImDrawFlags.None, 1f);
+            Ui.TextAt(drawList, this.fonts.LabelSmall, pos + new Vector2(padX, padY), (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32(), label);
         }
 
         return clicked;
@@ -93,23 +99,31 @@ internal sealed class Kit
         return clicked;
     }
 
-    // Pill toggle. Returns the next value, flipped if it was clicked this frame.
+    // Pill toggle (the switch itself stays round, like the presence dots). On: ink track, paper knob.
+    // Off: surface track with a strong hairline, muted knob. Returns the next value, flipped on click.
     public bool Toggle(string id, bool value)
     {
-        var width = Ui.Px(38f);
-        var height = Ui.Px(22f);
+        var width = Ui.Px(36f);
+        var height = Ui.Px(20f);
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton(id, new Vector2(width, height));
         var drawList = ImGui.GetWindowDrawList();
 
-        var track = value ? this.theme.AccentDeep : Palette.Rgb(0x2A3346);
-        drawList.AddRectFilled(pos, pos + new Vector2(width, height), track.U32(), height * 0.5f);
+        if (value)
+        {
+            drawList.AddRectFilled(pos, pos + new Vector2(width, height), Palette.TextPrimary.U32(), height * 0.5f);
+        }
+        else
+        {
+            drawList.AddRectFilled(pos, pos + new Vector2(width, height), Palette.Surface2.U32(), height * 0.5f);
+            drawList.AddRect(pos, pos + new Vector2(width, height), Palette.BorderStrong.U32(), height * 0.5f, ImDrawFlags.None, 1f);
+        }
 
         var knobRadius = (height * 0.5f) - Ui.Px(2f);
         var knobX = value
             ? pos.X + width - knobRadius - Ui.Px(2f)
             : pos.X + knobRadius + Ui.Px(2f);
-        var knobColor = value ? Palette.White : Palette.Rgb(0x8A94A4);
+        var knobColor = value ? Palette.Paper : Palette.TextMuted;
         drawList.AddCircleFilled(new Vector2(knobX, pos.Y + (height * 0.5f)), knobRadius, knobColor.U32(), 16);
 
         return clicked ? !value : value;
@@ -224,7 +238,8 @@ internal sealed class Kit
             var lineWidth = 0f;
             for (var i = 0; i < labels.Count; i++)
             {
-                var chipWidth = Ui.Measure(this.fonts.Caption, labels[i]).X + (Ui.Px(11f) * 2f);
+                // Mirrors Chip's geometry: LabelSmall text, 12px side padding, 14px check when selected.
+                var chipWidth = Ui.Measure(this.fonts.LabelSmall, labels[i]).X + (Ui.Px(12f) * 2f) + (selected(i) ? Ui.Px(14f) : 0f);
                 if (i > 0)
                 {
                     if (lineWidth + spacing + chipWidth <= maxWidth)

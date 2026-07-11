@@ -15,6 +15,7 @@ internal sealed class DiscoveryService
     private bool fetchedOnce;
     private string? nextCursor;
     private int epoch;
+    private int previewEpoch;
 
     public DiscoveryService(IApiClient api, AuthService auth, IPluginLog log)
     {
@@ -70,6 +71,37 @@ internal sealed class DiscoveryService
         this.Tier = next.Tier ?? Tier.World;
         this.OnlineOnly = next.OnlineOnly == true;
         this.Fetch();
+    }
+
+    // First-page result count for a draft query, without touching the grid's state. Feeds the filter
+    // sheet's live "Show results · N" label; PreviewMore marks a count that is only the first page.
+    public int PreviewCount { get; private set; }
+
+    public bool PreviewMore { get; private set; }
+
+    public void Preview(DiscoverQuery draft)
+    {
+        var myEpoch = ++this.previewEpoch;
+        var snapshot = Clone(draft);
+        snapshot.Cursor = null!;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
+                if (string.IsNullOrEmpty(token) || myEpoch != this.previewEpoch)
+                    return;
+                var result = await this.api.DiscoverAsync(token, snapshot, CancellationToken.None);
+                if (myEpoch != this.previewEpoch)
+                    return;
+                this.PreviewCount = result.Profiles?.Count ?? 0;
+                this.PreviewMore = result.NextCursor != null;
+            }
+            catch (Exception ex)
+            {
+                this.log.Warning(ex, "Discover preview failed.");
+            }
+        });
     }
 
     public void Reset() => this.Apply(Default());
