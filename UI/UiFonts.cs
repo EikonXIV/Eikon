@@ -19,6 +19,19 @@ internal sealed class UiFonts : IDisposable
     private const string SansFile = "Eikon.Fonts.InterTight.ttf";
     private const string MonoFile = "Eikon.Fonts.JetBrainsMono.ttf";
 
+    // Ranges merged from the game font, deliberately EXCLUDING Latin: merged glyphs override the base
+    // font's, so an unbounded merge would silently replace Instrument Serif / Inter Tight letterforms
+    // with the game's Axis face. Pairs, zero-terminated (ImGui glyph-range format).
+    private static readonly ushort[] CjkRanges =
+    {
+        0x3000, 0x30FF,   // CJK punctuation, hiragana, katakana
+        0x3400, 0x4DBF,   // CJK extension A
+        0x4E00, 0x9FFF,   // CJK unified ideographs
+        0xF900, 0xFAFF,   // CJK compatibility ideographs
+        0xFF00, 0xFFEF,   // halfwidth and fullwidth forms
+        0,
+    };
+
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly List<IFontHandle> owned = new();
 
@@ -67,10 +80,11 @@ internal sealed class UiFonts : IDisposable
                 false,
                 resource);
 
-            // Fall back to the game's Axis glyphs (Latin + Japanese kana/kanji) for member-entered text,
-            // so a non-Latin name or bio renders in the game font instead of as tofu. Zero bundle cost.
+            // Fall back to the game's Axis glyphs for member-entered text, so a Japanese name or bio
+            // renders in the game font instead of as tofu. Zero bundle cost. Restricted to CjkRanges:
+            // an unbounded merge would override the bundled Latin letterforms too.
             if (cjk)
-                tk.AddGameGlyphs(new GameFontStyle(GameFontFamily.Axis, px), null, font);
+                tk.AddGameGlyphs(new GameFontStyle(GameFontFamily.Axis, px), CjkRanges, font);
         }));
         this.owned.Add(handle);
         return handle;
