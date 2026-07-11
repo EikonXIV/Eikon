@@ -94,43 +94,59 @@ internal sealed class MyProfileScreen : IScreen
 
         this.catalog.EnsureLoaded();
 
-        ImGui.Indent(pad);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
         if (this.editing)
+        {
+            ImGui.Indent(pad);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
             this.DrawForm(contentWidth);
+            ImGui.Unindent(pad);
+        }
         else
-            this.DrawCard(contentWidth);
-        ImGui.Unindent(pad);
+        {
+            // The card lays out full-bleed (its hairline rules span the window), padding its own content.
+            this.DrawCard(ImGui.GetContentRegionAvail().X);
+        }
 
         this.lightbox.Draw();
     }
 
     // ---- card ----
 
-    private void DrawCard(float contentWidth)
+    private void DrawCard(float fullWidth)
     {
+        var pad = Ui.Px(20f);
         var dl = ImGui.GetWindowDrawList();
+        var eyebrowHeight = Ui.Measure(this.fonts.Eyebrow, "X").Y;
 
-        this.Eyebrow("Your card");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(2f)));
-        var rowX = ImGui.GetCursorPosX();
-        using (this.fonts.SerifTitle.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted("Profile");
+        // Header: YOUR CARD eyebrow over the serif title, an underlined Edit bottom-aligned beside it.
+        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
+        var head = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(head.X + pad, head.Y), Palette.TextSecondary.U32(), "YOUR CARD");
+        var titleY = head.Y + eyebrowHeight + Ui.Px(4f);
+        var titleSize = Ui.Measure(this.fonts.SerifTitle, "Profile");
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(head.X + pad, titleY), Palette.TextPrimary.U32(), "Profile");
 
-        // Edit affordance, right-aligned on the title row.
-        var editSize = Ui.Measure(this.fonts.Label, "Edit");
-        ImGui.SameLine();
-        ImGui.SetCursorPosX(rowX + contentWidth - editSize.X);
-        if (this.TextButton("##edit", "Edit"))
+        const string edit = "Edit";
+        var editSize = Ui.Measure(this.fonts.LabelSmall, edit);
+        var editPos = new Vector2((head.X + fullWidth) - pad - editSize.X, (titleY + titleSize.Y) - editSize.Y - Ui.Px(4f));
+        ImGui.SetCursorScreenPos(editPos);
+        if (ImGui.InvisibleButton("##edit", new Vector2(editSize.X, editSize.Y + Ui.Px(4f))))
             this.OpenForm();
+        var editHover = ImGui.IsItemHovered();
+        Ui.TextAt(dl, this.fonts.LabelSmall, editPos, (editHover ? Palette.TextPrimary : Palette.TextSecondary).U32(), edit);
+        var underlineY = editPos.Y + editSize.Y + Ui.Px(3f);
+        dl.AddLine(new Vector2(editPos.X, underlineY), new Vector2(editPos.X + editSize.X, underlineY), (editHover ? Palette.TextPrimary : Palette.Border).U32(), 1f);
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+        var headerBottom = titleY + titleSize.Y + Ui.Px(16f);
+        dl.AddLine(new Vector2(head.X, headerBottom), new Vector2(head.X + fullWidth, headerBottom), Palette.Border.U32(), 1f);
+        ImGui.SetCursorScreenPos(new Vector2(head.X, headerBottom + 1f));
 
-        // Portrait + summary. Show the main approved photo (what the grid shows); fall back to a monogram
-        // tile until a photo exists and clears review.
+        // Portrait beside presence, serif name, and the world meta line. The photo is the main approved
+        // one (what the grid shows); a monogram tile stands in until one exists and clears review.
+        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+        var block = ImGui.GetCursorScreenPos();
         var thumb = new Vector2(Ui.Px(88f), Ui.Px(112f));
-        var tpos = ImGui.GetCursorScreenPos();
+        var tpos = new Vector2(block.X + pad, block.Y);
         this.photoSvc.EnsureLoaded();
         var main = this.photoSvc.Mine.FirstOrDefault(p => p.State == PhotoStateEnum.Approved);
         var portrait = main is null ? null : this.photoSvc.Texture(main.Id);
@@ -142,39 +158,41 @@ internal sealed class MyProfileScreen : IScreen
         else
         {
             dl.AddRectFilled(tpos, tpos + thumb, Palette.Surface2.U32());
+            dl.AddRect(tpos, tpos + thumb, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
             var initial = this.displayName.Length > 0 ? this.displayName[..1].ToUpperInvariant() : "?";
             var initSize = Ui.Measure(this.fonts.SerifTitle, initial);
             Ui.TextAt(dl, this.fonts.SerifTitle, tpos + ((thumb - initSize) * 0.5f), Palette.TextMuted.U32(), initial);
         }
-        dl.AddRect(tpos, tpos + thumb, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
         var textX = tpos.X + thumb.X + Ui.Px(16f);
-        dl.AddCircleFilled(new Vector2(textX + Ui.Px(3f), tpos.Y + Ui.Px(9f)), Ui.Px(3f), Palette.Online.U32(), 12);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX + Ui.Px(13f), tpos.Y + Ui.Px(2f)), Palette.TextSecondary.U32(), "VISIBLE ON GRID");
-        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(textX, tpos.Y + Ui.Px(24f)), Palette.TextPrimary.U32(), this.displayName.Length > 0 ? this.displayName : "Your name");
-        var summary = this.worldId > 0 ? this.catalog.WorldName(this.worldId) : "Set your world";
-        Ui.TextAt(dl, this.fonts.Label, new Vector2(textX, tpos.Y + Ui.Px(58f)), Palette.TextSecondary.U32(), summary);
+        var lineY = tpos.Y + Ui.Px(4f);
+        dl.AddCircleFilled(new Vector2(textX + Ui.Px(3f), lineY + (eyebrowHeight * 0.5f)), Ui.Px(3f), Palette.Online.U32(), 12);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX + Ui.Px(14f), lineY), Palette.TextSecondary.U32(), "VISIBLE ON GRID");
+        lineY += eyebrowHeight + Ui.Px(6f);
+        var name = this.displayName.Length > 0 ? this.displayName : "Your name";
+        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(textX, lineY), Palette.TextPrimary.U32(), name);
+        lineY += Ui.Measure(this.fonts.SerifName, name).Y + Ui.Px(4f);
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, lineY), Palette.TextSecondary.U32(), this.WorldMeta());
 
-        ImGui.Dummy(thumb);
-        this.SectionBottom(contentWidth);
-
-        // Identity — server-driven so the card reflects the real profile.
-        this.SectionTop();
-        this.DrawCardTable(contentWidth);
-        this.SectionBottom(contentWidth);
+        ImGui.Dummy(new Vector2(0f, thumb.Y + Ui.Px(24f)));
+        this.FullRule(fullWidth);
 
         // About
-        this.SectionTop();
-        this.Eyebrow("About you");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+        var about = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(about.X + pad, about.Y), Palette.TextSecondary.U32(), "ABOUT YOU");
+        ImGui.Dummy(new Vector2(0f, eyebrowHeight + Ui.Px(12f)));
+        ImGui.Indent(pad);
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, this.bio.Length > 0 ? Palette.WithAlpha(Palette.TextPrimary, 0.9f) : Palette.TextMuted))
         {
-            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
+            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + (fullWidth - (pad * 2f)));
             ImGui.TextUnformatted(this.bio.Length > 0 ? this.bio : "Add a short bio from Edit.");
             ImGui.PopTextWrapPos();
         }
-        this.SectionBottom(contentWidth);
+        ImGui.Unindent(pad);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+        this.FullRule(fullWidth);
 
         // Interests
         var picked = new List<string>();
@@ -182,23 +200,32 @@ internal sealed class MyProfileScreen : IScreen
             if (this.interests[i]) picked.Add(Options.Interests[i]);
         if (picked.Count > 0)
         {
-            this.SectionTop();
-            this.Eyebrow("Interests");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.DrawTags(picked, contentWidth);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+            var tags = ImGui.GetCursorScreenPos();
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(tags.X + pad, tags.Y), Palette.TextSecondary.U32(), "INTERESTS");
+            ImGui.Dummy(new Vector2(0f, eyebrowHeight + Ui.Px(12f)));
+            ImGui.Indent(pad);
+            this.DrawTags(picked, fullWidth - (pad * 2f));
+            ImGui.Unindent(pad);
         }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        if (this.kit.SecondaryButton("##preview", "Preview as others see it", contentWidth) && this.session.UserId is { } me)
-        {
-            this.selection.ProfileUserId = me;
-            this.selection.ProfileDisplayName = this.displayName;
-            this.selection.ProfileReturn = Screen.MyProfile;
-            this.details.Invalidate();
-            this.router.Navigate(Screen.ProfileDetail);
-        }
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+    }
+
+    private void FullRule(float fullWidth)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        ImGui.GetWindowDrawList().AddLine(pos, new Vector2(pos.X + fullWidth, pos.Y), Palette.Border.U32(), 1f);
+        ImGui.Dummy(new Vector2(0f, 1f));
+    }
+
+    private string WorldMeta()
+    {
+        foreach (var dc in this.catalog.DataCenters)
+            foreach (var w in dc.Worlds)
+                if (w.Id == this.worldId)
+                    return $"{w.Name} · {dc.Name}";
+        return "Set your world from Edit";
     }
 
     // ---- form ----
@@ -304,6 +331,16 @@ internal sealed class MyProfileScreen : IScreen
             this.CloseForm(false);
             return;
         }
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        if (this.kit.SecondaryButton("##f_preview", "Preview as others see it", contentWidth) && this.session.UserId is { } me)
+        {
+            this.selection.ProfileUserId = me;
+            this.selection.ProfileDisplayName = this.displayName;
+            this.selection.ProfileReturn = Screen.MyProfile;
+            this.details.Invalidate();
+            this.router.Navigate(Screen.ProfileDetail);
+        }
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
     }
 
@@ -386,29 +423,12 @@ internal sealed class MyProfileScreen : IScreen
 
     // ---- small pieces ----
 
-    private void Eyebrow(string text)
-    {
-        using (this.fonts.Eyebrow.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted(text.ToUpperInvariant());
-    }
-
     private void Field(string text)
     {
         using (this.fonts.Label.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
             ImGui.TextUnformatted(text);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-    }
-
-    private bool TextButton(string id, string label)
-    {
-        var pos = ImGui.GetCursorScreenPos();
-        var size = Ui.Measure(this.fonts.Label, label);
-        var clicked = ImGui.InvisibleButton(id, size);
-        var hovered = ImGui.IsItemHovered();
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Label, pos, (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32(), label);
-        return clicked;
     }
 
     private void DrawTags(IReadOnlyList<string> labels, float innerWidth)
@@ -423,7 +443,7 @@ internal sealed class MyProfileScreen : IScreen
         foreach (var label in labels)
         {
             var ts = Ui.Measure(this.fonts.LabelSmall, label);
-            var w = ts.X + Ui.Px(20f);
+            var w = ts.X + Ui.Px(24f);
             if (x > origin.X && (x + w) > (origin.X + innerWidth))
             {
                 x = origin.X;
@@ -432,56 +452,10 @@ internal sealed class MyProfileScreen : IScreen
             }
             var pos = new Vector2(x, y);
             dl.AddRect(pos, pos + new Vector2(w, h), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
-            Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(10f), (h - ts.Y) * 0.5f), Palette.TextSecondary.U32(), label);
+            Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(12f), (h - ts.Y) * 0.5f), Palette.TextPrimary.U32(), label);
             x += w + gap;
         }
         ImGui.Dummy(new Vector2(innerWidth, (rows * h) + ((rows - 1) * gap)));
-    }
-
-    private void DrawCardTable(float contentWidth)
-    {
-        var pronoun = this.pronounCustom.Length > 0 ? this.pronounCustom : Options.Pronouns[this.pronoun];
-        var gender = this.genderCustom.Length > 0 ? this.genderCustom : Options.Genders[this.gender];
-        var picked = new List<string>();
-        for (var i = 0; i < this.races.Length; i++)
-            if (this.races[i]) picked.Add(Options.Races[i]);
-        var race = picked.Count > 0 ? string.Join(" / ", picked) : "—";
-
-        var cells = new (string Label, string Value, bool Mono)[]
-        {
-            ("Age", this.age.ToString(), true),
-            ("Gender", gender, false),
-            ("Pronouns", pronoun, false),
-            ("Race", race, false),
-        };
-
-        var origin = ImGui.GetCursorScreenPos();
-        var dl = ImGui.GetWindowDrawList();
-        var colW = contentWidth / 2f;
-        var cellH = Ui.Px(48f);
-        var rows = (cells.Length + 1) / 2;
-
-        for (var i = 0; i < cells.Length; i++)
-        {
-            var cx = origin.X + ((i % 2) * colW);
-            var cy = origin.Y + ((i / 2) * cellH);
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx, cy + Ui.Px(6f)), Palette.TextSecondary.U32(), cells[i].Label.ToUpperInvariant());
-            var valueFont = cells[i].Mono ? this.fonts.Eyebrow : this.fonts.Label;
-            Ui.TextAt(dl, valueFont, new Vector2(cx, cy + Ui.Px(22f)), Palette.TextPrimary.U32(), cells[i].Value);
-        }
-
-        ImGui.Dummy(new Vector2(contentWidth, rows * cellH));
-    }
-
-    private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
-
-    private void SectionBottom(float contentWidth)
-    {
-        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
-        var y = ImGui.GetCursorScreenPos().Y;
-        var wx = ImGui.GetCursorScreenPos().X;
-        ImGui.GetWindowDrawList().AddLine(new Vector2(wx, y), new Vector2(wx + contentWidth, y), Palette.Border.U32(), 1f);
-        ImGui.Dummy(new Vector2(0f, 1f));
     }
 
     private void Helper(string text)
@@ -492,13 +466,6 @@ internal sealed class MyProfileScreen : IScreen
     }
 
     // ---- server state (reused) ----
-
-    private string DcName(int world)
-    {
-        var idx = this.DcIndexOf(world);
-        var dcs = this.catalog.DataCenters;
-        return idx >= 0 && idx < dcs.Count ? dcs[idx].Name : "—";
-    }
 
     private int DcIndexOf(int world)
     {
