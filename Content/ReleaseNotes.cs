@@ -12,6 +12,15 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 6, 2),
+            "July 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Opening someone's profile no longer gets stuck on 'Loading' after a brief connection hiccup. It retries on its own, and only shows a message if it really can't reach the profile.",
+            ]),
+        new Release(
             new Version(1, 6, 1),
             "July 2026",
             New: [],
