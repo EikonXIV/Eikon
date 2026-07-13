@@ -17,6 +17,7 @@ internal sealed class ProfileDetailService
     private readonly ILog log;
     private readonly int[] retryDelaysMs;
     private CancellationTokenSource? loadCts;
+    private Task loadTask = Task.CompletedTask;
     private Guid loadedFor;
 
     public ProfileDetailService(IApiClient api, ITokenProvider auth, ILog log)
@@ -41,6 +42,10 @@ internal sealed class ProfileDetailService
 
     public ProfileDetailDto? Current { get; private set; }
 
+    // Test seam: the most recent background load, so a test can await settling deterministically instead
+    // of polling Loading (which would busy-wait and starve the load's continuations on a small thread pool).
+    internal Task LoadTask => this.loadTask;
+
     public void Ensure(Guid userId)
     {
         if (this.loadedFor == userId)
@@ -59,7 +64,7 @@ internal sealed class ProfileDetailService
         var ct = (this.loadCts = new CancellationTokenSource()).Token;
         this.Loading = true;
         this.Failed = false;
-        _ = Task.Run(async () =>
+        this.loadTask = Task.Run(async () =>
         {
             try
             {

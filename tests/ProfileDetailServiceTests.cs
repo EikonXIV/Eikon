@@ -15,7 +15,7 @@ public class ProfileDetailServiceTests
     private static readonly int[] NoDelay = { 0, 0, 0 };   // three instant retries, so the tests don't wait
 
     [Fact]
-    public void A_transient_failure_that_recovers_on_retry_loads_without_error()
+    public async Task A_transient_failure_that_recovers_on_retry_loads_without_error()
     {
         var api = new SequencedProfileApi(n => n == 0
             ? throw new ApiException("503", 503)
@@ -23,7 +23,7 @@ public class ProfileDetailServiceTests
         var svc = new ProfileDetailService(api, new StubTokenProvider(User), new NullLog(), NoDelay);
 
         svc.Ensure(User);
-        Settle(svc);
+        await svc.LoadTask;
 
         Assert.False(svc.Failed);
         Assert.NotNull(svc.Current);
@@ -32,13 +32,13 @@ public class ProfileDetailServiceTests
     }
 
     [Fact]
-    public void A_persistent_failure_reports_Failed_only_after_exhausting_retries()
+    public async Task A_persistent_failure_reports_Failed_only_after_exhausting_retries()
     {
         var api = new SequencedProfileApi(_ => throw new ApiException("500", 500));
         var svc = new ProfileDetailService(api, new StubTokenProvider(User), new NullLog(), NoDelay);
 
         svc.Ensure(User);
-        Settle(svc);
+        await svc.LoadTask;
 
         Assert.True(svc.Failed);
         Assert.Null(svc.Current);
@@ -46,37 +46,32 @@ public class ProfileDetailServiceTests
     }
 
     [Fact]
-    public void A_terminal_4xx_fails_fast_without_retrying()
+    public async Task A_terminal_4xx_fails_fast_without_retrying()
     {
         var api = new SequencedProfileApi(_ => throw new ApiException("404", 404));
         var svc = new ProfileDetailService(api, new StubTokenProvider(User), new NullLog(), NoDelay);
 
         svc.Ensure(User);
-        Settle(svc);
+        await svc.LoadTask;
 
         Assert.True(svc.Failed);
         Assert.Equal(1, api.Calls);
     }
 
     [Fact]
-    public void Ensure_does_not_refetch_the_same_id_after_it_settles()
+    public async Task Ensure_does_not_refetch_the_same_id_after_it_settles()
     {
         var api = new SequencedProfileApi(_ => throw new ApiException("500", 500));
         var svc = new ProfileDetailService(api, new StubTokenProvider(User), new NullLog(), NoDelay);
 
         svc.Ensure(User);
-        Settle(svc);
+        await svc.LoadTask;
         var afterFirst = api.Calls;
         svc.Ensure(User);   // same id still pinned -> no new load
-        Settle(svc);
+        await svc.LoadTask;
 
         Assert.Equal(afterFirst, api.Calls);
     }
-
-    // Spin until the background Load task settles (Loading flips back to false). Load sets Loading true
-    // synchronously in Ensure, so the wait can't observe a stale pre-call false.
-    private static void Settle(ProfileDetailService svc)
-        => Assert.True(SpinWait.SpinUntil(() => !svc.Loading, 2000), "profile load did not settle");
 
     // Answers GetProfileAsync from a per-call-index function, so a test can fail the first N attempts and
     // then succeed (or keep failing). Counts calls so the retry count is assertable.
