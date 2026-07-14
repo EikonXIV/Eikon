@@ -7,9 +7,12 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Screens;
 
-// My profile (warm-editorial). A read-only card (portrait, summary, about, interests) with an Edit
-// button that swaps the body for a single scrolling form: the 6-slot photo manager plus inline pickers
-// for every field. The form edits live state; Save pushes the whole profile, Cancel reloads it.
+// My profile (warm-editorial). A self-preview of the profile-detail view — "how others see you":
+// a hero, the portraits grid, data table, albums, about, interests, looking-for and after-dark, pinned
+// under a preview strip and above a sticky Edit CTA. Edit swaps the body for a single scrolling form:
+// the 6-slot photo manager plus inline pickers for every field. Save pushes the whole profile, Cancel
+// reloads it. The preview reads the server's own ProfileDetailDto for the signed-in user, so unsupported
+// mockup fields (FFXIV job/role, tagline) are simply absent rather than faked.
 internal sealed class MyProfileScreen : IScreen
 {
     private readonly ScreenRouter router;
@@ -23,11 +26,14 @@ internal sealed class MyProfileScreen : IScreen
     private readonly Selection selection;
     private readonly SessionStore session;
     private readonly ProfileDetailService details;
+    private readonly AlbumService albums;
 
     private int worldId;
     private bool applied;
     private bool editing;
     private int editDc = -1;
+    private int heroIndex;
+    private Guid previewFor;
 
     private string displayName = string.Empty;
     private string bio = string.Empty;
@@ -47,7 +53,7 @@ internal sealed class MyProfileScreen : IScreen
     private readonly bool[] meet = new bool[Options.Meet.Length];
     private readonly bool[] kinks = new bool[Options.Kinks.Length];
 
-    public MyProfileScreen(ScreenRouter router, Kit kit, UiFonts fonts, Lightbox lightbox, ProfileService profiles, WorldCatalog catalog, PhotoManager photos, PhotoService photoSvc, Selection selection, SessionStore session, ProfileDetailService details)
+    public MyProfileScreen(ScreenRouter router, Kit kit, UiFonts fonts, Lightbox lightbox, ProfileService profiles, WorldCatalog catalog, PhotoManager photos, PhotoService photoSvc, Selection selection, SessionStore session, ProfileDetailService details, AlbumService albums)
     {
         this.router = router;
         this.kit = kit;
@@ -60,6 +66,7 @@ internal sealed class MyProfileScreen : IScreen
         this.selection = selection;
         this.session = session;
         this.details = details;
+        this.albums = albums;
     }
 
     public Screen Id => Screen.MyProfile;
@@ -103,113 +110,507 @@ internal sealed class MyProfileScreen : IScreen
         }
         else
         {
-            // The card lays out full-bleed (its hairline rules span the window), padding its own content.
-            this.DrawCard(ImGui.GetContentRegionAvail().X);
+            this.DrawPreview(ImGui.GetContentRegionAvail());
         }
 
         this.lightbox.Draw();
     }
 
-    // ---- card ----
+    // ---- preview (how others see you) ----
 
-    private void DrawCard(float fullWidth)
+    private void DrawPreview(Vector2 avail)
     {
-        var pad = Ui.Px(20f);
-        var dl = ImGui.GetWindowDrawList();
-        var eyebrowHeight = Ui.Measure(this.fonts.Eyebrow, "X").Y;
-
-        // Header: YOUR CARD eyebrow over the serif title, an underlined Edit bottom-aligned beside it.
-        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
-        var head = ImGui.GetCursorScreenPos();
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(head.X + pad, head.Y), Palette.TextSecondary.U32(), "YOUR CARD");
-        var titleY = head.Y + eyebrowHeight + Ui.Px(4f);
-        var titleSize = Ui.Measure(this.fonts.SerifTitle, "Profile");
-        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(head.X + pad, titleY), Palette.TextPrimary.U32(), "Profile");
-
-        const string edit = "Edit";
-        var editSize = Ui.Measure(this.fonts.LabelSmall, edit);
-        var editPos = new Vector2((head.X + fullWidth) - pad - editSize.X, (titleY + titleSize.Y) - editSize.Y - Ui.Px(4f));
-        ImGui.SetCursorScreenPos(editPos);
-        if (ImGui.InvisibleButton("##edit", new Vector2(editSize.X, editSize.Y + Ui.Px(4f))))
-            this.OpenForm();
-        var editHover = ImGui.IsItemHovered();
-        Ui.TextAt(dl, this.fonts.LabelSmall, editPos, (editHover ? Palette.TextPrimary : Palette.TextSecondary).U32(), edit);
-        var underlineY = editPos.Y + editSize.Y + Ui.Px(3f);
-        dl.AddLine(new Vector2(editPos.X, underlineY), new Vector2(editPos.X + editSize.X, underlineY), (editHover ? Palette.TextPrimary : Palette.Border).U32(), 1f);
-
-        var headerBottom = titleY + titleSize.Y + Ui.Px(16f);
-        dl.AddLine(new Vector2(head.X, headerBottom), new Vector2(head.X + fullWidth, headerBottom), Palette.Border.U32(), 1f);
-        ImGui.SetCursorScreenPos(new Vector2(head.X, headerBottom + 1f));
-
-        // Portrait beside presence, serif name, and the world meta line. The photo is the main approved
-        // one (what the grid shows); a monogram tile stands in until one exists and clears review.
-        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
-        var block = ImGui.GetCursorScreenPos();
-        var thumb = new Vector2(Ui.Px(88f), Ui.Px(112f));
-        var tpos = new Vector2(block.X + pad, block.Y);
         this.photoSvc.EnsureLoaded();
-        var main = this.photoSvc.Mine.FirstOrDefault(p => p.State == PhotoStateEnum.Approved);
-        var portrait = main is null ? null : this.photoSvc.Texture(main.Id);
-        if (portrait != null)
+        this.albums.EnsureLoaded();
+
+        var stripH = Ui.Px(44f);
+        var ctaH = Ui.Px(64f);
+        var rootPos = ImGui.GetCursorScreenPos();
+
+        this.DrawPreviewStrip(avail.X, stripH);
+
+        ProfileDetailDto? loaded = null;
+        if (this.session.UserId is { } me)
         {
-            var (uvMin, uvMax) = Ui.CoverUv(portrait.Width, portrait.Height, thumb.X / thumb.Y);
-            dl.AddImage(portrait.Handle, tpos, tpos + thumb, uvMin, uvMax);
+            this.details.Ensure(me);
+            loaded = this.details.Current;
+        }
+
+        var bodyH = avail.Y - stripH - ctaH;
+        ImGui.SetCursorPos(new Vector2(0f, stripH));
+        using (var body = ImRaii.Child("mp_preview", new Vector2(avail.X, bodyH), false, ImGuiWindowFlags.NoScrollbar))
+        {
+            if (body.Success)
+            {
+                if (loaded is null)
+                {
+                    ImGui.Dummy(new Vector2(0f, Ui.Px(80f)));
+                    Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextMuted, "Loading preview…");
+                }
+                else
+                {
+                    if (this.previewFor != loaded.UserId)
+                    {
+                        this.previewFor = loaded.UserId;
+                        this.heroIndex = 0;
+                    }
+
+                    this.DrawHero(avail.X, loaded);
+                    this.DrawPortraits(avail.X, loaded);
+                    this.DrawDataTable(avail.X, loaded);
+                    this.DrawSections(avail.X, loaded);
+                }
+            }
+        }
+
+        // Sticky Edit CTA, pinned above the bottom nav with a hairline separating it from the scroll body.
+        var footerY = rootPos.Y + stripH + bodyH;
+        ImGui.GetWindowDrawList().AddLine(new Vector2(rootPos.X, footerY), new Vector2(rootPos.X + avail.X, footerY), Palette.Border.U32(), 1f);
+        var ctaPad = Ui.Px(16f);
+        ImGui.SetCursorPos(new Vector2(ctaPad, stripH + bodyH + Ui.Px(10f)));
+        if (this.EditCta(avail.X - (ctaPad * 2f), Ui.Px(44f)))
+            this.OpenForm();
+    }
+
+    private void DrawPreviewStrip(float fullWidth, float height)
+    {
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var pad = Ui.Px(20f);
+        var midY = origin.Y + (height * 0.5f);
+
+        const string label = "YOUR PROFILE PREVIEW · HOW OTHERS SEE YOU";
+        var ls = Ui.Measure(this.fonts.Eyebrow, label);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, midY - (ls.Y * 0.5f)), Palette.TextSecondary.U32(), label);
+
+        var pen = FontAwesomeIcon.Pen.ToIconString();
+        var ps = Ui.Measure(this.fonts.Icon, pen);
+        ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth - pad) - ps.X, midY - (ps.Y * 0.5f)));
+        if (ImGui.InvisibleButton("##mp_edit_top", ps))
+            this.OpenForm();
+        Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), pen);
+
+        dl.AddLine(new Vector2(origin.X, origin.Y + height - 1f), new Vector2(origin.X + fullWidth, origin.Y + height - 1f), Palette.Border.U32(), 1f);
+    }
+
+    private void DrawHero(float fullWidth, ProfileDetailDto dto)
+    {
+        var heroHeight = fullWidth * 1.25f;
+        var pos = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        dl.AddRectFilled(pos, pos + new Vector2(fullWidth, heroHeight), Palette.Surface2.U32());
+
+        var photos = dto.PhotoIds;
+        var count = photos.Count;
+        this.heroIndex = count > 0 ? Math.Clamp(this.heroIndex, 0, count - 1) : 0;
+        var photoId = count > 0 ? photos[this.heroIndex] : dto.MainPhotoId;
+        var texture = photoId is { } id ? this.photoSvc.Texture(id) : null;
+        if (texture != null)
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(texture.Width, texture.Height, fullWidth / heroHeight, offsetY: 0.2f);
+            dl.AddImage(texture.Handle, pos, pos + new Vector2(fullWidth, heroHeight), uvMin, uvMax);
         }
         else
         {
-            dl.AddRectFilled(tpos, tpos + thumb, Palette.Surface2.U32());
-            dl.AddRect(tpos, tpos + thumb, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
-            var initial = this.displayName.Length > 0 ? this.displayName[..1].ToUpperInvariant() : "?";
-            var initSize = Ui.Measure(this.fonts.SerifTitle, initial);
-            Ui.TextAt(dl, this.fonts.SerifTitle, tpos + ((thumb - initSize) * 0.5f), Palette.TextMuted.U32(), initial);
+            var initial = dto.DisplayName.Length > 0 ? dto.DisplayName[..1].ToUpperInvariant() : "?";
+            var isz = Ui.Measure(this.fonts.SerifTitle, initial);
+            Ui.TextAt(dl, this.fonts.SerifTitle, pos + new Vector2((fullWidth - isz.X) * 0.5f, (heroHeight * 0.35f) - (isz.Y * 0.5f)), Palette.TextMuted.U32(), initial);
         }
 
-        var textX = tpos.X + thumb.X + Ui.Px(16f);
-        var lineY = tpos.Y + Ui.Px(4f);
-        dl.AddCircleFilled(new Vector2(textX + Ui.Px(3f), lineY + (eyebrowHeight * 0.5f)), Ui.Px(3f), Palette.Online.U32(), 12);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX + Ui.Px(14f), lineY), Palette.TextSecondary.U32(), "VISIBLE ON GRID");
-        lineY += eyebrowHeight + Ui.Px(6f);
-        var name = this.displayName.Length > 0 ? this.displayName : "Your name";
-        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(textX, lineY), Palette.TextPrimary.U32(), name);
-        lineY += Ui.Measure(this.fonts.SerifName, name).Y + Ui.Px(4f);
-        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, lineY), Palette.TextSecondary.U32(), this.WorldMeta());
+        // Photo counter chip, top-right (NN / NN).
+        if (count > 0)
+        {
+            var counter = $"{this.heroIndex + 1:00} / {count:00}";
+            var cs = Ui.Measure(this.fonts.Count, counter);
+            var chipPad = new Vector2(Ui.Px(8f), Ui.Px(4f));
+            var chipSize = cs + (chipPad * 2f);
+            var chipPos = new Vector2((pos.X + fullWidth) - Ui.Px(12f) - chipSize.X, pos.Y + Ui.Px(12f));
+            dl.AddRectFilled(chipPos, chipPos + chipSize, Palette.Scrim.U32());
+            Ui.TextAt(dl, this.fonts.Count, chipPos + chipPad, Palette.WithAlpha(Palette.White, 0.9f).U32(), counter);
+        }
 
-        ImGui.Dummy(new Vector2(0f, thumb.Y + Ui.Px(24f)));
+        // Gradient + overlaid status eyebrow and the two-tone name, anchored bottom-left.
+        var gradTop = pos + new Vector2(0f, heroHeight * 0.55f);
+        var clear = Palette.WithAlpha(Palette.Bg, 0f).U32();
+        var solid = Palette.WithAlpha(Palette.Bg, 0.96f).U32();
+        dl.AddRectFilledMultiColor(gradTop, pos + new Vector2(fullWidth, heroHeight), clear, clear, solid, solid);
+
+        var ox = pos.X + Ui.Px(20f);
+        var (first, rest) = SplitName(dto.DisplayName);
+        var firstH = Ui.Measure(this.fonts.SerifTitle, first).Y;
+        var restH = rest.Length > 0 ? Ui.Measure(this.fonts.SerifItalicTitle, rest).Y : 0f;
+        var restY = (pos.Y + heroHeight) - Ui.Px(20f) - restH;
+        var firstY = restY - firstH + Ui.Px(4f);
+        if (rest.Length > 0)
+            Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(ox, restY), Palette.Signal.U32(), rest);
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(ox, firstY), Palette.TextPrimary.U32(), first);
+
+        if (dto.Online)
+        {
+            const string status = "ONLINE NOW";
+            var eH = Ui.Measure(this.fonts.Eyebrow, status).Y;
+            var ey = firstY - Ui.Px(8f) - eH;
+            dl.AddCircleFilled(new Vector2(ox + Ui.Px(3f), ey + (eH * 0.5f)), Ui.Px(3f), Palette.Online.U32(), 12);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(ox + Ui.Px(13f), ey), Palette.WithAlpha(Palette.TextPrimary, 0.85f).U32(), status);
+        }
+
+        // Paging taps: left/right thirds step photos, centre opens the viewer; one photo opens on tap.
+        if (count > 1)
+        {
+            var third = fullWidth / 3f;
+            ImGui.SetCursorScreenPos(pos);
+            if (ImGui.InvisibleButton("##mp_hero_prev", new Vector2(third, heroHeight)))
+                this.heroIndex = (this.heroIndex - 1 + count) % count;
+            ImGui.SetCursorScreenPos(pos + new Vector2(third, 0f));
+            if (ImGui.InvisibleButton("##mp_hero_open", new Vector2(third, heroHeight)))
+                this.lightbox.OpenPhotos(photos, this.heroIndex);
+            ImGui.SetCursorScreenPos(pos + new Vector2(third * 2f, 0f));
+            if (ImGui.InvisibleButton("##mp_hero_next", new Vector2(fullWidth - (third * 2f), heroHeight)))
+                this.heroIndex = (this.heroIndex + 1) % count;
+        }
+        else
+        {
+            ImGui.SetCursorScreenPos(pos);
+            if (ImGui.InvisibleButton("##mp_hero", new Vector2(fullWidth, heroHeight)) && count > 0)
+                this.lightbox.OpenPhotos(photos, this.heroIndex);
+        }
+
+        ImGui.SetCursorScreenPos(pos);
+        ImGui.Dummy(new Vector2(fullWidth, heroHeight));
+    }
+
+    private void DrawPortraits(float fullWidth, ProfileDetailDto dto)
+    {
+        var pad = Ui.Px(20f);
+        var dl = ImGui.GetWindowDrawList();
+        var photos = dto.PhotoIds;
+        var count = photos.Count;
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
+        var head = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(head.X + pad, head.Y), Palette.TextSecondary.U32(), "PORTRAITS");
+        var slots = $"{count:00} slots";
+        var ss = Ui.Measure(this.fonts.Eyebrow, slots);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2((head.X + fullWidth) - pad - ss.X, head.Y), Palette.TextMuted.U32(), slots);
+        ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(14f)));
+
+        if (count == 0)
+            return;
+
+        const int cols = 3;
+        var gap = Ui.Px(8f);
+        var innerWidth = fullWidth - (pad * 2f);
+        var tileW = (innerWidth - (gap * (cols - 1))) / cols;
+        var tileH = tileW * 1.3f;
+        var basePos = ImGui.GetCursorScreenPos();
+        var originX = basePos.X + pad;
+        var rows = (count + cols - 1) / cols;
+
+        for (var i = 0; i < count; i++)
+        {
+            var col = i % cols;
+            var row = i / cols;
+            var tp = new Vector2(originX + (col * (tileW + gap)), basePos.Y + (row * (tileH + gap)));
+            var tmax = tp + new Vector2(tileW, tileH);
+            dl.AddRectFilled(tp, tmax, Palette.Surface2.U32());
+            var tex = this.photoSvc.Texture(photos[i]);
+            if (tex != null)
+            {
+                var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, tileW / tileH);
+                dl.AddImage(tex.Handle, tp, tmax, uvMin, uvMax);
+            }
+            dl.AddRect(tp, tmax, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
+            var num = $"{i + 1:00}";
+            var ns = Ui.Measure(this.fonts.Mono, num);
+            var badgePad = new Vector2(Ui.Px(5f), Ui.Px(3f));
+            var badgePos = tp + new Vector2(Ui.Px(6f), Ui.Px(6f));
+            dl.AddRectFilled(badgePos, badgePos + ns + (badgePad * 2f), Palette.Scrim.U32());
+            Ui.TextAt(dl, this.fonts.Mono, badgePos + badgePad, Palette.WithAlpha(Palette.White, 0.85f).U32(), num);
+
+            ImGui.SetCursorScreenPos(tp);
+            if (ImGui.InvisibleButton($"##mp_portrait_{i}", new Vector2(tileW, tileH)))
+                this.lightbox.OpenPhotos(photos, i);
+        }
+
+        ImGui.SetCursorScreenPos(basePos);
+        ImGui.Dummy(new Vector2(fullWidth, (rows * tileH) + ((rows - 1) * gap)));
+    }
+
+    private void DrawDataTable(float fullWidth, ProfileDetailDto dto)
+    {
+        // Only fields the profile model actually carries — the mockup's FFXIV job/role cells have no data.
+        var cells = new (string Label, string Value, bool Mono)[]
+        {
+            ("World", dto.World, false),
+            ("Data Center", dto.Dc, false),
+            ("Age", dto.Age.ToString(), true),
+            ("Last Seen", dto.Online ? "Now" : LastSeen(dto.LastSeenAt), false),
+        };
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
         this.FullRule(fullWidth);
 
-        // About
-        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
-        var about = ImGui.GetCursorScreenPos();
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(about.X + pad, about.Y), Palette.TextSecondary.U32(), "ABOUT YOU");
-        ImGui.Dummy(new Vector2(0f, eyebrowHeight + Ui.Px(12f)));
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var cellW = fullWidth / 2f;
+        var cellH = Ui.Px(54f);
+        var pad = Ui.Px(20f);
+        var rows = (cells.Length + 1) / 2;
+
+        for (var i = 0; i < cells.Length; i++)
+        {
+            var col = i % 2;
+            var row = i / 2;
+            var cx = origin.X + (col * cellW);
+            var cy = origin.Y + (row * cellH);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + pad, cy + Ui.Px(12f)), Palette.TextSecondary.U32(), cells[i].Label.ToUpperInvariant());
+            var valueFont = cells[i].Mono ? this.fonts.Eyebrow : this.fonts.Label;
+            Ui.TextAt(dl, valueFont, new Vector2(cx + pad, cy + Ui.Px(28f)), Palette.TextPrimary.U32(), cells[i].Value);
+            if (col == 0)
+                dl.AddLine(new Vector2(cx + cellW, cy), new Vector2(cx + cellW, cy + cellH), Palette.Border.U32(), 1f);
+            dl.AddLine(new Vector2(cx, cy + cellH), new Vector2(cx + cellW, cy + cellH), Palette.Border.U32(), 1f);
+        }
+
+        ImGui.Dummy(new Vector2(fullWidth, rows * cellH));
+    }
+
+    private void DrawSections(float fullWidth, ProfileDetailDto dto)
+    {
+        var pad = Ui.Px(20f);
+        var innerWidth = fullWidth - (pad * 2f);
         ImGui.Indent(pad);
-        using (this.fonts.Caption.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, this.bio.Length > 0 ? Palette.WithAlpha(Palette.TextPrimary, 0.9f) : Palette.TextMuted))
+
+        this.DrawAlbums(fullWidth, innerWidth);
+
+        if (!string.IsNullOrWhiteSpace(dto.Bio))
         {
-            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + (fullWidth - (pad * 2f)));
-            ImGui.TextUnformatted(this.bio.Length > 0 ? this.bio : "Add a short bio from Edit.");
-            ImGui.PopTextWrapPos();
+            this.SectionTop();
+            this.Eyebrow("About");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.WithAlpha(Palette.TextPrimary, 0.9f)))
+            {
+                ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + innerWidth);
+                ImGui.TextUnformatted(dto.Bio);
+                ImGui.PopTextWrapPos();
+            }
+            this.SectionBottom(fullWidth);
         }
+
+        if (dto.Interests.Count > 0)
+            this.TagSection(fullWidth, innerWidth, "Interests", dto.Interests.ToArray(), signal: false);
+
+        if (dto.LookingFor.Count > 0)
+            this.TagSection(fullWidth, innerWidth, "Looking for", ProfileMapper.Labels(dto.LookingFor).ToArray(), signal: true);
+
+        if (dto.AfterDark is { } ad)
+            this.DrawAfterDark(fullWidth, innerWidth, ad);
+
         ImGui.Unindent(pad);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
-        this.FullRule(fullWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+    }
 
-        // Interests
-        var picked = new List<string>();
-        for (var i = 0; i < this.interests.Length; i++)
-            if (this.interests[i]) picked.Add(Options.Interests[i]);
-        if (picked.Count > 0)
+    private void DrawAlbums(float fullWidth, float innerWidth)
+    {
+        var mine = this.albums.Mine;
+        if (mine.Count == 0)
+            return;
+
+        this.SectionTop();
+        this.Eyebrow("Albums");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        foreach (var album in mine)
+            this.DrawAlbumRow(album, innerWidth);
+        this.SectionBottom(fullWidth);
+    }
+
+    private void DrawAlbumRow(AlbumDto album, float innerWidth)
+    {
+        var rowH = Ui.Px(56f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##mp_album_" + album.Id, new Vector2(innerWidth, rowH));
+        var dl = ImGui.GetWindowDrawList();
+
+        var isPublic = album.Visibility == AlbumVisibilityEnum.Public;
+        var thumb = Ui.Px(44f);
+        var tmin = new Vector2(pos.X, pos.Y + ((rowH - thumb) * 0.5f));
+        var tmax = tmin + new Vector2(thumb, thumb);
+        dl.AddRectFilled(tmin, tmax, Palette.Surface2.U32());
+        dl.AddRect(tmin, tmax, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+        var tex = album.CoverPhotoId is { } cover ? this.albums.Texture(album.Id, cover) : null;
+        if (tex is { Width: > 0, Height: > 0 })
         {
-            ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
-            var tags = ImGui.GetCursorScreenPos();
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(tags.X + pad, tags.Y), Palette.TextSecondary.U32(), "INTERESTS");
-            ImGui.Dummy(new Vector2(0f, eyebrowHeight + Ui.Px(12f)));
-            ImGui.Indent(pad);
-            this.DrawTags(picked, fullWidth - (pad * 2f));
-            ImGui.Unindent(pad);
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, 1f);
+            dl.AddImage(tex.Handle, tmin, tmax, uvMin, uvMax);
+        }
+        else
+        {
+            var glyph = (isPublic ? FontAwesomeIcon.Star : FontAwesomeIcon.Lock).ToIconString();
+            var gs = Ui.Measure(this.fonts.Icon, glyph);
+            Ui.TextAt(dl, this.fonts.Icon, ((tmin + tmax) * 0.5f) - (gs * 0.5f), Palette.TextMuted.U32(), glyph);
         }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+        var textX = pos.X + thumb + Ui.Px(12f);
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(textX, pos.Y + Ui.Px(11f)), Palette.TextPrimary.U32(), album.Name);
+        var vis = isPublic ? "public" : "private";
+        var meta = album.PhotoCount == 1 ? $"1 photo · {vis}" : $"{album.PhotoCount} photos · {vis}";
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, pos.Y + Ui.Px(30f)), Palette.TextMuted.U32(), meta);
+
+        // Self-preview: every album is viewable to me, so the affordance is always View (the public/private
+        // state a visitor keys off is carried in the meta line above).
+        var midY = pos.Y + (rowH * 0.5f);
+        const string label = "View";
+        var lsz = Ui.Measure(this.fonts.LabelSmall, label);
+        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chs = Ui.Measure(this.fonts.Icon, chevron);
+        var ax = (pos.X + innerWidth) - lsz.X - Ui.Px(6f) - chs.X;
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(ax, midY - (lsz.Y * 0.5f)), Palette.Signal.U32(), label);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(ax + lsz.X + Ui.Px(6f), midY - (chs.Y * 0.5f)), Palette.Signal.U32(), chevron);
+
+        if (clicked)
+        {
+            this.selection.AlbumId = album.Id;
+            this.selection.AlbumName = album.Name;
+            this.selection.AlbumReturn = Screen.MyProfile;
+            this.router.Navigate(Screen.AlbumViewer);
+        }
+    }
+
+    private void DrawAfterDark(float fullWidth, float innerWidth, AfterDarkDto ad)
+    {
+        this.SectionTop();
+
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var moon = FontAwesomeIcon.Moon.ToIconString();
+        var moonSize = Ui.Measure(this.fonts.Icon, moon);
+        Ui.TextAt(dl, this.fonts.Icon, origin, Palette.Signal.U32(), moon);
+        var labelX = origin.X + moonSize.X + Ui.Px(8f);
+        var eSize = Ui.Measure(this.fonts.Eyebrow, "AFTER DARK");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(labelX, origin.Y + ((moonSize.Y - eSize.Y) * 0.5f)), Palette.TextSecondary.U32(), "AFTER DARK");
+        var pillX = labelX + eSize.X + Ui.Px(10f);
+        var pillText = Ui.Measure(this.fonts.Eyebrow, "18+");
+        var pillSize = new Vector2(pillText.X + Ui.Px(10f), moonSize.Y);
+        var pillPos = new Vector2(pillX, origin.Y);
+        dl.AddRectFilled(pillPos, pillPos + pillSize, Palette.WithAlpha(Palette.Signal, 0.10f).U32());
+        dl.AddRect(pillPos, pillPos + pillSize, Palette.WithAlpha(Palette.Signal, 0.40f).U32(), 0f, ImDrawFlags.None, 1f);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pillPos.X + Ui.Px(5f), pillPos.Y + ((pillSize.Y - pillText.Y) * 0.5f)), Palette.Signal.U32(), "18+");
+        ImGui.Dummy(new Vector2(0f, moonSize.Y));
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        if (ad.Position is { } p) this.AfterDarkRow("Position", ProfileMapper.Label(p));
+        if (ad.Role is { } r) this.AfterDarkRow("Role", ProfileMapper.Label(r));
+        if (ad.Size is { } s) this.AfterDarkRow("Size", ProfileMapper.Label(s));
+        if (ad.Meet.Count > 0) this.AfterDarkRow("Meet", string.Join(" · ", ad.Meet.Select(ProfileMapper.Label)));
+
+        if (ad.Kinks.Count > 0)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+            this.Eyebrow("Kinks");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+            this.TagFlow(ad.Kinks.ToArray(), signal: true, innerWidth);
+        }
+
+        this.SectionBottom(fullWidth);
+    }
+
+    private void AfterDarkRow(string label, string value)
+    {
+        using (this.fonts.LabelSmall.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+            ImGui.TextUnformatted(label);
+        ImGui.SameLine(Ui.Px(96f));
+        using (this.fonts.LabelSmall.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
+            ImGui.TextUnformatted(value);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
+    }
+
+    private void TagSection(float fullWidth, float innerWidth, string label, IReadOnlyList<string> labels, bool signal)
+    {
+        this.SectionTop();
+        this.Eyebrow(label);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.TagFlow(labels, signal, innerWidth);
+        this.SectionBottom(fullWidth);
+    }
+
+    private void TagFlow(IReadOnlyList<string> labels, bool signal, float innerWidth)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var origin = ImGui.GetCursorScreenPos();
+        var gap = Ui.Px(6f);
+        var h = Ui.Px(28f);
+        var x = origin.X;
+        var y = origin.Y;
+        var rows = 1;
+
+        foreach (var label in labels)
+        {
+            var ts = Ui.Measure(this.fonts.LabelSmall, label);
+            var w = ts.X + Ui.Px(20f);
+            if (x > origin.X && (x + w) > (origin.X + innerWidth))
+            {
+                x = origin.X;
+                y += h + gap;
+                rows++;
+            }
+
+            var pos = new Vector2(x, y);
+            if (signal)
+            {
+                dl.AddRectFilled(pos, pos + new Vector2(w, h), Palette.WithAlpha(Palette.Signal, 0.10f).U32());
+                dl.AddRect(pos, pos + new Vector2(w, h), Palette.WithAlpha(Palette.Signal, 0.40f).U32(), 0f, ImDrawFlags.None, 1f);
+                Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(10f), (h - ts.Y) * 0.5f), Palette.Signal.U32(), label);
+            }
+            else
+            {
+                dl.AddRect(pos, pos + new Vector2(w, h), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+                Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(10f), (h - ts.Y) * 0.5f), Palette.TextSecondary.U32(), label);
+            }
+
+            x += w + gap;
+        }
+
+        ImGui.Dummy(new Vector2(innerWidth, (rows * h) + ((rows - 1) * gap)));
+    }
+
+    private bool EditCta(float width, float height)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##mp_edit_cta", new Vector2(width, height));
+        var dl = ImGui.GetWindowDrawList();
+        var bg = (ImGui.IsItemHovered() ? Palette.WithAlpha(Palette.TextPrimary, 0.9f) : Palette.TextPrimary).U32();
+        dl.AddRectFilled(pos, pos + new Vector2(width, height), bg);
+
+        var pen = FontAwesomeIcon.Pen.ToIconString();
+        const string label = "Edit profile";
+        var ps = Ui.Measure(this.fonts.Icon, pen);
+        var lsz = Ui.Measure(this.fonts.Label, label);
+        var gap = Ui.Px(8f);
+        var startX = pos.X + ((width - (ps.X + gap + lsz.X)) * 0.5f);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(startX, pos.Y + ((height - ps.Y) * 0.5f)), Palette.Paper.U32(), pen);
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(startX + ps.X + gap, pos.Y + ((height - lsz.Y) * 0.5f)), Palette.Paper.U32(), label);
+        return clicked;
+    }
+
+    private void Eyebrow(string text)
+    {
+        using (this.fonts.Eyebrow.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+            ImGui.TextUnformatted(text.ToUpperInvariant());
+    }
+
+    private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
+
+    private void SectionBottom(float fullWidth)
+    {
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
+        var y = ImGui.GetCursorScreenPos().Y;
+        var wx = ImGui.GetWindowPos().X;
+        ImGui.GetWindowDrawList().AddLine(new Vector2(wx, y), new Vector2(wx + fullWidth, y), Palette.Border.U32(), 1f);
+        ImGui.Dummy(new Vector2(0f, 1f));
     }
 
     private void FullRule(float fullWidth)
@@ -219,13 +620,22 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.Dummy(new Vector2(0f, 1f));
     }
 
-    private string WorldMeta()
+    private static (string First, string Surname) SplitName(string name)
     {
-        foreach (var dc in this.catalog.DataCenters)
-            foreach (var w in dc.Worlds)
-                if (w.Id == this.worldId)
-                    return $"{w.Name} · {dc.Name}";
-        return "Set your world from Edit";
+        var sp = name.IndexOf(' ');
+        return sp > 0 ? (name[..sp], name[(sp + 1)..]) : (name, string.Empty);
+    }
+
+    private static string LastSeen(DateTimeOffset? at)
+    {
+        if (at is null)
+            return "—";
+        var d = DateTimeOffset.UtcNow - at.Value;
+        if (d.TotalMinutes < 1) return "Now";
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
+        return at.Value.LocalDateTime.ToString("MMM d");
     }
 
     // ---- form ----
@@ -242,6 +652,10 @@ internal sealed class MyProfileScreen : IScreen
             this.profiles.Save(this.BuildRequest());
         else if (this.profiles.Mine is { } mine)
             this.ApplyFromServer(mine);
+
+        // Force the preview to refetch so it reflects what was just saved (and clears cropped/new photos).
+        this.details.Invalidate();
+        this.previewFor = Guid.Empty;
         this.editing = false;
     }
 
@@ -429,33 +843,6 @@ internal sealed class MyProfileScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
             ImGui.TextUnformatted(text);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-    }
-
-    private void DrawTags(IReadOnlyList<string> labels, float innerWidth)
-    {
-        var dl = ImGui.GetWindowDrawList();
-        var origin = ImGui.GetCursorScreenPos();
-        var gap = Ui.Px(6f);
-        var h = Ui.Px(28f);
-        var x = origin.X;
-        var y = origin.Y;
-        var rows = 1;
-        foreach (var label in labels)
-        {
-            var ts = Ui.Measure(this.fonts.LabelSmall, label);
-            var w = ts.X + Ui.Px(24f);
-            if (x > origin.X && (x + w) > (origin.X + innerWidth))
-            {
-                x = origin.X;
-                y += h + gap;
-                rows++;
-            }
-            var pos = new Vector2(x, y);
-            dl.AddRect(pos, pos + new Vector2(w, h), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
-            Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(12f), (h - ts.Y) * 0.5f), Palette.TextPrimary.U32(), label);
-            x += w + gap;
-        }
-        ImGui.Dummy(new Vector2(innerWidth, (rows * h) + ((rows - 1) * gap)));
     }
 
     private void Helper(string text)
