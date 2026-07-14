@@ -59,13 +59,14 @@ jobs:
           Write-Host "Releasing $tag (AssemblyVersion $assembly)"
 
       # Generate the Dalamud repo manifest from the freshly-built Eikon.json, so AssemblyVersion
-      # and DalamudApiLevel can never drift from the binary. Downloads point at the GitHub release;
-      # RepoUrl and IconUrl stay on eikon.chat.
+      # and DalamudApiLevel can never drift from the binary. Downloads point at this tagged release
+      # (pinned, not 'latest', so a repo.json can never resolve to a newer release's zip); RepoUrl and
+      # IconUrl stay on eikon.chat.
       - name: Generate repo.json
         shell: pwsh
         run: |
           $m = Get-Content 'bin/Release/Eikon/Eikon.json' -Raw | ConvertFrom-Json
-          $zip = 'https://github.com/EikonXIV/Eikon/releases/latest/download/latest.zip'
+          $zip = 'https://github.com/EikonXIV/Eikon/releases/download/${{ steps.ver.outputs.tag }}/latest.zip'
           # The changelog Dalamud shows for the update comes from the annotated tag message
           # (git tag -a vX.Y.Z -m "..."), so cutting the release also writes the changelog.
           # actions/checkout's shallow fetch leaves the triggering tag as a lightweight ref
