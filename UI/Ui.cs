@@ -8,42 +8,57 @@ namespace Eikon.UI;
 // Small UI helpers shared across the custom drawing code.
 internal static class Ui
 {
-    // Scale a hardcoded pixel value by the global HUD scale so layouts hold at any scale.
-    public static float Px(float value) => value * ImGuiHelpers.GlobalScale;
+    // Extra UI zoom on top of the game HUD scale, from the member's Text size setting (1.0 = 100%). Drives
+    // layout (Px) and draw-list text immediately when it changes, so a resize shows at once.
+    public static float Scale { get; set; } = 1f;
 
-    // Measure text in a specific font. Falls back to the current font if the handle is null.
+    // The factor the fonts are actually rasterized at. It lags Scale during a Text size change: the atlas
+    // rebuilds in the background and this catches up only when the new glyphs land. Set by UiFonts.
+    public static float FontBakedScale { get; set; } = 1f;
+
+    // Ratio to draw baked glyphs at the display size. 1.0 once the atlas has caught up (crisp); off 1.0 in
+    // the brief window after a change, so draw-list text resizes instantly (soft) and then sharpens.
+    private static float TextRenderScale => FontBakedScale > 0f ? Scale / FontBakedScale : 1f;
+
+    // Scale a hardcoded pixel value by the global HUD scale and the Text size factor so layouts hold at
+    // any scale and grow with the text.
+    public static float Px(float value) => value * ImGuiHelpers.GlobalScale * Scale;
+
+    // Measure text in a specific font, at the display size (baked size times the pending render ratio).
     public static Vector2 Measure(IFontHandle? font, string text)
     {
         if (font is null)
-            return ImGui.CalcTextSize(text);
+            return ImGui.CalcTextSize(text) * TextRenderScale;
 
         using (font.Push())
-            return ImGui.CalcTextSize(text);
+            return ImGui.CalcTextSize(text) * TextRenderScale;
     }
 
-    // Draw text into a draw list with a specific font, so we keep both pixel placement and the
-    // intended type scale.
+    // Draw text into a draw list with a specific font, at the display size, so it resizes with the Text
+    // size setting the moment it changes rather than waiting for the atlas rebuild.
     public static void TextAt(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, uint color, string text)
     {
-        if (font is null)
-        {
-            drawList.AddText(pos, color, text);
-            return;
-        }
-
-        using (font.Push())
-            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), pos, color, text);
+        using (font?.Push())
+            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize() * TextRenderScale, pos, color, text);
     }
 
-    // Draw one line of text horizontally centered in a container of the given width, using a
-    // specific font and color, advancing the layout cursor like a normal item.
+    // Draw text at an explicit pixel size, scaling the font's baked glyphs. Used for the Text size live
+    // preview, so a sample resizes as the slider drags without rebuilding the atlas on every frame.
+    public static void TextAtSized(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, float pixelSize, uint color, string text)
+    {
+        using (font?.Push())
+            drawList.AddText(ImGui.GetFont(), pixelSize, pos, color, text);
+    }
+
+    // Draw one line of text horizontally centered in a container of the given width, using a specific font
+    // and color, advancing the layout cursor like a normal item. Draw-list based so it tracks the Text size
+    // ratio like the rest.
     public static void CenteredText(float containerWidth, IFontHandle? font, Vector4 color, string text)
     {
-        var width = Measure(font, text).X;
-        ImGui.SetCursorPosX(MathF.Max(0f, (containerWidth - width) * 0.5f));
-        using (font?.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, color))
-            ImGui.TextUnformatted(text);
+        var size = Measure(font, text);
+        var pos = ImGui.GetCursorScreenPos();
+        TextAt(ImGui.GetWindowDrawList(), font, new Vector2(pos.X + MathF.Max(0f, (containerWidth - size.X) * 0.5f), pos.Y), color.U32(), text);
+        ImGui.Dummy(size);
     }
 
     // The Eikon mark: an Allagan-tomestone glyph (a stone tablet outline with a glowing diamond core
