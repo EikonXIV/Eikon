@@ -1,5 +1,4 @@
 using System.Threading;
-using Dalamud.Plugin.Services;
 using Eikon.Contracts;
 
 namespace Eikon.Net;
@@ -9,14 +8,15 @@ namespace Eikon.Net;
 internal sealed class DiscoveryService
 {
     private readonly IApiClient api;
-    private readonly AuthService auth;
-    private readonly IPluginLog log;
+    private readonly ITokenProvider auth;
+    private readonly ILog log;
     private DiscoverQuery query = Default();
+    private Task fetchTask = Task.CompletedTask;
     private bool fetchedOnce;
     private string? nextCursor;
     private int epoch;
 
-    public DiscoveryService(IApiClient api, AuthService auth, IPluginLog log)
+    public DiscoveryService(IApiClient api, ITokenProvider auth, ILog log)
     {
         this.api = api;
         this.auth = auth;
@@ -24,6 +24,10 @@ internal sealed class DiscoveryService
     }
 
     public bool Loading { get; private set; }
+
+    // A fresh grid load is in flight (refresh, tier, or filter change), as opposed to a LoadMore append.
+    // Drives the grid's refresh spinner without lighting it up for infinite-scroll pagination.
+    public bool Reloading { get; private set; }
 
     public bool HasMore => this.nextCursor != null;
 
@@ -74,6 +78,13 @@ internal sealed class DiscoveryService
 
     public void Reset() => this.Apply(Default());
 
+    // Re-run the current query from the top: reset paging and rebuild the grid so members who just came
+    // online surface. Preserves the active tier, online toggle, and filters.
+    public void Refresh() => this.Fetch();
+
+    // Test seam: the most recent fresh fetch, so a test can await it settling instead of polling Loading.
+    internal Task FetchTask => this.fetchTask;
+
     private static DiscoverQuery Default() => new()
     {
         Tier = Tier.World,
@@ -94,10 +105,11 @@ internal sealed class DiscoveryService
     {
         this.fetchedOnce = true;
         this.Loading = true;
+        this.Reloading = true;
         var myEpoch = ++this.epoch;
         this.query.Cursor = null!;
         var snapshot = Clone(this.query);
-        _ = Task.Run(async () =>
+        this.fetchTask = Task.Run(async () =>
         {
             try
             {
@@ -131,7 +143,10 @@ internal sealed class DiscoveryService
             finally
             {
                 if (myEpoch == this.epoch)
+                {
                     this.Loading = false;
+                    this.Reloading = false;
+                }
             }
         });
     }

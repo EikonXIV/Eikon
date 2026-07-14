@@ -47,6 +47,7 @@ internal sealed class GridScreen : IScreen
             this.discovery.SetTier(DiscoveryService.TierOrder[tierIdx]);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        var chipRow = ImGui.GetCursorScreenPos();
         if (this.kit.Chip("##grid_online", "Online now", this.discovery.OnlineOnly))
             this.discovery.SetOnline(!this.discovery.OnlineOnly);
         ImGui.SameLine(0f, Ui.Px(6f));
@@ -55,6 +56,13 @@ internal sealed class GridScreen : IScreen
         ImGui.SameLine(0f, Ui.Px(6f));
         if (this.kit.Chip("##grid_favs", "Favorites", false))
             this.router.Navigate(Screen.Favorites);
+
+        // Refresh: re-pull discovery from the top so members who just came online surface. Right-aligned
+        // in the filter row and sized to the chip height so it sits level with the chips.
+        var refreshSize = Ui.Measure(this.fonts.Caption, "Ag").Y + Ui.Px(12f);
+        var refreshPos = new Vector2(chipRow.X + contentWidth - refreshSize, chipRow.Y);
+        if (this.kit.HeaderIconButton(ImGui.GetWindowDrawList(), "##grid_refresh", FontAwesomeIcon.SyncAlt.ToIconString(), refreshPos, refreshSize, this.discovery.Reloading))
+            this.discovery.Refresh();
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
 
