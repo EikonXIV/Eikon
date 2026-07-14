@@ -46,6 +46,10 @@ public sealed class Plugin : IDalamudPlugin
         }
 #endif
 
+        // Apply the saved Text size before any font builds, so the atlas rasterizes at the chosen size on
+        // first frame rather than rebuilding after.
+        Ui.Scale = TextScale.ToFactor(config.TextScalePercent);
+
         var services = new ServiceCollection();
 
         // Dalamud services. These interfaces are not IDisposable, so the container will not try

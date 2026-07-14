@@ -38,6 +38,7 @@ internal sealed class SettingsScreen : IScreen
     private bool discreet;
     private bool onlyVerifiedMessage;
     private bool settingsLoaded;   // privacy prefs fetched from the server this session
+    private int textStep;          // live Text size slider step; committed to config (and applied) on release
 
     public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow)
     {
@@ -52,6 +53,7 @@ internal sealed class SettingsScreen : IScreen
         this.sound = sound;
         this.log = log;
         this.deleteFlow = deleteFlow;
+        this.textStep = TextScale.NearestStepIndex(config.TextScalePercent);
     }
 
     public Screen Id => Screen.Settings;
@@ -71,6 +73,11 @@ internal sealed class SettingsScreen : IScreen
         this.kit.SectionLabel("Browse layout");
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.DrawLayoutCards(contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+        this.kit.SectionLabel("Text size");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.DrawTextSize(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Account");
@@ -351,6 +358,87 @@ internal sealed class SettingsScreen : IScreen
         if (line.Length > 0)
             lines.Add(line);
         return lines;
+    }
+
+    // Text size: an A-cue slider snapping to fixed steps, over a live sample that resizes as you drag. The
+    // sample scales by drawing at an explicit size; the real UI resize commits once on release
+    // (IsItemDeactivated), and the font atlas re-rasterizes in the background.
+    private void DrawTextSize(float contentWidth)
+    {
+        // Percent readout, right-aligned. Reflects the current step; a drag updates it the next frame.
+        var pctText = $"{TextScale.Steps[this.textStep]}%";
+        var pctSize = Ui.Measure(this.fonts.Caption, pctText);
+        var pctPos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(pctPos.X + contentWidth - pctSize.X, pctPos.Y), this.theme.AccentText.U32(), pctText);
+        ImGui.Dummy(new Vector2(contentWidth, pctSize.Y));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+
+        var released = this.DrawSizeSlider(contentWidth);   // updates this.textStep
+        var pendingPercent = TextScale.Steps[this.textStep];
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        this.DrawSizePreview(contentWidth, TextScale.ToFactor(pendingPercent));
+
+        if (released && pendingPercent != this.config.TextScalePercent)
+        {
+            this.config.TextScalePercent = pendingPercent;
+            Ui.Scale = TextScale.ToFactor(pendingPercent);   // instant: layout + draw-list text resize now
+            this.fonts.Rebuild(Ui.Scale);                    // crisp catch-up in the background
+            this.config.Save();
+        }
+    }
+
+    // A small "A" and a large "A" flanking the slider (its size cues), manually centered against the row so
+    // the mixed-size glyphs line up with the track. Returns true on the frame the drag ends.
+    private bool DrawSizeSlider(float contentWidth)
+    {
+        var rowH = Ui.Px(24f);
+        var rowPos = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+
+        var aSmall = Ui.Measure(this.fonts.Caption, "A");
+        var aLarge = Ui.Measure(this.fonts.Title, "A");
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(rowPos.X, rowPos.Y + ((rowH - aSmall.Y) * 0.5f)), Palette.TextMuted.U32(), "A");
+        var aLargeX = rowPos.X + contentWidth - aLarge.X;
+        Ui.TextAt(drawList, this.fonts.Title, new Vector2(aLargeX, rowPos.Y + ((rowH - aLarge.Y) * 0.5f)), Palette.TextMuted.U32(), "A");
+
+        var gap = Ui.Px(12f);
+        var sliderX = rowPos.X + aSmall.X + gap;
+        var sliderW = aLargeX - gap - sliderX;
+        ImGui.SetCursorScreenPos(new Vector2(sliderX, rowPos.Y + ((rowH - Ui.Px(22f)) * 0.5f)));
+        this.textStep = this.kit.Slider("##s_textsize", this.textStep, 0, TextScale.Steps.Length - 1, sliderW);
+        var released = ImGui.IsItemDeactivated();
+
+        ImGui.SetCursorScreenPos(rowPos);
+        ImGui.Dummy(new Vector2(contentWidth, rowH));
+        return released;
+    }
+
+    // A sample profile row that resizes to the pending Text size, so the effect is visible before commit.
+    private void DrawSizePreview(float contentWidth, float factor)
+    {
+        float Px(float designPx) => Ui.Px(designPx) / Ui.Scale * factor;   // design px at the pending factor
+
+        var pad = Ui.Px(12f);
+        var avatar = Px(38f);
+        var namePx = Px(17f);
+        var bioPx = Px(14f);
+        var textH = namePx + Ui.Px(4f) + bioPx;
+        var boxH = (pad * 2f) + MathF.Max(avatar, textH);
+
+        var pos = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, boxH), Palette.Surface2.U32(), Ui.Px(10f));
+
+        var av = new Vector2(pos.X + pad, pos.Y + ((boxH - avatar) * 0.5f));
+        drawList.AddCircleFilled(av + new Vector2(avatar * 0.5f, avatar * 0.5f), avatar * 0.5f, this.theme.AccentTint.U32(), 24);
+        Ui.TextAtSized(drawList, this.fonts.Title, new Vector2(av.X + (avatar * 0.32f), av.Y + (avatar * 0.24f)), avatar * 0.5f, this.theme.AccentText.U32(), "R");
+
+        var textX = av.X + avatar + pad;
+        var textY = pos.Y + ((boxH - textH) * 0.5f);
+        Ui.TextAtSized(drawList, this.fonts.Body, new Vector2(textX, textY), namePx, Palette.TextPrimary.U32(), "Rhys · 28");
+        Ui.TextAtSized(drawList, this.fonts.Caption, new Vector2(textX, textY + namePx + Ui.Px(4f)), bioPx, Palette.TextSecondary.U32(), "Warm, quiet, here for real.");
+
+        ImGui.Dummy(new Vector2(contentWidth, boxH));
     }
 
     private bool NavRow(string id, string label, string value, Vector4 labelColor, bool chevron, float contentWidth)
