@@ -30,6 +30,21 @@ public class DiscoveryServiceTests
         Assert.Null(api.LastQuery?.Cursor);             // fresh pull, paging reset to the top
     }
 
+    [Fact]
+    public async Task Reloading_is_true_while_a_fetch_is_in_flight_and_false_once_it_settles()
+    {
+        var gate = new TaskCompletionSource();
+        var svc = new DiscoveryService(new GatedDiscoverApi(gate.Task), new StubTokenProvider(User), new NullLog());
+
+        svc.Refresh();
+        Assert.True(svc.Reloading);   // set synchronously in Fetch, so it holds until the gated fetch returns
+
+        gate.SetResult();
+        await svc.FetchTask;
+
+        Assert.False(svc.Reloading);
+    }
+
     private sealed class RecordingDiscoverApi : StubApiClient
     {
         private int calls;
@@ -43,6 +58,20 @@ public class DiscoveryServiceTests
             Interlocked.Increment(ref this.calls);
             this.LastQuery = query;
             return Task.FromResult(new DiscoverResult { Profiles = new List<BasicProfileDto>(), NextCursor = null! });
+        }
+    }
+
+    // Holds the fetch open until the test releases the gate, so Reloading can be observed mid-flight.
+    private sealed class GatedDiscoverApi : StubApiClient
+    {
+        private readonly Task gate;
+
+        public GatedDiscoverApi(Task gate) => this.gate = gate;
+
+        public override async Task<DiscoverResult> DiscoverAsync(string accessToken, DiscoverQuery query, CancellationToken ct)
+        {
+            await this.gate;
+            return new DiscoverResult { Profiles = new List<BasicProfileDto>(), NextCursor = null! };
         }
     }
 }

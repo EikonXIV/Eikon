@@ -61,7 +61,7 @@ internal sealed class GridScreen : IScreen
         // in the filter row and sized to the chip height so it sits level with the chips.
         var refreshSize = Ui.Measure(this.fonts.Caption, "Ag").Y + Ui.Px(12f);
         var refreshPos = new Vector2(chipRow.X + contentWidth - refreshSize, chipRow.Y);
-        if (this.kit.HeaderIconButton(ImGui.GetWindowDrawList(), "##grid_refresh", FontAwesomeIcon.SyncAlt.ToIconString(), refreshPos, refreshSize))
+        if (this.kit.HeaderIconButton(ImGui.GetWindowDrawList(), "##grid_refresh", FontAwesomeIcon.SyncAlt.ToIconString(), refreshPos, refreshSize, this.discovery.Reloading))
             this.discovery.Refresh();
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));

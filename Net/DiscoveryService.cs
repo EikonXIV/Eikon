@@ -25,6 +25,10 @@ internal sealed class DiscoveryService
 
     public bool Loading { get; private set; }
 
+    // A fresh grid load is in flight (refresh, tier, or filter change), as opposed to a LoadMore append.
+    // Drives the grid's refresh spinner without lighting it up for infinite-scroll pagination.
+    public bool Reloading { get; private set; }
+
     public bool HasMore => this.nextCursor != null;
 
     // Segmented-control order for the proximity tiers. The generated Tier enum is alphabetical
@@ -101,6 +105,7 @@ internal sealed class DiscoveryService
     {
         this.fetchedOnce = true;
         this.Loading = true;
+        this.Reloading = true;
         var myEpoch = ++this.epoch;
         this.query.Cursor = null!;
         var snapshot = Clone(this.query);
@@ -138,7 +143,10 @@ internal sealed class DiscoveryService
             finally
             {
                 if (myEpoch == this.epoch)
+                {
                     this.Loading = false;
+                    this.Reloading = false;
+                }
             }
         });
     }
