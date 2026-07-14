@@ -12,6 +12,16 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(1, 7, 0),
+            "July 2026",
+            New:
+            [
+                "Set your text size in Settings. A slider scales the whole app, from a little smaller to much larger, so it's easier to read.",
+                "Refresh the grid with the new button to pull in whoever just came online, without leaving the screen.",
+            ],
+            Improved: [],
+            Fixed: []),
+        new Release(
             new Version(1, 6, 2),
             "July 2026",
             New: [],
