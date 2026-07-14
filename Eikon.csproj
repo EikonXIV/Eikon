@@ -34,9 +34,10 @@
     <None Remove="tests\**" />
   </ItemGroup>
 
-  <!-- Grant the test assembly access to internal types (IApiClient, ApiClient, ApiException). -->
+  <!-- Grant the test assembly and the Vitrine UI harness access to internal types. -->
   <ItemGroup>
     <InternalsVisibleTo Include="Eikon.Tests" />
+    <InternalsVisibleTo Include="Vitrine" />
   </ItemGroup>
 
   <ItemGroup>
