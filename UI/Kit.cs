@@ -1,3 +1,4 @@
+using Dalamud.Interface;
 using Eikon.UI.Theme;
 
 namespace Eikon.UI;
@@ -18,11 +19,12 @@ internal sealed class Kit
 
     // An editorial tag chip: hard-square, hairline outline with secondary text; selected chips fill
     // with ink, flip the text to paper, and gain a small drawn check. Returns true on click.
-    public bool Chip(string id, string label, bool selected)
+    // showCheck draws a tick beside the label when selected. Onboarding opts out for a fill-only chip.
+    public bool Chip(string id, string label, bool selected, bool showCheck = true)
     {
         var padX = Ui.Px(12f);
         var height = Ui.Px(32f);
-        var check = selected ? Ui.Px(14f) : 0f;
+        var check = selected && showCheck ? Ui.Px(14f) : 0f;
         var textSize = Ui.Measure(this.fonts.LabelSmall, label);
         var size = new Vector2(check + textSize.X + (padX * 2f), height);
         var padY = (height - textSize.Y) * 0.5f;
@@ -35,11 +37,15 @@ internal sealed class Kit
         if (selected)
         {
             drawList.AddRectFilled(pos, pos + size, Palette.TextPrimary.U32(), 0f);
-            var tick = Palette.Paper.U32();
-            var cx = pos.X + padX;
-            var cy = pos.Y + (height * 0.5f);
-            drawList.AddLine(new Vector2(cx, cy), new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3.5f)), tick, Ui.Px(1.5f));
-            drawList.AddLine(new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3.5f)), new Vector2(cx + Ui.Px(9f), cy - Ui.Px(4f)), tick, Ui.Px(1.5f));
+            if (showCheck)
+            {
+                var tick = Palette.Paper.U32();
+                var cx = pos.X + padX;
+                var cy = pos.Y + (height * 0.5f);
+                drawList.AddLine(new Vector2(cx, cy), new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3.5f)), tick, Ui.Px(1.5f));
+                drawList.AddLine(new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3.5f)), new Vector2(cx + Ui.Px(9f), cy - Ui.Px(4f)), tick, Ui.Px(1.5f));
+            }
+
             Ui.TextAt(drawList, this.fonts.LabelSmall, pos + new Vector2(padX + check, padY), Palette.Paper.U32(), label);
         }
         else
@@ -52,11 +58,26 @@ internal sealed class Kit
         return clicked;
     }
 
+    // Editorial section eyebrow: mono, tracked caps, muted. Callers pass mixed case; it uppercases.
     public void SectionLabel(string text)
     {
-        using (this.fonts.Caption.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted(text);
+        using (this.fonts.Eyebrow.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+            ImGui.TextUnformatted(text.ToUpperInvariant());
+    }
+
+    // A centered, square-bordered icon badge (age gate shield, onboarding welcome mark). Draws at the
+    // current cursor, centered within `fullWidth`, and advances the cursor past the badge.
+    public void CenteredFramedIcon(float fullWidth, string glyph, float box)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        var min = new Vector2(pos.X + ((fullWidth - box) * 0.5f), pos.Y);
+        var max = min + new Vector2(box, box);
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRect(min, max, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+        var gs = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(drawList, this.fonts.Icon, min + ((new Vector2(box, box) - gs) * 0.5f), this.theme.Accent.U32(), glyph);
+        ImGui.Dummy(new Vector2(fullWidth, box));
     }
 
     // A square header icon button matching the main window's title-bar chrome: a faint hover fill and a
@@ -75,8 +96,10 @@ internal sealed class Kit
         return clicked;
     }
 
+    // Editorial primary CTA: a cream (ink) fill with paper-dark text, matching the drawn CTAs on the
+    // profile and filter screens. Dims slightly on hover.
     public bool PrimaryButton(string id, string label, float width = 0f)
-        => this.FilledButton(id, label, width, this.theme.AccentDeep, this.theme.Accent, this.theme.OnAccent);
+        => this.FilledButton(id, label, width, Palette.TextPrimary, Palette.WithAlpha(Palette.TextPrimary, 0.88f), Palette.Paper);
 
     public bool DangerButton(string id, string label, float width = 0f)
         => this.FilledButton(id, label, width, Palette.DangerFill, Palette.Danger, Palette.White);
@@ -91,7 +114,7 @@ internal sealed class Kit
         var drawList = ImGui.GetWindowDrawList();
 
         drawList.AddRect(pos, pos + new Vector2(w, height),
-            (hovered ? Palette.TextMuted : Palette.Border).U32(), Ui.Px(10f), ImDrawFlags.None, 1f);
+            (hovered ? Palette.TextMuted : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
         var textSize = Ui.Measure(this.fonts.Body, label);
         Ui.TextAt(drawList, this.fonts.Body,
             pos + new Vector2((w - textSize.X) * 0.5f, (height - textSize.Y) * 0.5f),
@@ -140,8 +163,8 @@ internal sealed class Kit
 
         if (value)
         {
-            drawList.AddRectFilled(pos, max, this.theme.AccentDeep.U32(), Ui.Px(5f));
-            var tick = this.theme.OnAccent.U32();
+            drawList.AddRectFilled(pos, max, Palette.TextPrimary.U32());
+            var tick = Palette.Paper.U32();
             var a = pos + new Vector2(size * 0.22f, size * 0.52f);
             var b = pos + new Vector2(size * 0.42f, size * 0.72f);
             var c = pos + new Vector2(size * 0.78f, size * 0.30f);
@@ -150,7 +173,7 @@ internal sealed class Kit
         }
         else
         {
-            drawList.AddRect(pos, max, Palette.Border.U32(), Ui.Px(5f), ImDrawFlags.None, 1f);
+            drawList.AddRect(pos, max, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
         }
 
         return clicked ? !value : value;
@@ -161,7 +184,7 @@ internal sealed class Kit
     {
         var height = Ui.Px(34f);
         var w = width <= 0f ? ImGui.GetContentRegionAvail().X : width;
-        var rounding = Ui.Px(8f);
+        var rounding = 0f;
         var pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
 
@@ -207,7 +230,7 @@ internal sealed class Kit
         for (var i = 0; i < total; i++)
         {
             var x = pos.X + (i * (segment + gap));
-            var color = i < current ? this.theme.Secondary.Base : Palette.Rgb(0x2A3346);
+            var color = i < current ? this.theme.Secondary.Base : Palette.Surface2;
             drawList.AddRectFilled(new Vector2(x, pos.Y), new Vector2(x + segment, pos.Y + height), color.U32(), height * 0.5f);
         }
 
@@ -229,7 +252,7 @@ internal sealed class Kit
 
     // Wrapping chip row for single or multi select. `selected` reports whether index i is on;
     // returns the clicked index, or -1 if nothing was clicked this frame.
-    public int ChipFlow(string idPrefix, IReadOnlyList<string> labels, Func<int, bool> selected, float maxWidth)
+    public int ChipFlow(string idPrefix, IReadOnlyList<string> labels, Func<int, bool> selected, float maxWidth, bool showCheck = true)
     {
         var clicked = -1;
         var spacing = Ui.Px(6f);
@@ -239,7 +262,7 @@ internal sealed class Kit
             for (var i = 0; i < labels.Count; i++)
             {
                 // Mirrors Chip's geometry: LabelSmall text, 12px side padding, 14px check when selected.
-                var chipWidth = Ui.Measure(this.fonts.LabelSmall, labels[i]).X + (Ui.Px(12f) * 2f) + (selected(i) ? Ui.Px(14f) : 0f);
+                var chipWidth = Ui.Measure(this.fonts.LabelSmall, labels[i]).X + (Ui.Px(12f) * 2f) + (selected(i) && showCheck ? Ui.Px(14f) : 0f);
                 if (i > 0)
                 {
                     if (lineWidth + spacing + chipWidth <= maxWidth)
@@ -257,7 +280,7 @@ internal sealed class Kit
                     lineWidth = chipWidth;
                 }
 
-                if (this.Chip($"{idPrefix}{i}", labels[i], selected(i)))
+                if (this.Chip($"{idPrefix}{i}", labels[i], selected(i), showCheck))
                     clicked = i;
             }
         }
@@ -265,37 +288,42 @@ internal sealed class Kit
         return clicked;
     }
 
-    // Numeric stepper with minus and plus controls. Returns the next value, clamped to the range.
-    public int Stepper(string id, int value, int min, int max)
+    // Boxed numeric stepper matching the filter's age cell: a hairline box with minus at the left edge,
+    // a serif value centered, and plus at the right edge. Edge controls dim at the range limits.
+    public int Stepper(string id, int value, int min, int max, float width = 0f)
     {
-        var box = Ui.Px(32f);
-        var gap = Ui.Px(16f);
-        var numberWidth = Ui.Px(46f);
+        var w = width <= 0f ? Ui.Px(160f) : width;
+        var height = Ui.Px(44f);
+        var box = Ui.Px(40f);
         var pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRect(pos, pos + new Vector2(w, height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
         var result = value;
-
-        ImGui.SetCursorScreenPos(pos);
-        if (ImGui.InvisibleButton(id + "_minus", new Vector2(box, box)))
+        if (this.StepGlyph(id + "_minus", pos, box, height, FontAwesomeIcon.Minus, value > min))
             result = Math.Max(min, value - 1);
-        this.StepperButton(drawList, pos, box, "-", ImGui.IsItemHovered());
-
-        var numberX = pos.X + box + gap;
-        var number = value.ToString();
-        var numberSize = Ui.Measure(this.fonts.Title, number);
-        Ui.TextAt(drawList, this.fonts.Title,
-            new Vector2(numberX + ((numberWidth - numberSize.X) * 0.5f), pos.Y + ((box - numberSize.Y) * 0.5f)),
-            Palette.TextPrimary.U32(), number);
-
-        var plusPos = new Vector2(numberX + numberWidth + gap, pos.Y);
-        ImGui.SetCursorScreenPos(plusPos);
-        if (ImGui.InvisibleButton(id + "_plus", new Vector2(box, box)))
+        if (this.StepGlyph(id + "_plus", new Vector2((pos.X + w) - box, pos.Y), box, height, FontAwesomeIcon.Plus, value < max))
             result = Math.Min(max, value + 1);
-        this.StepperButton(drawList, plusPos, box, "+", ImGui.IsItemHovered());
+
+        var number = value.ToString();
+        var numberSize = Ui.Measure(this.fonts.SerifName, number);
+        Ui.TextAt(drawList, this.fonts.SerifName, pos + new Vector2((w - numberSize.X) * 0.5f, (height - numberSize.Y) * 0.5f), Palette.TextPrimary.U32(), number);
 
         ImGui.SetCursorScreenPos(pos);
-        ImGui.Dummy(new Vector2((box * 2f) + (gap * 2f) + numberWidth, box));
+        ImGui.Dummy(new Vector2(w, height));
         return result;
+    }
+
+    private bool StepGlyph(string id, Vector2 pos, float box, float height, FontAwesomeIcon icon, bool enabled)
+    {
+        ImGui.SetCursorScreenPos(pos);
+        var clicked = ImGui.InvisibleButton(id, new Vector2(box, height)) && enabled;
+        var hovered = ImGui.IsItemHovered();
+        var glyph = icon.ToIconString();
+        var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
+        var color = !enabled ? Palette.WithAlpha(Palette.TextMuted, 0.3f) : (hovered ? Palette.TextPrimary : Palette.TextMuted);
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Icon, pos + ((new Vector2(box, height) - glyphSize) * 0.5f), color.U32(), glyph);
+        return clicked;
     }
 
     // Horizontal slider. Click or drag anywhere along the track to set the value; returns the next
@@ -353,7 +381,7 @@ internal sealed class Kit
     {
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, Ui.Px(10f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
         using (this.fonts.Body.Push())
         {
@@ -403,18 +431,18 @@ internal sealed class Kit
         return submitted && !shift;
     }
 
-    public void PasswordField(string id, ref string value, float width)
+    public void PasswordField(string id, ref string value, float width, string hint = "")
     {
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, Ui.Px(10f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
         using (this.fonts.Body.Push())
         {
             ImGui.SetNextItemWidth(width);
             // The managed ref-string overload does not take flags, so this is not masked yet.
             // Masking moves in with the real key handling in phase C.
-            ImGui.InputTextWithHint(id, string.Empty, ref value);
+            ImGui.InputTextWithHint(id, hint, ref value);
         }
     }
 
@@ -425,7 +453,7 @@ internal sealed class Kit
     {
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, Ui.Px(10f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
         using (this.fonts.Body.Push())
         {
@@ -464,16 +492,6 @@ internal sealed class Kit
         ImGui.SetCursorPos(new Vector2(localStart.X, localStart.Y + (bottom - start.Y)));
     }
 
-    private void StepperButton(ImDrawListPtr drawList, Vector2 pos, float size, string label, bool hovered)
-    {
-        drawList.AddRect(pos, pos + new Vector2(size, size),
-            (hovered ? Palette.TextMuted : Palette.Border).U32(), size * 0.5f, ImDrawFlags.None, 1f);
-        var textSize = Ui.Measure(this.fonts.Body, label);
-        Ui.TextAt(drawList, this.fonts.Body,
-            pos + new Vector2((size - textSize.X) * 0.5f, (size - textSize.Y) * 0.5f),
-            Palette.TextSecondary.U32(), label);
-    }
-
     private bool FilledButton(string id, string label, float width, Vector4 fill, Vector4 hoverFill, Vector4 textColor)
     {
         var height = Ui.Px(38f);
@@ -483,7 +501,7 @@ internal sealed class Kit
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
 
-        drawList.AddRectFilled(pos, pos + new Vector2(w, height), (hovered ? hoverFill : fill).U32(), Ui.Px(10f));
+        drawList.AddRectFilled(pos, pos + new Vector2(w, height), (hovered ? hoverFill : fill).U32());
         var textSize = Ui.Measure(this.fonts.Body, label);
         Ui.TextAt(drawList, this.fonts.Body,
             pos + new Vector2((w - textSize.X) * 0.5f, (height - textSize.Y) * 0.5f),
