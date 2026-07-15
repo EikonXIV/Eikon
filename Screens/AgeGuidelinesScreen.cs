@@ -38,8 +38,8 @@ internal sealed class AgeGuidelinesScreen : IScreen
         using var spacing = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(28f)));
-        Ui.CenteredText(avail.X, this.fonts.Icon, this.theme.Accent, FontAwesomeIcon.ShieldAlt.ToIconString());
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.kit.CenteredFramedIcon(avail.X, FontAwesomeIcon.ShieldAlt.ToIconString(), Ui.Px(48f));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, "Before you start");
         ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
         Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextSecondary, "Eikon is an 18+ space. A few ground rules.");
@@ -82,24 +82,31 @@ internal sealed class AgeGuidelinesScreen : IScreen
     {
         using (ImRaii.PushColor(ImGuiCol.ChildBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-        using (ImRaii.PushStyle(ImGuiStyleVar.ChildRounding, Ui.Px(10f)))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(12f), Ui.Px(12f))))
+        using (ImRaii.PushStyle(ImGuiStyleVar.ChildRounding, 0f))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(14f), Ui.Px(14f))))
         using (var box = ImRaii.Child("rules", new Vector2(width, Ui.Px(140f)), true))
         {
             if (!box.Success)
                 return;
 
-            this.Rule("No minors and no childlike depictions, ever. This includes Lalafell in NSFW.");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            this.Rule("Consent and respect. No harassment, no unsolicited explicit content.");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            this.Rule("Eikon stays in game and on Discord. No IRL meetups.");
+            this.Rule("No minors and no childlike depictions,", " ever. This includes Lalafell in NSFW.");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+            this.Rule("Consent and respect.", " No harassment, no unsolicited explicit content.");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+            this.Rule("Eikon stays in game and on Discord.", " No IRL meetups.");
         }
     }
 
-    private void Rule(string text)
+    // Each rule reads as a bright lead phrase and a muted remainder that wraps after it.
+    private void Rule(string lead, string rest)
     {
         using (this.fonts.Caption.Push())
-            ImGui.TextWrapped(text);
+        {
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
+                ImGui.TextUnformatted(lead);
+            ImGui.SameLine(0f, 0f);
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+                ImGui.TextWrapped(rest);
+        }
     }
 }

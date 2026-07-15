@@ -44,6 +44,6 @@ internal static class Options
     public static readonly string[] Kinks =
     {
         "Roleplay", "Praise", "Degradation", "Bondage", "Exhibition",
-        "Voyeur", "Pet play", "Edging", "Aftercare",
+        "Voyeur", "Pet play", "Edging", "Aftercare", "Impact", "Sensory",
     };
 }
