@@ -321,7 +321,7 @@ internal sealed class ChatScreen : IScreen
             ImGui.SetCursorScreenPos(new Vector2(tapX, midY - Ui.Px(20f)));
             tapClicked = ImGui.InvisibleButton("##chat_peer", new Vector2(tapRight - tapX, Ui.Px(40f)));
             if (ImGui.IsItemHovered())
-                drawList.AddRectFilled(new Vector2(tapX, midY - Ui.Px(20f)), new Vector2(tapRight, midY + Ui.Px(20f)), Palette.WithAlpha(Palette.White, 0.04f).U32());
+                drawList.AddRectFilled(new Vector2(tapX, midY - Ui.Px(20f)), new Vector2(tapRight, midY + Ui.Px(20f)), Palette.WithAlpha(Palette.Overlay, 0.04f).U32());
         }
 
         var avatarMin = new Vector2(origin.X + pad + backSize.X + Ui.Px(12f), midY - (avatarSize * 0.5f));
@@ -368,7 +368,7 @@ internal sealed class ChatScreen : IScreen
         var hovered = ImGui.IsItemHovered();
         var min = ImGui.GetItemRectMin();
         if (hovered)
-            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
+            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.Overlay, 0.06f).U32(), Ui.Px(8f));
         var glyph = icon.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(min.X + ((size - glyphSize.X) * 0.5f), min.Y + ((size - glyphSize.Y) * 0.5f)), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
@@ -941,7 +941,7 @@ internal sealed class ChatScreen : IScreen
         // Send reflects whether there is anything to send: a faint raised square while the field is empty
         // (tapping it does nothing), the solid cream ink once there is text, brightening to white on hover.
         var sendCenter = sendPos + new Vector2(control * 0.5f, control * 0.5f);
-        var sendFill = actionable ? (sendHover ? Palette.White : Palette.TextPrimary) : Palette.WithAlpha(Palette.White, 0.06f);
+        var sendFill = actionable ? (sendHover ? Palette.Overlay : Palette.TextPrimary) : Palette.WithAlpha(Palette.Overlay, 0.06f);
         drawList.AddRectFilled(sendPos, sendPos + new Vector2(control, control), sendFill.U32(), 0f);
         var sendGlyph = FontAwesomeIcon.PaperPlane.ToIconString();
         var sendSize = Ui.Measure(this.fonts.Icon, sendGlyph);
@@ -1100,7 +1100,7 @@ internal sealed class ChatScreen : IScreen
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         if (hovered)
-            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.White, 0.04f).U32(), Ui.Px(10f));
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.Overlay, 0.04f).U32(), Ui.Px(10f));
 
         var thumb = Ui.Px(44f);
         var tpos = new Vector2(pos.X + Ui.Px(4f), pos.Y + ((rowH - thumb) * 0.5f));

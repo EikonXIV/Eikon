@@ -196,7 +196,7 @@ internal sealed class AlbumAccessScreen : IScreen
         ImGui.SetCursorScreenPos(pillPos);
         var clicked = ImGui.InvisibleButton("##acc_revoke_" + grantee.UserId, new Vector2(pillW, pillH));
         var hovered = ImGui.IsItemHovered();
-        drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(Palette.White, hovered ? 0.28f : 0.16f).U32(), Ui.Px(8f), ImDrawFlags.None, 1f);
+        drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(Palette.Overlay, hovered ? 0.28f : 0.16f).U32(), Ui.Px(8f), ImDrawFlags.None, 1f);
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pillPos.X + Ui.Px(10f), pillPos.Y + ((pillH - ls.Y) * 0.5f)), Palette.TextSecondary.U32(), label);
         if (clicked)
             this.albums.Revoke(albumId, grantee.UserId);
@@ -257,7 +257,7 @@ internal sealed class AlbumAccessScreen : IScreen
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         if (hovered && !alreadyGranted)
-            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.White, 0.045f).U32(), Ui.Px(10f));
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.Overlay, 0.045f).U32(), Ui.Px(10f));
 
         var radius = Ui.Px(16f);
         var center = new Vector2(pos.X + radius, pos.Y + (rowH * 0.5f));

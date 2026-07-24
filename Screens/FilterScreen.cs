@@ -225,7 +225,7 @@ internal sealed class FilterScreen : IScreen
         }
 
         if (ImGui.IsItemHovered())
-            dl.AddRectFilled(origin, origin + new Vector2(fullWidth, height), Palette.WithAlpha(Palette.White, 0.03f).U32());
+            dl.AddRectFilled(origin, origin + new Vector2(fullWidth, height), Palette.WithAlpha(Palette.Overlay, 0.03f).U32());
 
         var midY = origin.Y + (height * 0.5f);
         dl.AddCircleFilled(new Vector2(origin.X + pad + Ui.Px(3f), midY), Ui.Px(3f), Palette.Online.U32(), 12);
@@ -349,7 +349,7 @@ internal sealed class FilterScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var size = new Vector2(avail.X - (pad * 2f), Ui.Px(44f));
         var clicked = ImGui.InvisibleButton("##filter_apply", size);
-        var fill = ImGui.IsItemHovered() ? Palette.White : Palette.TextPrimary;
+        var fill = ImGui.IsItemHovered() ? Palette.Overlay : Palette.TextPrimary;
         dl.AddRectFilled(pos, pos + size, fill.U32(), 0f);
 
         var count = this.discovery.PreviewCount + (this.discovery.PreviewMore ? "+" : string.Empty);

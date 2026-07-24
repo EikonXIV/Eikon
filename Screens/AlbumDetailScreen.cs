@@ -215,7 +215,7 @@ internal sealed class AlbumDetailScreen : IScreen
         var clicked = ImGui.InvisibleButton("##ad_add", size);
         var drawList = ImGui.GetWindowDrawList();
         var tint = atCap ? Palette.TextMuted : Palette.TextSecondary;
-        drawList.AddRect(pos, pos + size, Palette.WithAlpha(Palette.White, atCap ? 0.1f : 0.2f).U32(), Ui.Px(9f), ImDrawFlags.None, 1f);
+        drawList.AddRect(pos, pos + size, Palette.WithAlpha(Palette.Overlay, atCap ? 0.1f : 0.2f).U32(), Ui.Px(9f), ImDrawFlags.None, 1f);
         var glyph = (atCap ? FontAwesomeIcon.Lock : FontAwesomeIcon.Plus).ToIconString();
         var gs = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, pos + (size * 0.5f) - (gs * 0.5f), tint.U32(), glyph);
@@ -517,7 +517,7 @@ internal sealed class AlbumDetailScreen : IScreen
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         if (hovered)
-            drawList.AddRectFilled(pos, pos + new Vector2(width, height), Palette.WithAlpha(Palette.White, 0.05f).U32(), Ui.Px(8f));
+            drawList.AddRectFilled(pos, pos + new Vector2(width, height), Palette.WithAlpha(Palette.Overlay, 0.05f).U32(), Ui.Px(8f));
         var color = danger ? new Vector4(0.95f, 0.7f, 0.73f, 1f) : Palette.TextSecondary;
         var glyph = icon.ToIconString();
         var gs = Ui.Measure(this.fonts.Icon, glyph);

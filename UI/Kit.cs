@@ -102,7 +102,7 @@ internal sealed class Kit
             return false;
         }
         if (hovered)
-            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
+            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.Overlay, 0.06f).U32(), Ui.Px(8f));
         var gs = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(min.X + ((size - gs.X) * 0.5f), min.Y + ((size - gs.Y) * 0.5f)), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
         return clicked;
@@ -425,7 +425,7 @@ internal sealed class Kit
 
         drawList.AddRectFilled(trackMin, trackMax, Palette.Surface2.U32(), track * 0.5f);
         drawList.AddRectFilled(trackMin, new Vector2(knobX, trackMax.Y), this.theme.Secondary.Base.U32(), track * 0.5f);
-        drawList.AddCircleFilled(new Vector2(knobX, knobY), knobRadius, Palette.White.U32(), 16);
+        drawList.AddCircleFilled(new Vector2(knobX, knobY), knobRadius, Palette.Overlay.U32(), 16);
         drawList.AddCircle(new Vector2(knobX, knobY), knobRadius, Palette.Border.U32(), 16, 1f);
 
         return result;

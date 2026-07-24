@@ -11,10 +11,10 @@ internal sealed class Configuration : IPluginConfiguration
     // Index into AccentPresets.All. 0 is Blue, the default.
     public int AccentPresetIndex { get; set; }
 
-    // Selected pride-flag theme id (e.g. "pride", "trans"), or null for a plain solid accent. When a
-    // flag is active we also write AccentPresetIndex to the flag's nearest solid, so an older build
-    // that cannot read this field still renders a sensible color. Additive and optional, so old and new
-    // builds read each other's config.
+    // Selected theme id from the theme catalog (e.g. "editorial-dark", "paper-light", "sky", "pride"),
+    // or null for the default editorial dark. Drives the whole palette, not just the accent. Additive and
+    // optional, so old and new builds read each other's config; an id an older build cannot resolve falls
+    // back to its default.
     public string? ThemeId { get; set; }
 
     // Discovery grid layout: 0 = Expanded (2-column portrait tiles, the default), 1 = Compact

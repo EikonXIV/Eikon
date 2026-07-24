@@ -312,7 +312,7 @@ internal sealed class ModerationFlow
 
         if (ImGui.IsItemHovered())
         {
-            var tint = destructive ? Palette.WithAlpha(Palette.Danger, 0.12f) : Palette.WithAlpha(Palette.White, 0.06f);
+            var tint = destructive ? Palette.WithAlpha(Palette.Danger, 0.12f) : Palette.WithAlpha(Palette.Overlay, 0.06f);
             drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), 0f);
         }
 
@@ -513,7 +513,7 @@ internal sealed class ModerationFlow
         }
         else if (hovered)
         {
-            drawList.AddRectFilled(pos, pos + new Vector2(width, rowHeight), Palette.WithAlpha(Palette.White, 0.05f).U32(), rounding);
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowHeight), Palette.WithAlpha(Palette.Overlay, 0.05f).U32(), rounding);
         }
 
         var center = new Vector2(pos.X + Ui.Px(20f), pos.Y + (rowHeight * 0.5f));

@@ -231,7 +231,7 @@ internal sealed class AlbumsScreen : IScreen
         var clicked = ImGui.InvisibleButton("##album_new_card", new Vector2(width, cardH));
         var drawList = ImGui.GetWindowDrawList();
         var tint = atCap ? Palette.TextMuted : Palette.TextSecondary;
-        drawList.AddRect(pos, pos + new Vector2(width, cardH), Palette.WithAlpha(Palette.White, atCap ? 0.10f : 0.18f).U32(), Ui.Px(13f), ImDrawFlags.None, 1f);
+        drawList.AddRect(pos, pos + new Vector2(width, cardH), Palette.WithAlpha(Palette.Overlay, atCap ? 0.10f : 0.18f).U32(), Ui.Px(13f), ImDrawFlags.None, 1f);
         var center = new Vector2(pos.X + (width * 0.5f), pos.Y + (cardH * 0.5f));
         var glyph = (atCap ? FontAwesomeIcon.Lock : FontAwesomeIcon.Plus).ToIconString();
         var gs = Ui.Measure(this.fonts.Icon, glyph);

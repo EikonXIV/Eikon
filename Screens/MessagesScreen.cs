@@ -166,7 +166,7 @@ internal sealed class MessagesScreen : IScreen
         var clicked = ImGui.InvisibleButton("##conv_" + conversation.UserId, new Vector2(fullWidth, rowHeight));
         var dl = ImGui.GetWindowDrawList();
         if (ImGui.IsItemHovered())
-            dl.AddRectFilled(pos, pos + new Vector2(fullWidth, rowHeight), Palette.WithAlpha(Palette.White, 0.04f).U32());
+            dl.AddRectFilled(pos, pos + new Vector2(fullWidth, rowHeight), Palette.WithAlpha(Palette.Overlay, 0.04f).U32());
 
         var av = Ui.Px(48f);
         var amin = new Vector2(pos.X + pad, pos.Y + ((rowHeight - av) * 0.5f));

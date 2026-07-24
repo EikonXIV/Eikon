@@ -234,7 +234,7 @@ internal sealed class WhatsNewScreen : IScreen
             this.Dismiss();
         drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.Signal.U32());
         if (ImGui.IsItemHovered())
-            drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.WithAlpha(Palette.White, 0.10f).U32());
+            drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.WithAlpha(Palette.Overlay, 0.10f).U32());
         const string gotIt = "GOT IT";
         var gotSize = Ui.Measure(this.fonts.Eyebrow, gotIt);
         Ui.TextAt(drawList, this.fonts.Eyebrow, buttonPos + ((buttonSize - gotSize) * 0.5f), Palette.Paper.U32(), gotIt);
