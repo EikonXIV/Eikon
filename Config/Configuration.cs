@@ -6,7 +6,14 @@ namespace Eikon.Config;
 // Persisted plugin configuration. Stored by Dalamud per character-independent plugin config.
 internal sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    // A fresh install starts at the current version so no migration runs against defaults; a config
+    // saved by an older build carries its own lower number and is migrated on load.
+    public int Version { get; set; } = 3;
+
+    // Index into the retired AccentPresets table (0 = Blue, the old default). Kept only so the Version
+    // 2 -> 3 migration can read an older build's accent choice and resolve it to a catalog theme; the
+    // app itself no longer reads or writes it.
+    public int AccentPresetIndex { get; set; }
 
     // Selected theme id from the theme catalog (e.g. "editorial-dark", "paper-light", "sky", "pride"),
     // or null for the default editorial dark. Drives the whole palette, not just the accent. Additive and

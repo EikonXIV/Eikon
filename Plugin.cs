@@ -46,6 +46,16 @@ public sealed class Plugin : IDalamudPlugin
         }
 #endif
 
+        // One-time theme carry-over (Version 2 -> 3). Themes used to be a solid accent index plus a
+        // separate flag id; they are one catalog now, and two flag ids were renamed on the way. Resolve
+        // whatever the old build saved to a catalog id once, so an update keeps the picked theme.
+        if (config.Version < 3)
+        {
+            config.ThemeId = ThemeMigration.Resolve(config.ThemeId, config.AccentPresetIndex);
+            config.Version = 3;
+            config.Save();
+        }
+
         // Apply the saved Text size before any font builds, so the atlas rasterizes at the chosen size on
         // first frame rather than rebuilding after.
         Ui.Scale = TextScale.ToFactor(config.TextScalePercent);
