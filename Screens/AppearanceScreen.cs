@@ -6,15 +6,19 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Screens;
 
-// Theme picker (Settings > Appearance). Three grids of preview cards — Editorial base themes, Colors,
-// and Pride flags — each card a mini-app rendered in that theme's own palette. Tapping one applies it to
-// the whole app immediately and persists. Its own header + back chevron, so it takes the full window.
+// Theme picker (Settings > Appearance). The catalog is grouped into collapsible sections - the editorial
+// bases, the solid sets, the blends and the pride flags - because a flat list of every theme is a long
+// scroll to nothing. Each card is a mini-app rendered in that theme's own palette; tapping one applies it
+// to the whole app immediately and persists. Its own header + back chevron, so it takes the full window.
 internal sealed class AppearanceScreen : IScreen
 {
     private readonly ScreenRouter router;
     private readonly ThemeService theme;
     private readonly Kit kit;
     private readonly UiFonts fonts;
+
+    private readonly HashSet<string> expanded = new();
+    private bool opened;
 
     public AppearanceScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts)
     {
@@ -30,6 +34,14 @@ internal sealed class AppearanceScreen : IScreen
 
     public void Draw()
     {
+        // Open on the section holding the active theme, so the current pick is visible without hunting
+        // for it, and leave the rest closed.
+        if (!this.opened)
+        {
+            this.opened = true;
+            this.expanded.Add(this.theme.Current.Group);
+        }
+
         var avail = ImGui.GetContentRegionAvail();
         var pad = Ui.Px(16f);
         var headerHeight = Ui.Px(52f);
@@ -44,37 +56,91 @@ internal sealed class AppearanceScreen : IScreen
                 return;
 
             ImGui.Indent(pad);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+            {
+                ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+                foreach (var group in Themes.Groups)
+                    this.DrawSection(group, contentWidth);
+                ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
+            }
 
-            this.kit.SectionLabel("Editorial");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.DrawGrid(ThemeCategory.Editorial, 2, Ui.Px(88f), contentWidth);
-
-            ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-            this.kit.SectionLabel("Colors");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.DrawGrid(ThemeCategory.Color, 3, Ui.Px(58f), contentWidth);
-
-            ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-            this.kit.SectionLabel("Pride flags");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.DrawGrid(ThemeCategory.Pride, 2, Ui.Px(80f), contentWidth);
-
-            ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
             ImGui.Unindent(pad);
         }
     }
 
-    private void DrawGrid(ThemeCategory category, int columns, float previewH, float contentWidth)
+    private void DrawSection(string group, float contentWidth)
+    {
+        var defs = this.theme.All.Where(d => d.Group == group).ToList();
+        if (defs.Count == 0)
+            return;
+
+        var isOpen = this.expanded.Contains(group);
+        if (this.DrawSectionHeader(group, defs, isOpen, contentWidth) && !this.expanded.Remove(group))
+            this.expanded.Add(group);
+
+        if (!isOpen)
+            return;
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        this.DrawGrid(defs, contentWidth, Columns(group), Ui.Px(PreviewHeight(group)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+    }
+
+    // Chevron, section name and a count, over a hairline. The whole row toggles.
+    private bool DrawSectionHeader(string group, IReadOnlyList<ThemeDef> defs, bool isOpen, float contentWidth)
+    {
+        var rowHeight = Ui.Px(42f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##sec_" + group, new Vector2(contentWidth, rowHeight));
+        var hovered = ImGui.IsItemHovered();
+        var drawList = ImGui.GetWindowDrawList();
+        var midY = pos.Y + (rowHeight * 0.5f);
+
+        if (hovered)
+            drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, rowHeight), Palette.WithAlpha(Palette.Overlay, 0.04f).U32());
+
+        var chevron = (isOpen ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronRight).ToIconString();
+        var cs = Ui.Measure(this.fonts.Icon, chevron);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X, midY - (cs.Y * 0.5f)), (hovered ? Palette.TextPrimary : Palette.TextMuted).U32(), chevron);
+
+        var label = group.ToUpperInvariant();
+        var ls = Ui.Measure(this.fonts.Eyebrow, label);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(pos.X + Ui.Px(22f), midY - (ls.Y * 0.5f)), Palette.TextSecondary.U32(), label);
+
+        // A closed section still shows whether the active theme lives in it.
+        if (!isOpen && defs.Any(d => this.theme.IsSelected(d.Id)))
+            drawList.AddCircleFilled(new Vector2(pos.X + Ui.Px(28f) + ls.X, midY), Ui.Px(3f), this.theme.Accent.U32(), 10);
+
+        var count = $"{defs.Count:00}";
+        var ns = Ui.Measure(this.fonts.Mono, count);
+        Ui.TextAt(drawList, this.fonts.Mono, new Vector2(pos.X + contentWidth - ns.X, midY - (ns.Y * 0.5f)), Palette.TextMuted.U32(), count);
+
+        drawList.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        return clicked;
+    }
+
+    private static int Columns(string group) =>
+        group is Themes.GroupEditorial or Themes.GroupPride or Themes.GroupBlends ? 2 : 3;
+
+    private static float PreviewHeight(string group) => group switch
+    {
+        Themes.GroupEditorial => 88f,
+        Themes.GroupPride => 80f,
+        Themes.GroupBlends => 80f,
+        _ => 58f,
+    };
+
+    private void DrawGrid(IReadOnlyList<ThemeDef> defs, float contentWidth, int columns, float previewH)
     {
         var gap = Ui.Px(10f);
         var cellW = (contentWidth - (gap * (columns - 1))) / columns;
-        var defs = this.theme.All.Where(d => d.Category == category).ToList();
         for (var i = 0; i < defs.Count; i++)
         {
             if (i % columns != 0)
                 ImGui.SameLine(0f, gap);
             this.DrawCard(defs[i], cellW, previewH);
+            if (i % columns == columns - 1 && i != defs.Count - 1)
+                ImGui.Dummy(new Vector2(0f, gap));
         }
     }
 
@@ -117,7 +183,8 @@ internal sealed class AppearanceScreen : IScreen
     }
 
     // A mini app rendered in the card theme's own swatches [bg, panel, ink, accent]: window dots, a couple
-    // of text lines, an accent pill and dot; pride themes get their stripe as a top ribbon.
+    // of text lines, an accent pill and dot. Anything carrying a stripe - flags and blends - gets it as a
+    // top ribbon.
     private void DrawPreview(ImDrawListPtr dl, Vector2 pos, Vector2 size, ThemeDef def)
     {
         var bg = def.Swatches[0];
@@ -126,7 +193,7 @@ internal sealed class AppearanceScreen : IScreen
         dl.AddRectFilled(pos, pos + size, bg.U32());
 
         var topY = pos.Y;
-        if (def.Category == ThemeCategory.Pride && def.Stripes.Count > 1)
+        if (def.Stripes.Count > 1)
         {
             var barH = Ui.Px(5f);
             Ui.FlagBar(dl, pos, size.X, def.Stripes, barH);

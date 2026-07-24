@@ -91,6 +91,34 @@ internal static class Palette
         return lin <= 0.0031308f ? 12.92f * lin : (1.055f * MathF.Pow(lin, 1f / 2.4f)) - 0.055f;
     }
 
+    // sRGB -> OKLCH, the inverse of Oklch above. Lets a theme be authored as the hex someone picked
+    // while still driving the hue-tinted recipe, instead of hand-tuning a lightness/chroma/hue triple
+    // per color and hoping it lands back on the intended swatch.
+    public static (float L, float C, float H) OklchOf(uint rgb)
+    {
+        var r = ToLinear(((rgb >> 16) & 0xFF) / 255f);
+        var g = ToLinear(((rgb >> 8) & 0xFF) / 255f);
+        var b = ToLinear((rgb & 0xFF) / 255f);
+
+        var l = MathF.Cbrt((0.4122214708f * r) + (0.5363325363f * g) + (0.0514459929f * b));
+        var m = MathF.Cbrt((0.2119034982f * r) + (0.6806995451f * g) + (0.1073969566f * b));
+        var s = MathF.Cbrt((0.0883024619f * r) + (0.2817188376f * g) + (0.6299787005f * b));
+
+        var lightness = (0.2104542553f * l) + (0.7936177850f * m) - (0.0040720468f * s);
+        var a1 = (1.9779984951f * l) - (2.4285922050f * m) + (0.4505937099f * s);
+        var b1 = (0.0259040371f * l) + (0.7827717662f * m) - (0.8086757660f * s);
+
+        var chroma = MathF.Sqrt((a1 * a1) + (b1 * b1));
+        var hue = MathF.Atan2(b1, a1) * (180f / MathF.PI);
+        if (hue < 0f)
+            hue += 360f;
+
+        return (lightness, chroma, hue);
+    }
+
+    private static float ToLinear(float srgb) =>
+        srgb <= 0.04045f ? srgb / 12.92f : MathF.Pow((srgb + 0.055f) / 1.055f, 2.4f);
+
     public static Vector4 WithAlpha(this Vector4 c, float a) => new(c.X, c.Y, c.Z, a);
 
     public static Vector4 Lerp(Vector4 a, Vector4 b, float t) => new(

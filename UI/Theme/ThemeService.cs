@@ -58,9 +58,11 @@ internal sealed class ThemeService
         // Base palette first: AccentChannel.On and LiftForDark both read the freshly applied Bg.
         Palette.Apply(def.Colors);
 
+        // A blend carries its own mark and wash hues; everything else derives both from the signal, so
+        // the three roles stay a single accent as before.
         var signal = def.Colors.Signal;
         this.Primary = AccentChannel.FromHue(signal);
-        this.Secondary = AccentChannel.FromHue(Palette.LiftForDark(signal));
-        this.Tertiary = AccentChannel.FromHue(signal);
+        this.Secondary = AccentChannel.FromHue(Palette.LiftForDark(def.Mark ?? signal));
+        this.Tertiary = AccentChannel.FromHue(def.Wash ?? signal);
     }
 }
