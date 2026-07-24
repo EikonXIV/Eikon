@@ -18,13 +18,12 @@ internal sealed class AlbumAccessScreen : IScreen
     private readonly UiFonts fonts;
     private readonly AlbumService albums;
     private readonly Selection selection;
-    private readonly WindowController windowController;
     private readonly InboxService inbox;
     private readonly PhotoService photoSvc;
 
     private bool openPicker;
 
-    public AlbumAccessScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, WindowController windowController, InboxService inbox, PhotoService photoSvc)
+    public AlbumAccessScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, InboxService inbox, PhotoService photoSvc)
     {
         this.router = router;
         this.theme = theme;
@@ -32,7 +31,6 @@ internal sealed class AlbumAccessScreen : IScreen
         this.fonts = fonts;
         this.albums = albums;
         this.selection = selection;
-        this.windowController = windowController;
         this.inbox = inbox;
         this.photoSvc = photoSvc;
     }
@@ -68,7 +66,7 @@ internal sealed class AlbumAccessScreen : IScreen
                 var contentWidth = avail.X - (pad * 2f);
                 ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
 
-                if (this.ShareButton(contentWidth))
+                if (this.kit.PrimaryButton("##acc_share", "Share with someone", contentWidth))
                     this.openPicker = true;
 
                 var requests = this.albums.Requests.Where(r => r.AlbumId == albumId.Value).ToList();
@@ -113,35 +111,11 @@ internal sealed class AlbumAccessScreen : IScreen
             this.router.Navigate(Screen.AlbumDetail);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
-        var title = $"Who can see {name}";
-        var titleSize = Ui.Measure(this.fonts.Body, title);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), title);
-
-        var btn = Ui.Px(30f);
-        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
-        if (this.kit.HeaderIconButton(drawList, "##acc_min", FontAwesomeIcon.Minus.ToIconString(), minTL, btn))
-            this.windowController.Minimize();
+        var title = $"WHO CAN SEE · {name.ToUpperInvariant()}";
+        var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
-    }
-
-    private bool ShareButton(float contentWidth)
-    {
-        var height = Ui.Px(44f);
-        var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton("##acc_share", new Vector2(contentWidth, height));
-        var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRect(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.28f).U32(), Ui.Px(11f), ImDrawFlags.None, 1f);
-        var glyph = FontAwesomeIcon.UserPlus.ToIconString();
-        var gs = Ui.Measure(this.fonts.Icon, glyph);
-        const string label = "Share with someone";
-        var ls = Ui.Measure(this.fonts.Body, label);
-        var total = gs.X + Ui.Px(8f) + ls.X;
-        var x = pos.X + ((contentWidth - total) * 0.5f);
-        var midY = pos.Y + (height * 0.5f);
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(x, midY - (gs.Y * 0.5f)), this.theme.AccentText.U32(), glyph);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(x + gs.X + Ui.Px(8f), midY - (ls.Y * 0.5f)), this.theme.AccentText.U32(), label);
-        return clicked;
     }
 
     private void DrawRequestCard(AlbumRequestDto request, float contentWidth)
@@ -150,8 +124,8 @@ internal sealed class AlbumAccessScreen : IScreen
         var pad = Ui.Px(13f);
         var pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, cardH), Palette.Surface1.U32(), Ui.Px(13f));
-        drawList.AddRect(pos, pos + new Vector2(contentWidth, cardH), Palette.Border.U32(), Ui.Px(13f), ImDrawFlags.None, 1f);
+        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, cardH), Palette.Surface1.U32());
+        drawList.AddRect(pos, pos + new Vector2(contentWidth, cardH), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
         var radius = Ui.Px(18f);
         var center = new Vector2(pos.X + pad + radius, pos.Y + pad + radius);
@@ -196,7 +170,7 @@ internal sealed class AlbumAccessScreen : IScreen
         ImGui.SetCursorScreenPos(pillPos);
         var clicked = ImGui.InvisibleButton("##acc_revoke_" + grantee.UserId, new Vector2(pillW, pillH));
         var hovered = ImGui.IsItemHovered();
-        drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(Palette.Overlay, hovered ? 0.28f : 0.16f).U32(), Ui.Px(8f), ImDrawFlags.None, 1f);
+        drawList.AddRect(pillPos, pillPos + new Vector2(pillW, pillH), Palette.WithAlpha(Palette.Overlay, hovered ? 0.28f : 0.16f).U32(), 0f, ImDrawFlags.None, 1f);
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pillPos.X + Ui.Px(10f), pillPos.Y + ((pillH - ls.Y) * 0.5f)), Palette.TextSecondary.U32(), label);
         if (clicked)
             this.albums.Revoke(albumId, grantee.UserId);
@@ -215,27 +189,38 @@ internal sealed class AlbumAccessScreen : IScreen
             ImGui.OpenPopup("##acc_picker");
         }
 
+        // Sized to the list rather than a fixed height, so a short list does not leave a tall empty card.
+        var people = this.inbox.Conversations.Where(c => !c.IsRequest).ToList();
+        var boxPad = Ui.Px(16f);
+        var rowHeight = Ui.Px(48f);
+        var titleHeight = Ui.Measure(this.fonts.Title, "Share with").Y;
+        var labelHeight = Ui.Measure(this.fonts.Eyebrow, "X").Y;
+        var listHeight = people.Count == 0
+            ? Ui.Px(52f)
+            : MathF.Min(people.Count * rowHeight, Ui.Px(240f));
+        var height = (boxPad * 2f) + titleHeight + Ui.Px(8f) + labelHeight + Ui.Px(8f) + listHeight + Ui.Px(14f) + Ui.Px(38f);
+
         ImGui.SetNextWindowPos(ImGui.GetWindowPos() + (ImGui.GetWindowSize() * 0.5f), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
-        ImGui.SetNextWindowSize(new Vector2(Ui.Px(300f), Ui.Px(400f)));
+        ImGui.SetNextWindowSize(new Vector2(Ui.Px(300f), height));
         var open = true;
         using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(16f), Ui.Px(16f))))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(boxPad, boxPad)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
+        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
         {
             if (!ImGui.BeginPopupModal("##acc_picker", ref open, ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove))
                 return;
 
             var width = ImGui.GetContentRegionAvail().X;
             Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Share with");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             this.kit.SectionLabel("People you've messaged");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
-            var people = this.inbox.Conversations.Where(c => !c.IsRequest).ToList();
             var granted = this.albums.Grants(albumId).Select(g => g.UserId).ToHashSet();
-            using (ImRaii.Child("##acc_picker_list", new Vector2(width, Ui.Px(280f))))
+            using (ImRaii.Child("##acc_picker_list", new Vector2(width, listHeight)))
             {
                 if (people.Count == 0)
                     using (this.fonts.Caption.Push())
@@ -244,6 +229,10 @@ internal sealed class AlbumAccessScreen : IScreen
                 foreach (var person in people)
                     this.DrawPickerRow(albumId, person, granted.Contains(person.UserId), width);
             }
+
+            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+            if (this.kit.SecondaryButton("##acc_picker_close", "Close", width))
+                ImGui.CloseCurrentPopup();
 
             ImGui.EndPopup();
         }
@@ -257,7 +246,7 @@ internal sealed class AlbumAccessScreen : IScreen
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         if (hovered && !alreadyGranted)
-            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.Overlay, 0.045f).U32(), Ui.Px(10f));
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowH), Palette.WithAlpha(Palette.Overlay, 0.045f).U32());
 
         var radius = Ui.Px(16f);
         var center = new Vector2(pos.X + radius, pos.Y + (rowH * 0.5f));

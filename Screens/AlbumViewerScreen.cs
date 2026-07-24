@@ -18,9 +18,8 @@ internal sealed class AlbumViewerScreen : IScreen
     private readonly AlbumService albums;
     private readonly Selection selection;
     private readonly Lightbox lightbox;
-    private readonly WindowController windowController;
 
-    public AlbumViewerScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, Lightbox lightbox, WindowController windowController)
+    public AlbumViewerScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, Lightbox lightbox)
     {
         this.router = router;
         this.theme = theme;
@@ -29,7 +28,6 @@ internal sealed class AlbumViewerScreen : IScreen
         this.albums = albums;
         this.selection = selection;
         this.lightbox = lightbox;
-        this.windowController = windowController;
     }
 
     public Screen Id => Screen.AlbumViewer;
@@ -105,14 +103,9 @@ internal sealed class AlbumViewerScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
         var name = this.selection.ProfileDisplayName ?? string.Empty;
-        var title = name.Length > 0 ? $"{name} · {this.selection.AlbumName}" : this.selection.AlbumName;
-        var titleSize = Ui.Measure(this.fonts.Body, title);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), title);
-
-        var btn = Ui.Px(30f);
-        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
-        if (this.kit.HeaderIconButton(drawList, "##av_min", FontAwesomeIcon.Minus.ToIconString(), minTL, btn))
-            this.windowController.Minimize();
+        var title = (name.Length > 0 ? $"{name} · {this.selection.AlbumName}" : this.selection.AlbumName).ToUpperInvariant();
+        var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
     }
