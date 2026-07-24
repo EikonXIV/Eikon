@@ -11,6 +11,11 @@ internal sealed class Kit
     private readonly ThemeService theme;
     private readonly UiFonts fonts;
 
+    // Which stepper (if any) currently has its centre field in edit, plus the in-progress text so an
+    // immediate-mode resync can't clobber a partially typed number.
+    private string? stepperEditId;
+    private string stepperEditBuffer = string.Empty;
+
     public Kit(ThemeService theme, UiFonts fonts)
     {
         this.theme = theme;
@@ -289,7 +294,8 @@ internal sealed class Kit
     }
 
     // Boxed numeric stepper matching the filter's age cell: a hairline box with minus at the left edge,
-    // a serif value centered, and plus at the right edge. Edge controls dim at the range limits.
+    // a typeable serif value centered, and plus at the right edge. Type a number directly (faster than
+    // clicking a long way) or step with the edge controls, which dim at the range limits.
     public int Stepper(string id, int value, int min, int max, float width = 0f)
     {
         var w = width <= 0f ? Ui.Px(160f) : width;
@@ -299,18 +305,62 @@ internal sealed class Kit
         var drawList = ImGui.GetWindowDrawList();
         drawList.AddRect(pos, pos + new Vector2(w, height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
-        var result = value;
-        if (this.StepGlyph(id + "_minus", pos, box, height, FontAwesomeIcon.Minus, value > min))
-            result = Math.Max(min, value - 1);
-        if (this.StepGlyph(id + "_plus", new Vector2((pos.X + w) - box, pos.Y), box, height, FontAwesomeIcon.Plus, value < max))
-            result = Math.Min(max, value + 1);
+        // Editable centre first, so a blur caused by clicking an edge control commits before the step
+        // applies to the freshly committed value.
+        var result = this.SerifNumberField(id, value, min, max, pos, w, height);
 
-        var number = value.ToString();
-        var numberSize = Ui.Measure(this.fonts.SerifName, number);
-        Ui.TextAt(drawList, this.fonts.SerifName, pos + new Vector2((w - numberSize.X) * 0.5f, (height - numberSize.Y) * 0.5f), Palette.TextPrimary.U32(), number);
+        if (this.StepGlyph(id + "_minus", pos, box, height, FontAwesomeIcon.Minus, result > min))
+            result = Math.Max(min, result - 1);
+        if (this.StepGlyph(id + "_plus", new Vector2((pos.X + w) - box, pos.Y), box, height, FontAwesomeIcon.Plus, result < max))
+            result = Math.Min(max, result + 1);
 
         ImGui.SetCursorScreenPos(pos);
         ImGui.Dummy(new Vector2(w, height));
+        return result;
+    }
+
+    // A borderless, centred, typeable serif number filling [pos, pos+(width,height)]. Type to edit; the
+    // value commits (clamped) on blur/enter. Shares the stepper edit state so only one is active at once.
+    // The buffer holds the in-progress text so an immediate-mode resync can't clobber partial input.
+    public int SerifNumberField(string id, int value, int min, int max, Vector2 pos, float width, float height)
+    {
+        var result = value;
+        var editing = this.stepperEditId == id;
+        var digits = max.ToString().Length;
+        var text = editing ? this.stepperEditBuffer : value.ToString();
+        var fieldWidth = Ui.Measure(this.fonts.SerifName, new string('0', digits)).X + Ui.Px(14f);
+        var framePadY = (height - Ui.Measure(this.fonts.SerifName, "0").Y) * 0.5f;
+
+        ImGui.SetCursorScreenPos(new Vector2(pos.X + ((width - fieldWidth) * 0.5f), pos.Y));
+        using (ImRaii.PushColor(ImGuiCol.FrameBg, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.FrameBgHovered, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.FrameBgActive, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(7f), framePadY)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 0f))
+        using (this.fonts.SerifName.Push())
+        {
+            ImGui.SetNextItemWidth(fieldWidth);
+            var numFlags = ImGuiInputTextFlags.CharsDecimal | ImGuiInputTextFlags.AutoSelectAll;
+            ImGui.InputTextWithHint(id + "_num", string.Empty, ref text, 8, numFlags);
+            if (ImGui.IsItemActivated())
+            {
+                this.stepperEditId = id;
+                this.stepperEditBuffer = value.ToString();
+            }
+            else if (editing && ImGui.IsItemActive())
+            {
+                this.stepperEditBuffer = text;
+            }
+
+            if (editing && ImGui.IsItemDeactivated())
+            {
+                if (int.TryParse(this.stepperEditBuffer, out var typed))
+                    result = Math.Clamp(typed, min, max);
+                this.stepperEditId = null;
+            }
+        }
+
         return result;
     }
 

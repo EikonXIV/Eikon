@@ -294,17 +294,15 @@ internal sealed class FilterScreen : IScreen
         dl.AddRect(pos, pos + new Vector2(width, height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
         Ui.TextAt(dl, this.fonts.Eyebrow, pos + new Vector2(Ui.Px(12f), Ui.Px(8f)), Palette.TextSecondary.U32(), label);
 
+        // The typeable serif value goes first so a blur from clicking a step control commits before it.
         var rowY = pos.Y + Ui.Px(28f);
-        var next = value;
-        if (this.StepButton(id + "_dec", new Vector2(pos.X, rowY), FontAwesomeIcon.Minus, value > min))
-            next = Math.Max(min, value - 1);
-        if (this.StepButton(id + "_inc", new Vector2((pos.X + width) - Ui.Px(40f), rowY), FontAwesomeIcon.Plus, value < max))
-            next = Math.Min(max, value + 1);
+        var result = this.kit.SerifNumberField(id, value, min, max, new Vector2(pos.X, rowY), width, Ui.Px(40f));
 
-        var num = value.ToString();
-        var numSize = Ui.Measure(this.fonts.SerifName, num);
-        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(pos.X + ((width - numSize.X) * 0.5f), rowY + ((Ui.Px(40f) - numSize.Y) * 0.5f)), Palette.TextPrimary.U32(), num);
-        return next;
+        if (this.StepButton(id + "_dec", new Vector2(pos.X, rowY), FontAwesomeIcon.Minus, result > min))
+            result = Math.Max(min, result - 1);
+        if (this.StepButton(id + "_inc", new Vector2((pos.X + width) - Ui.Px(40f), rowY), FontAwesomeIcon.Plus, result < max))
+            result = Math.Min(max, result + 1);
+        return result;
     }
 
     private bool StepButton(string id, Vector2 pos, FontAwesomeIcon icon, bool enabled)
