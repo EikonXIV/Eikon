@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Threading;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -15,7 +16,8 @@ internal sealed class PhotoService : IDisposable
     private readonly IPluginLog log;
     private readonly HttpClient http = new();
     private readonly CancellationToken lifetime;
-    private readonly Dictionary<Guid, IDalamudTextureWrap?> textures = new();
+    // Read on the UI thread (Texture) while background LoadTexture tasks write, so it must be concurrent.
+    private readonly ConcurrentDictionary<Guid, IDalamudTextureWrap?> textures = new();
     private readonly HashSet<Guid> loadingTextures = new();
     private bool listLoading;
 
