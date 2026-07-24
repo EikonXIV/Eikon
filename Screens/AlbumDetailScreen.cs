@@ -140,7 +140,10 @@ internal sealed class AlbumDetailScreen : IScreen
     {
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetCursorScreenPos();
-        var count = this.albums.Photos(album.Id).Count;
+
+        // The album's own count, not the loaded photo list: the list is empty until the fetch lands, so
+        // reading it would flash "0 photos" over an album that has plenty. Add and remove both reload.
+        var count = album.PhotoCount;
 
         var photos = count == 1 ? "1 photo" : $"{count} photos";
         var visibility = album.Visibility == AlbumVisibilityEnum.Public ? "public" : "private";
