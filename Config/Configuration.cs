@@ -69,6 +69,14 @@ internal sealed class Configuration : IPluginConfiguration
     // Peers (user id strings) muted from the chat overflow menu: no toast, no sound.
     public List<string> MutedConversations { get; set; } = new();
 
+    // Threads deleted from the inbox, as peer user id -> the last message time (unix seconds) when it
+    // was deleted. Local by design: the server keeps a delivery queue that ages out, not an archive, and
+    // a durable per-conversation "deleted, and when" row on the server would be exactly the metadata
+    // trail the retention policy exists to destroy. The watermark is what brings a thread back when the
+    // peer writes again - anything newer than it means there is something unseen. Additive and optional,
+    // so old and new builds read each other's config; an older build just shows the thread as normal.
+    public Dictionary<string, long> DeletedConversations { get; set; } = new();
+
     // Per-conversation chat wallpaper: peer user id string -> absolute path of a local image the
     // viewer picked from the chat overflow menu. Local and cosmetic only - never uploaded, never sent
     // to the peer or the server. A missing or unreadable path silently falls back to the default

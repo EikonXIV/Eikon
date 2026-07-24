@@ -1,5 +1,6 @@
 using Dalamud.Interface;
 using Dalamud.Interface.ManagedFontAtlas;
+using Eikon.Config;
 using Eikon.Contracts;
 using Eikon.Navigation;
 using Eikon.Net;
@@ -19,10 +20,13 @@ internal sealed class MessagesScreen : IScreen
     private readonly InboxService inbox;
     private readonly Selection selection;
     private readonly PhotoService photoSvc;
+    private readonly ThreadDeletions deletions;
 
-    private bool showRequests;   // the Requests tab is active (else the Messages / threads tab)
+    private enum Tab { Messages, Requests, Deleted }
 
-    public MessagesScreen(ScreenRouter router, Kit kit, UiFonts fonts, InboxService inbox, Selection selection, PhotoService photoSvc)
+    private Tab tab = Tab.Messages;
+
+    public MessagesScreen(ScreenRouter router, Kit kit, UiFonts fonts, InboxService inbox, Selection selection, PhotoService photoSvc, Configuration config, ChatService chat)
     {
         this.router = router;
         this.kit = kit;
@@ -30,6 +34,7 @@ internal sealed class MessagesScreen : IScreen
         this.inbox = inbox;
         this.selection = selection;
         this.photoSvc = photoSvc;
+        this.deletions = new ThreadDeletions(config, chat);
     }
 
     public Screen Id => Screen.Messages;
@@ -41,8 +46,12 @@ internal sealed class MessagesScreen : IScreen
         var fullWidth = ImGui.GetContentRegionAvail().X;
         this.inbox.EnsureLoaded();
         var conversations = this.inbox.Conversations;
-        var threads = conversations.Where(c => !c.IsRequest).ToList();
-        var requests = conversations.Where(c => c.IsRequest).ToList();
+        // Bring back anything the peer has written to since it was deleted, before the lists are split.
+        this.deletions.Sync(conversations);
+
+        var threads = conversations.Where(c => !c.IsRequest && !this.deletions.IsDeleted(c.UserId)).ToList();
+        var requests = conversations.Where(c => c.IsRequest && !this.deletions.IsDeleted(c.UserId)).ToList();
+        var deleted = conversations.Where(c => this.deletions.IsDeleted(c.UserId)).ToList();
 
         this.DrawHeader(fullWidth, threads.Count);
 
@@ -64,23 +73,35 @@ internal sealed class MessagesScreen : IScreen
             return;
         }
 
-        this.DrawTabs(fullWidth, threads.Count, requests.Count);
+        this.DrawTabs(fullWidth, threads.Count, requests.Count, deleted.Count);
 
         using var scroll = ImRaii.Child("inbox_scroll", ImGui.GetContentRegionAvail(), false, ImGuiWindowFlags.NoScrollbar);
         if (!scroll.Success)
             return;
 
         var pad = Ui.Px(20f);
-        var list = this.showRequests ? requests : threads;
+        var list = this.tab switch
+        {
+            Tab.Requests => requests,
+            Tab.Deleted => deleted,
+            _ => threads,
+        };
+
         if (list.Count == 0)
         {
+            var empty = this.tab switch
+            {
+                Tab.Requests => "No requests right now.",
+                Tab.Deleted => "Nothing deleted.",
+                _ => "No messages yet.",
+            };
             ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-            Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, this.showRequests ? "No requests right now." : "No messages yet.");
+            Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, empty);
             return;
         }
 
         foreach (var conversation in list)
-            if (this.DrawRow(conversation, fullWidth, pad))
+            if (this.DrawRow(conversation, fullWidth, pad) && this.tab != Tab.Deleted)
                 this.Open(conversation);
     }
 
@@ -107,7 +128,7 @@ internal sealed class MessagesScreen : IScreen
 
     // Segmented Messages / Requests toggle under the header. The active segment is a filled cream pill;
     // the Requests segment carries a gold dot while any request is still pending.
-    private void DrawTabs(float fullWidth, int messageCount, int requestCount)
+    private void DrawTabs(float fullWidth, int messageCount, int requestCount, int deletedCount)
     {
         var pad = Ui.Px(20f);
         var height = Ui.Px(42f);
@@ -115,13 +136,15 @@ internal sealed class MessagesScreen : IScreen
         var origin = ImGui.GetCursorScreenPos();
         var left = origin.X + pad;
         var barWidth = fullWidth - (pad * 2f);
-        var segWidth = barWidth * 0.5f;
+        var segWidth = barWidth / 3f;
         var dl = ImGui.GetWindowDrawList();
 
-        if (this.Segment(dl, "##tab_messages", new Vector2(left, origin.Y), new Vector2(segWidth, height), "MESSAGES", messageCount, !this.showRequests, false))
-            this.showRequests = false;
-        if (this.Segment(dl, "##tab_requests", new Vector2(left + segWidth, origin.Y), new Vector2(segWidth, height), "REQUESTS", requestCount, this.showRequests, requestCount > 0))
-            this.showRequests = true;
+        if (this.Segment(dl, "##tab_messages", new Vector2(left, origin.Y), new Vector2(segWidth, height), "MESSAGES", messageCount, this.tab == Tab.Messages, false))
+            this.tab = Tab.Messages;
+        if (this.Segment(dl, "##tab_requests", new Vector2(left + segWidth, origin.Y), new Vector2(segWidth, height), "REQUESTS", requestCount, this.tab == Tab.Requests, requestCount > 0))
+            this.tab = Tab.Requests;
+        if (this.Segment(dl, "##tab_deleted", new Vector2(left + (segWidth * 2f), origin.Y), new Vector2(segWidth, height), "DELETED", deletedCount, this.tab == Tab.Deleted, false))
+            this.tab = Tab.Deleted;
 
         dl.AddRect(new Vector2(left, origin.Y), new Vector2(left + barWidth, origin.Y + height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
@@ -164,9 +187,18 @@ internal sealed class MessagesScreen : IScreen
         var rowHeight = Ui.Px(72f);
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##conv_" + conversation.UserId, new Vector2(fullWidth, rowHeight));
+
+        // The row fills the width, so the actions drawn over it have to be allowed to overlap or they
+        // would never take the click.
+        ImGui.SetItemAllowOverlap();
+        var rowHovered = ImGui.IsItemHovered();
+        var after = ImGui.GetCursorScreenPos();
         var dl = ImGui.GetWindowDrawList();
-        if (ImGui.IsItemHovered())
+        if (rowHovered)
             dl.AddRectFilled(pos, pos + new Vector2(fullWidth, rowHeight), Palette.WithAlpha(Palette.Overlay, 0.04f).U32());
+
+        var actionsWidth = this.DrawRowActions(dl, conversation, pos, fullWidth, rowHeight, pad, rowHovered);
+        ImGui.SetCursorScreenPos(after);
 
         var av = Ui.Px(48f);
         var amin = new Vector2(pos.X + pad, pos.Y + ((rowHeight - av) * 0.5f));
@@ -177,7 +209,7 @@ internal sealed class MessagesScreen : IScreen
         dl.AddCircle(dotCenter, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(2f));
 
         var textX = amin.X + av + Ui.Px(14f);
-        var textRight = (pos.X + fullWidth) - pad;
+        var textRight = (pos.X + fullWidth) - pad - actionsWidth;
 
         var time = Ago(conversation.LastMessageAt);
         var timeWidth = 0f;
@@ -233,6 +265,39 @@ internal sealed class MessagesScreen : IScreen
         while (n > 0 && Ui.Measure(font, text[..n]).X + ellipsisWidth > maxWidth)
             n--;
         return text[..n].TrimEnd() + ellipsis;
+    }
+
+    // Row actions, right-aligned. Messages and Requests get a delete that appears on hover, so the list
+    // stays quiet until the member reaches for it; Deleted always shows restore and permanent delete,
+    // since there is nothing else to do with a row there. Returns the width to keep the text clear of.
+    private float DrawRowActions(ImDrawListPtr dl, ConversationSummaryDto conversation, Vector2 pos, float fullWidth, float rowHeight, float pad, bool rowHovered)
+    {
+        var button = Ui.Px(30f);
+        var gap = Ui.Px(6f);
+        var top = pos.Y + ((rowHeight - button) * 0.5f);
+        var right = (pos.X + fullWidth) - pad;
+
+        if (this.tab == Tab.Deleted)
+        {
+            var purgeAt = new Vector2(right - button, top);
+            var restoreAt = new Vector2(purgeAt.X - gap - button, top);
+
+            if (this.kit.RowIconButton(dl, "##conv_restore_" + conversation.UserId, FontAwesomeIcon.TrashRestore.ToIconString(), restoreAt, button))
+                this.deletions.Restore(conversation.UserId);
+            if (this.kit.RowIconButton(dl, "##conv_purge_" + conversation.UserId, FontAwesomeIcon.TrashAlt.ToIconString(), purgeAt, button, Palette.Danger))
+                this.deletions.Purge(conversation.UserId);
+
+            return (button * 2f) + gap + Ui.Px(10f);
+        }
+
+        if (!rowHovered && !ImGui.IsAnyItemHovered())
+            return 0f;
+
+        var deleteAt = new Vector2(right - button, top);
+        if (this.kit.RowIconButton(dl, "##conv_delete_" + conversation.UserId, FontAwesomeIcon.TrashAlt.ToIconString(), deleteAt, button, Palette.Danger))
+            this.deletions.Delete(conversation);
+
+        return button + Ui.Px(10f);
     }
 
     private void DrawAvatar(ImDrawListPtr dl, Vector2 min, float size, Guid? photoId, string initial)
