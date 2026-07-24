@@ -78,35 +78,65 @@ internal sealed class AgeGuidelinesScreen : IScreen
         return result;
     }
 
+    private static readonly (string Label, string Detail)[] Rules =
+    {
+        ("No minors", "No childlike depictions, ever. This includes Lalafell in NSFW."),
+        ("Consent and respect", "No harassment, no unsolicited explicit content."),
+        ("No IRL meetups", "Eikon stays in game and on Discord."),
+    };
+
     private void DrawRules(float width)
     {
+        var boxPad = Ui.Px(14f);
+        var inner = width - (boxPad * 2f);
+
         using (ImRaii.PushColor(ImGuiCol.ChildBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
         using (ImRaii.PushStyle(ImGuiStyleVar.ChildRounding, 0f))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(14f), Ui.Px(14f))))
-        using (var box = ImRaii.Child("rules", new Vector2(width, Ui.Px(140f)), true))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(boxPad, boxPad)))
+        using (var box = ImRaii.Child("rules", new Vector2(width, this.RulesHeight(inner) + (boxPad * 2f)), true))
         {
             if (!box.Success)
                 return;
 
-            this.Rule("No minors and no childlike depictions,", " ever. This includes Lalafell in NSFW.");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.Rule("Consent and respect.", " No harassment, no unsolicited explicit content.");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.Rule("Eikon stays in game and on Discord.", " No IRL meetups.");
+            for (var i = 0; i < Rules.Length; i++)
+            {
+                if (i > 0)
+                    ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+                this.Rule(Rules[i].Label, Rules[i].Detail);
+            }
         }
     }
 
-    // Each rule reads as a bright lead phrase and a muted remainder that wraps after it.
-    private void Rule(string lead, string rest)
+    // Measured with the same raw font metrics the stacked labels and wrapped details draw with, so the
+    // box is exactly tall enough at any text size and never clips the last line.
+    private float RulesHeight(float inner)
+    {
+        using (this.fonts.Caption.Push())
+        {
+            var height = 0f;
+            for (var i = 0; i < Rules.Length; i++)
+            {
+                if (i > 0)
+                    height += Ui.Px(12f);
+                height += ImGui.GetTextLineHeight() + Ui.Px(3f);
+                height += ImGui.CalcTextSize(Rules[i].Detail, false, inner).Y;
+            }
+
+            return height;
+        }
+    }
+
+    // Each rule stacks: a bright label on its own line, the muted detail wrapped left-aligned beneath it.
+    private void Rule(string label, string detail)
     {
         using (this.fonts.Caption.Push())
         {
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                ImGui.TextUnformatted(lead);
-            ImGui.SameLine(0f, 0f);
+                ImGui.TextUnformatted(label);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(3f)));
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextWrapped(rest);
+                ImGui.TextWrapped(detail);
         }
     }
 }
