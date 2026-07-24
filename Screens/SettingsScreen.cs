@@ -73,6 +73,7 @@ internal sealed class SettingsScreen : IScreen
         var pad = Ui.Px(16f);
         var contentWidth = ImGui.GetContentRegionAvail().X - (pad * 2f);
         ImGui.Indent(pad);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
         if (this.inDataCenter)
         {
