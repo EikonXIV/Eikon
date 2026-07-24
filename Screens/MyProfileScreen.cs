@@ -38,9 +38,7 @@ internal sealed class MyProfileScreen : IScreen
     private string displayName = string.Empty;
     private string bio = string.Empty;
     private int pronoun;
-    private string pronounCustom = string.Empty;
     private int gender;
-    private string genderCustom = string.Empty;
     private int age = 27;
     private readonly bool[] races = new bool[Options.Races.Length];
     private readonly bool[] tribes = new bool[Options.Tribes.Length];
@@ -689,11 +687,9 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.Field("Pronouns");
         this.Single("f_pn", Options.Pronouns, ref this.pronoun, contentWidth);
-        this.kit.TextField("##f_pnc", ref this.pronounCustom, "Custom (optional)", contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.Field("Gender");
         this.Single("f_gn", Options.Genders, ref this.gender, contentWidth);
-        this.kit.TextField("##f_gnc", ref this.genderCustom, "Custom (optional)", contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.Field("Age");
         this.age = this.kit.Stepper("##f_age", this.age, 18, 99);
@@ -868,9 +864,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         this.displayName = m.DisplayName;
         this.pronoun = ProfileMapper.IndexOfPronoun(m.Pronoun);
-        this.pronounCustom = m.PronounCustom ?? string.Empty;
         this.gender = ProfileMapper.IndexOfGender(m.Gender);
-        this.genderCustom = m.GenderCustom ?? string.Empty;
         this.age = (int)m.Age;
         CopyInto(this.races, ProfileMapper.FromRaces(m.Races ?? new List<RaceElement>()));
         this.worldId = (int)(m.WorldId ?? 0);
@@ -893,9 +887,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         DisplayName = this.displayName.Trim(),
         Pronoun = ProfileMapper.Pronoun(this.pronoun),
-        PronounCustom = string.IsNullOrWhiteSpace(this.pronounCustom) ? null : this.pronounCustom,
         Gender = ProfileMapper.Gender(this.gender),
-        GenderCustom = string.IsNullOrWhiteSpace(this.genderCustom) ? null : this.genderCustom,
         Age = this.age,
         Races = ProfileMapper.RacesOf(this.races),
         WorldId = this.worldId > 0 ? this.worldId : null,
