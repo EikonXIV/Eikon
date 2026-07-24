@@ -27,6 +27,7 @@ internal sealed class ChatScreen : IScreen
     private readonly PhotoService photoSvc;
     private readonly AlbumService albums;
     private readonly Configuration config;
+    private readonly ThreadDeletions deletions;
 
     private Guid markReadFor;       // peer we last marked read
     private int markReadCount = -1; // thread length at that point, so new messages while open re-mark
@@ -62,6 +63,7 @@ internal sealed class ChatScreen : IScreen
         this.photoSvc = photoSvc;
         this.albums = albums;
         this.config = config;
+        this.deletions = new ThreadDeletions(config, chat);
     }
 
     public Screen Id => Screen.Chat;
@@ -301,7 +303,28 @@ internal sealed class ChatScreen : IScreen
                 {
                     this.albums.EnsureLoaded();
                     this.openAlbumPicker = true;
-                });
+                },
+                onDeleteThread: this.deletions.IsDeleted(peer) ? null : () =>
+                {
+                    foreach (var c in this.inbox.Conversations)
+                    {
+                        if (c.UserId != peer)
+                            continue;
+
+                        this.deletions.Delete(c);
+                        break;
+                    }
+
+                    this.router.Navigate(Screen.Messages);
+                },
+                onRestoreThread: this.deletions.IsDeleted(peer) ? () => this.deletions.Restore(peer) : null,
+                onPurgeThread: this.deletions.IsDeleted(peer)
+                    ? () =>
+                    {
+                        this.deletions.Purge(peer);
+                        this.router.Navigate(Screen.Messages);
+                    }
+                    : null);
 
         var avatarSize = Ui.Px(36f);
 

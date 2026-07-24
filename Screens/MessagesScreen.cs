@@ -101,7 +101,7 @@ internal sealed class MessagesScreen : IScreen
         }
 
         foreach (var conversation in list)
-            if (this.DrawRow(conversation, fullWidth, pad) && this.tab != Tab.Deleted)
+            if (this.DrawRow(conversation, fullWidth, pad))
                 this.Open(conversation);
     }
 
@@ -188,17 +188,9 @@ internal sealed class MessagesScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##conv_" + conversation.UserId, new Vector2(fullWidth, rowHeight));
 
-        // The row fills the width, so the actions drawn over it have to be allowed to overlap or they
-        // would never take the click.
-        ImGui.SetItemAllowOverlap();
-        var rowHovered = ImGui.IsItemHovered();
-        var after = ImGui.GetCursorScreenPos();
         var dl = ImGui.GetWindowDrawList();
-        if (rowHovered)
+        if (ImGui.IsItemHovered())
             dl.AddRectFilled(pos, pos + new Vector2(fullWidth, rowHeight), Palette.WithAlpha(Palette.Overlay, 0.04f).U32());
-
-        var actionsWidth = this.DrawRowActions(dl, conversation, pos, fullWidth, rowHeight, pad, rowHovered);
-        ImGui.SetCursorScreenPos(after);
 
         var av = Ui.Px(48f);
         var amin = new Vector2(pos.X + pad, pos.Y + ((rowHeight - av) * 0.5f));
@@ -209,7 +201,7 @@ internal sealed class MessagesScreen : IScreen
         dl.AddCircle(dotCenter, Ui.Px(5f), Palette.Bg.U32(), 12, Ui.Px(2f));
 
         var textX = amin.X + av + Ui.Px(14f);
-        var textRight = (pos.X + fullWidth) - pad - actionsWidth;
+        var textRight = (pos.X + fullWidth) - pad;
 
         var time = Ago(conversation.LastMessageAt);
         var timeWidth = 0f;
@@ -217,6 +209,7 @@ internal sealed class MessagesScreen : IScreen
         {
             var timeSize = Ui.Measure(this.fonts.Mono, time);
             timeWidth = timeSize.X + Ui.Px(10f);
+
             Ui.TextAt(dl, this.fonts.Mono, new Vector2(textRight - timeSize.X, pos.Y + Ui.Px(17f)), Palette.TextMuted.U32(), time);
         }
 
@@ -265,39 +258,6 @@ internal sealed class MessagesScreen : IScreen
         while (n > 0 && Ui.Measure(font, text[..n]).X + ellipsisWidth > maxWidth)
             n--;
         return text[..n].TrimEnd() + ellipsis;
-    }
-
-    // Row actions, right-aligned. Messages and Requests get a delete that appears on hover, so the list
-    // stays quiet until the member reaches for it; Deleted always shows restore and permanent delete,
-    // since there is nothing else to do with a row there. Returns the width to keep the text clear of.
-    private float DrawRowActions(ImDrawListPtr dl, ConversationSummaryDto conversation, Vector2 pos, float fullWidth, float rowHeight, float pad, bool rowHovered)
-    {
-        var button = Ui.Px(30f);
-        var gap = Ui.Px(6f);
-        var top = pos.Y + ((rowHeight - button) * 0.5f);
-        var right = (pos.X + fullWidth) - pad;
-
-        if (this.tab == Tab.Deleted)
-        {
-            var purgeAt = new Vector2(right - button, top);
-            var restoreAt = new Vector2(purgeAt.X - gap - button, top);
-
-            if (this.kit.RowIconButton(dl, "##conv_restore_" + conversation.UserId, FontAwesomeIcon.TrashRestore.ToIconString(), restoreAt, button))
-                this.deletions.Restore(conversation.UserId);
-            if (this.kit.RowIconButton(dl, "##conv_purge_" + conversation.UserId, FontAwesomeIcon.TrashAlt.ToIconString(), purgeAt, button, Palette.Danger))
-                this.deletions.Purge(conversation.UserId);
-
-            return (button * 2f) + gap + Ui.Px(10f);
-        }
-
-        if (!rowHovered && !ImGui.IsAnyItemHovered())
-            return 0f;
-
-        var deleteAt = new Vector2(right - button, top);
-        if (this.kit.RowIconButton(dl, "##conv_delete_" + conversation.UserId, FontAwesomeIcon.TrashAlt.ToIconString(), deleteAt, button, Palette.Danger))
-            this.deletions.Delete(conversation);
-
-        return button + Ui.Px(10f);
     }
 
     private void DrawAvatar(ImDrawListPtr dl, Vector2 min, float size, Guid? photoId, string initial)

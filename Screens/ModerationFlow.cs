@@ -50,6 +50,9 @@ internal sealed class ModerationFlow
     private Action? onSharedMedia;    // optional "Shared media" row (chat only)
     private Action? onShareAlbum;     // optional "Share an album" row (chat only)
     private Action? onSafetyNumber;   // optional "Safety number" row (chat only)
+    private Action? onDeleteThread;   // optional "Delete thread" row (chat only)
+    private Action? onRestoreThread;  // optional "Restore thread" row, when the thread is already deleted
+    private Action? onPurgeThread;    // optional "Delete permanently" row, when the thread is already deleted
     private bool chatActions;         // host is the chat screen: show the chat-wallpaper rows
     private bool openMenu, openBlock, openReport;
     private int reason = -1;
@@ -68,7 +71,7 @@ internal sealed class ModerationFlow
         this.media = media;
     }
 
-    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null, Action? onShareAlbum = null)
+    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null, Action? onShareAlbum = null, Action? onDeleteThread = null, Action? onRestoreThread = null, Action? onPurgeThread = null)
     {
         this.targetId = userId;
         this.target = name;
@@ -77,6 +80,9 @@ internal sealed class ModerationFlow
         this.onSharedMedia = onSharedMedia;
         this.onShareAlbum = onShareAlbum;
         this.onSafetyNumber = onSafetyNumber;
+        this.onDeleteThread = onDeleteThread;
+        this.onRestoreThread = onRestoreThread;
+        this.onPurgeThread = onPurgeThread;
         this.chatActions = chatActions;
         this.openMenu = true;
         this.moderationKeys.EnsureLoaded();   // warm the verified seal key before a report is sealed
@@ -178,6 +184,9 @@ internal sealed class ModerationFlow
             + (hasBackground ? row : 0f)                        // clear chat background
             + div                                                // divider before safety / block / report
             + (this.onSafetyNumber != null ? row : 0f)
+            + (this.onDeleteThread != null ? row : 0f)
+            + (this.onRestoreThread != null ? row : 0f)
+            + (this.onPurgeThread != null ? row : 0f)
             + row                                                // block
             + row;                                               // report
         var rounding = 0f;
@@ -282,6 +291,24 @@ internal sealed class ModerationFlow
             {
                 ImGui.CloseCurrentPopup();
                 verify();
+            }
+
+            if (this.onRestoreThread is { } restore && this.MenuRow("##mm_restore", FontAwesomeIcon.TrashRestore, "Restore thread", false, width))
+            {
+                ImGui.CloseCurrentPopup();
+                restore();
+            }
+
+            if (this.onDeleteThread is { } deleteThread && this.MenuRow("##mm_delete_thread", FontAwesomeIcon.TrashAlt, "Delete thread", true, width))
+            {
+                ImGui.CloseCurrentPopup();
+                deleteThread();
+            }
+
+            if (this.onPurgeThread is { } purge && this.MenuRow("##mm_purge_thread", FontAwesomeIcon.TrashAlt, "Delete permanently", true, width))
+            {
+                ImGui.CloseCurrentPopup();
+                purge();
             }
 
             if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, "Block", false, width))
