@@ -23,8 +23,13 @@ internal sealed class GridScreen : IScreen
     private readonly Selection selection;
     private readonly PhotoService photoSvc;
     private readonly Configuration config;
+    private readonly FavoritesService favorites;
 
-    public GridScreen(ScreenRouter router, Kit kit, UiFonts fonts, DiscoveryService discovery, Selection selection, PhotoService photoSvc, Configuration config)
+    // Favorites is a filter over the same grid, not a separate screen: the chip swaps the source list
+    // and everything else - header, tiles, density - stays exactly as it is.
+    private bool favoritesOnly;
+
+    public GridScreen(ScreenRouter router, Kit kit, UiFonts fonts, DiscoveryService discovery, Selection selection, PhotoService photoSvc, Configuration config, FavoritesService favorites)
     {
         this.router = router;
         this.kit = kit;
@@ -33,15 +38,24 @@ internal sealed class GridScreen : IScreen
         this.selection = selection;
         this.photoSvc = photoSvc;
         this.config = config;
+        this.favorites = favorites;
     }
 
     public Screen Id => Screen.Grid;
 
     public bool Chrome => true;
 
+    // Whichever list the Favorites chip has selected. Favorites arrive as one list, so the paging and
+    // the "finding people" status below only apply to discovery.
+    private IReadOnlyList<BasicProfileDto> Source =>
+        this.favoritesOnly ? this.favorites.Profiles : this.discovery.Profiles;
+
     public void Draw()
     {
-        this.discovery.EnsureInitial();
+        if (this.favoritesOnly)
+            this.favorites.EnsureLoaded();
+        else
+            this.discovery.EnsureInitial();
 
         var avail = ImGui.GetContentRegionAvail();
         var width = avail.X;
@@ -55,9 +69,10 @@ internal sealed class GridScreen : IScreen
         if (!scroll.Success)
             return;
 
-        if (this.discovery.Loading && this.discovery.Profiles.Count == 0)
+        var loading = this.favoritesOnly ? !this.favorites.Loaded : this.discovery.Loading;
+        if (loading && this.Source.Count == 0)
         {
-            this.DrawStatus(bodyAvail.X, "Finding people…");
+            this.DrawStatus(bodyAvail.X, this.favoritesOnly ? "Loading favorites…" : "Finding people…");
             return;
         }
 
@@ -70,7 +85,8 @@ internal sealed class GridScreen : IScreen
         }
 
         // Infinite scroll: pull the next page as the viewer nears the bottom of the grid scroll region.
-        if (this.discovery.HasMore)
+        // Favorites come back whole, so there is nothing to page.
+        if (!this.favoritesOnly && this.discovery.HasMore)
         {
             if (this.discovery.Loading)
                 this.DrawStatus(bodyAvail.X, "Loading more…");
@@ -93,17 +109,19 @@ internal sealed class GridScreen : IScreen
 
         var y = origin.Y + Ui.Px(18f);
 
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(left, y), Palette.TextSecondary.U32(), "DISCOVER");
-        const string scope = "IN SCOPE";
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(left, y), Palette.TextSecondary.U32(), this.favoritesOnly ? "SAVED" : "DISCOVER");
+        var scope = this.favoritesOnly ? "STARRED" : "IN SCOPE";
         var scopeW = Ui.Measure(this.fonts.Eyebrow, scope).X;
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(right - scopeW, y), Palette.TextSecondary.U32(), scope);
         y += eyebrowH + Ui.Px(4f);
 
-        const string nearby = "Nearby ";
-        var nearbyW = Ui.Measure(this.fonts.SerifTitle, nearby).X;
-        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(left, y), Palette.TextPrimary.U32(), nearby);
-        Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(left + nearbyW, y), Palette.TextSecondary.U32(), "adventurers");
-        var count = this.discovery.Profiles.Count.ToString("N0");
+        // Two-tone title: roman lead, italic tail. The filter swaps the words, not the treatment.
+        var lead = this.favoritesOnly ? "Your " : "Nearby ";
+        var tail = this.favoritesOnly ? "favorites" : "adventurers";
+        var leadW = Ui.Measure(this.fonts.SerifTitle, lead).X;
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(left, y), Palette.TextPrimary.U32(), lead);
+        Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(left + leadW, y), Palette.TextSecondary.U32(), tail);
+        var count = this.Source.Count.ToString("N0");
         var countSize = Ui.Measure(this.fonts.Count, count);
         Ui.TextAt(dl, this.fonts.Count, new Vector2(right - countSize.X, (y + titleH) - countSize.Y), Palette.TextPrimary.U32(), count);
         y += titleH + Ui.Px(16f);
@@ -171,8 +189,8 @@ internal sealed class GridScreen : IScreen
 
         if (this.PillChip(dl, "##chip_online", "Online now", this.discovery.OnlineOnly, true, ref x, y, chipH))
             this.discovery.SetOnline(!this.discovery.OnlineOnly);
-        if (this.PillChip(dl, "##chip_favs", "Favorites", false, false, ref x, y, chipH))
-            this.router.Navigate(Screen.Favorites);
+        if (this.PillChip(dl, "##chip_favs", "Favorites", this.favoritesOnly, false, ref x, y, chipH))
+            this.favoritesOnly = !this.favoritesOnly;
 
         // Refresh: re-pull discovery from the top so members who just came online surface. Right-aligned
         // and sized to the chip height so it sits level; spins and swallows clicks while reloading.
@@ -230,7 +248,7 @@ internal sealed class GridScreen : IScreen
         var shown = 0;
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(gap, gap)))
         {
-            foreach (var profile in this.discovery.Profiles)
+            foreach (var profile in this.Source)
             {
                 if (shown % columns != 0)
                     ImGui.SameLine(0f, gap);
@@ -325,6 +343,18 @@ internal sealed class GridScreen : IScreen
     {
         ImGui.Dummy(new Vector2(0f, Ui.Px(36f)));
         var buttonWidth = Ui.Px(180f);
+
+        // Filtered to favorites and empty: the tier prompts below would send the member widening a pool
+        // that is not the reason the grid is empty.
+        if (this.favoritesOnly)
+        {
+            this.kit.EmptyState(FontAwesomeIcon.Star.ToIconString(), "No favorites yet", "People you star appear here for quick access.", width);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
+            if (this.kit.PrimaryButton("##empty_favs", "Browse everyone", buttonWidth))
+                this.favoritesOnly = false;
+            return;
+        }
+
         if (this.discovery.Tier == Tier.World)
         {
             this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), "Quiet on your world", "No one nearby right now. Try the wider Data Center pool.", width);
