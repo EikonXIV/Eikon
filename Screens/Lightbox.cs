@@ -219,12 +219,12 @@ internal sealed class Lightbox
                 var hintCenter = count > 1
                     ? new Vector2(origin.X + (avail.X * 0.5f), origin.Y + img.Y - Ui.Px(16f))
                     : new Vector2(origin.X + avail.X - Ui.Px(16f), origin.Y + img.Y - Ui.Px(16f));
-                drawList.AddCircleFilled(hintCenter, Ui.Px(13f), Palette.Scrim.U32(), 16);
+                Scrimmed(drawList, hintCenter, Ui.Px(13f));
                 var hintSize = Ui.Measure(this.fonts.Icon, hint);
                 Ui.TextAt(drawList, this.fonts.Icon, hintCenter - (hintSize * 0.5f), Palette.White.U32(), hint);
             }
 
-            drawList.AddCircleFilled(closeCenter, Ui.Px(13f), Palette.Scrim.U32(), 16);
+            Scrimmed(drawList, closeCenter, Ui.Px(13f));
             var closeGlyph = FontAwesomeIcon.Times.ToIconString();
             var closeSize = Ui.Measure(this.fonts.Icon, closeGlyph);
             Ui.TextAt(drawList, this.fonts.Icon, new Vector2(closeCenter.X - (closeSize.X * 0.5f), closeCenter.Y - (closeSize.Y * 0.5f)), Palette.White.U32(), closeGlyph);
@@ -233,11 +233,16 @@ internal sealed class Lightbox
         }
     }
 
-    // A paging affordance: a chevron on a dark scrim disc so it stays legible over any photo. Purely
+    // A squared scrim plate behind a control, so it stays legible over any photo without bringing back
+    // the soft-UI discs the rest of the surface dropped.
+    private static void Scrimmed(ImDrawListPtr drawList, Vector2 center, float half) =>
+        drawList.AddRectFilled(center - new Vector2(half, half), center + new Vector2(half, half), Palette.Scrim.U32());
+
+    // A paging affordance: a chevron on a dark scrim plate so it stays legible over any photo. Purely
     // visual; the wide invisible zones behind it take the taps.
     private void DrawArrow(ImDrawListPtr drawList, Vector2 center, FontAwesomeIcon icon)
     {
-        drawList.AddCircleFilled(center, Ui.Px(15f), Palette.Scrim.U32(), 20);
+        Scrimmed(drawList, center, Ui.Px(15f));
         var glyph = icon.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, center - (glyphSize * 0.5f), Palette.White.U32(), glyph);
