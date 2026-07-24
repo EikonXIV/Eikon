@@ -497,19 +497,47 @@ internal sealed class Kit
         return submitted && !shift;
     }
 
-    public void PasswordField(string id, ref string value, float width, string hint = "")
+    // Masked passphrase field with an eye toggle butted onto its right edge. The toggle carries the same
+    // fill and height as the field, so with square corners the pair reads as one control. `reveal` flips
+    // in place. Returns true when Enter is pressed.
+    public bool PasswordField(string id, ref string value, float width, ref bool reveal, string hint = "")
     {
+        bool submitted;
+        var toggleWidth = Ui.Px(44f);
+
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
         using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
         using (this.fonts.Body.Push())
         {
-            ImGui.SetNextItemWidth(width);
-            // The managed ref-string overload does not take flags, so this is not masked yet.
-            // Masking moves in with the real key handling in phase C.
-            ImGui.InputTextWithHint(id, hint, ref value);
+            ImGui.SetNextItemWidth(width - toggleWidth);
+            var flags = ImGuiInputTextFlags.EnterReturnsTrue;
+            if (!reveal)
+                flags |= ImGuiInputTextFlags.Password;
+            submitted = ImGui.InputTextWithHint(id, hint, ref value, 256, flags);
         }
+
+        var height = ImGui.GetItemRectSize().Y;
+        ImGui.SameLine(0f, 0f);
+
+        var pos = ImGui.GetCursorScreenPos();
+        if (ImGui.InvisibleButton(id + "_reveal", new Vector2(toggleWidth, height)))
+            reveal = !reveal;
+
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRectFilled(pos, pos + new Vector2(toggleWidth, height), Palette.Surface2.U32());
+        var glyph = (reveal ? FontAwesomeIcon.EyeSlash : FontAwesomeIcon.Eye).ToIconString();
+        var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
+        var tint = ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextMuted;
+        Ui.TextAt(
+            drawList,
+            this.fonts.Icon,
+            new Vector2(pos.X + ((toggleWidth - glyphSize.X) * 0.5f), pos.Y + ((height - glyphSize.Y) * 0.5f)),
+            tint.U32(),
+            glyph);
+
+        return submitted;
     }
 
     // Masked passphrase field with an optional reveal. Unlike PasswordField this uses the flagged

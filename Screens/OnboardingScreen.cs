@@ -30,6 +30,7 @@ internal sealed class OnboardingScreen : IScreen
 
     private int step;
     private string passphrase = string.Empty;
+    private bool revealPassphrase;
     private string displayName = string.Empty;
     private int pronoun;
     private int gender;
@@ -162,7 +163,7 @@ internal sealed class OnboardingScreen : IScreen
     {
         this.kit.SectionLabel("Set a passphrase");
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.kit.PasswordField("##ob_pass", ref this.passphrase, contentWidth, "At least 8 characters");
+        this.kit.PasswordField("##ob_pass", ref this.passphrase, contentWidth, ref this.revealPassphrase, "At least 8 characters");
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         var strength = Math.Min(this.passphrase.Length / 14f, 1f);
