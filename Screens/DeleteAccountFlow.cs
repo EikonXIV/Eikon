@@ -84,7 +84,7 @@ internal sealed class DeleteAccountFlow
         using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(18f), Ui.Px(18f))))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
         {
             visible = ImGui.BeginPopupModal("##delete_account", ref open, flags);
@@ -232,17 +232,20 @@ internal sealed class DeleteAccountFlow
     // Center of the host window, so the modal floats inside the app rather than the game screen.
     private static Vector2 HostCenter() => ImGui.GetWindowPos() + (ImGui.GetWindowSize() * 0.5f);
 
+    // A squared badge matching the age gate's framed icon, tinted by the state it announces.
     private void IconBadge(float contentWidth, FontAwesomeIcon icon, Vector4 color)
     {
-        var diameter = Ui.Px(52f);
+        var box = Ui.Px(52f);
         var pos = ImGui.GetCursorScreenPos();
-        var center = new Vector2(pos.X + (contentWidth * 0.5f), pos.Y + (diameter * 0.5f));
+        var min = new Vector2(pos.X + ((contentWidth - box) * 0.5f), pos.Y);
+        var max = min + new Vector2(box, box);
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddCircleFilled(center, diameter * 0.5f, Palette.WithAlpha(color, 0.14f).U32(), 32);
+        drawList.AddRectFilled(min, max, Palette.WithAlpha(color, 0.12f).U32());
+        drawList.AddRect(min, max, Palette.WithAlpha(color, 0.45f).U32(), 0f, ImDrawFlags.None, 1f);
         var glyph = icon.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (glyphSize.X * 0.5f), center.Y - (glyphSize.Y * 0.5f)), color.U32(), glyph);
-        ImGui.Dummy(new Vector2(contentWidth, diameter));
+        Ui.TextAt(drawList, this.fonts.Icon, min + ((new Vector2(box, box) - glyphSize) * 0.5f), color.U32(), glyph);
+        ImGui.Dummy(new Vector2(contentWidth, box));
     }
 
     private void Divider(float width)

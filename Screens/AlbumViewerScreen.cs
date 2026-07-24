@@ -115,7 +115,7 @@ internal sealed class AlbumViewerScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##av_p_" + photoId, size);
         var drawList = ImGui.GetWindowDrawList();
-        var rounding = Ui.Px(9f);
+        var rounding = 0f;
         var tex = this.albums.Texture(albumId, photoId);
         drawList.AddRectFilled(pos, pos + size, Palette.Surface2.U32(), rounding);
         if (tex is { Width: > 0, Height: > 0 })

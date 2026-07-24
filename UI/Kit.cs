@@ -102,7 +102,7 @@ internal sealed class Kit
             return false;
         }
         if (hovered)
-            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.Overlay, 0.06f).U32(), Ui.Px(8f));
+            drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.Overlay, 0.06f).U32());
         var gs = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(min.X + ((size - gs.X) * 0.5f), min.Y + ((size - gs.Y) * 0.5f)), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
         return clicked;

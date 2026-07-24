@@ -140,7 +140,7 @@ internal sealed class Lightbox
         using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Bg))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(pad, pad)))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
         {
             if (!ImGui.BeginPopupModal("##lightbox", ref open, flags))
@@ -158,11 +158,11 @@ internal sealed class Lightbox
                 var scale = MathF.Min(img.X / texture.Width, img.Y / texture.Height);
                 var drawSize = new Vector2(texture.Width * scale, texture.Height * scale);
                 var imagePos = origin + ((img - drawSize) * 0.5f);
-                drawList.AddImageRounded(texture.Handle, imagePos, imagePos + drawSize, Vector2.Zero, Vector2.One, 0xFFFFFFFFu, Ui.Px(10f));
+                drawList.AddImage(texture.Handle, imagePos, imagePos + drawSize, Vector2.Zero, Vector2.One);
             }
             else
             {
-                drawList.AddRectFilled(origin, origin + img, Palette.Surface2.U32(), Ui.Px(10f));
+                drawList.AddRectFilled(origin, origin + img, Palette.Surface2.U32());
                 // Only the explicit placeholder (a profile with no photos) draws a letter; a profile
                 // photo that is still downloading just shows the panel until it arrives.
                 if (this.placeholderInitial is { } initial)

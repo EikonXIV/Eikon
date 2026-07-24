@@ -145,7 +145,7 @@ internal sealed class BlockedUsersScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(18f), Ui.Px(18f))))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
         {
             if (!ImGui.BeginPopupModal("##unblock_confirm", ref open, flags))
