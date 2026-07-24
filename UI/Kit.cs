@@ -108,6 +108,33 @@ internal sealed class Kit
         return clicked;
     }
 
+    // A square hairline-bordered icon button for row actions, placed in screen space so a row drawing
+    // itself can position it precisely. Border and glyph both lift on hover. The glyph rests muted so a
+    // column of them stays quiet; `hoverTint` colors it on hover only (destructive actions pass the
+    // danger red). Callers restore the layout cursor afterwards.
+    public bool RowIconButton(ImDrawListPtr drawList, string id, string glyph, Vector2 topLeft, float size, Vector4? hoverTint = null)
+    {
+        ImGui.SetCursorScreenPos(topLeft);
+        var clicked = ImGui.InvisibleButton(id, new Vector2(size, size));
+        var hovered = ImGui.IsItemHovered();
+        var min = ImGui.GetItemRectMin();
+        var max = min + new Vector2(size, size);
+
+        if (hovered)
+            drawList.AddRectFilled(min, max, Palette.WithAlpha(Palette.Overlay, 0.06f).U32());
+        drawList.AddRect(min, max, (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+
+        var color = hovered ? hoverTint ?? Palette.TextPrimary : Palette.WithAlpha(Palette.TextSecondary, 0.75f);
+        var gs = Ui.Measure(this.fonts.Icon, glyph);
+        Ui.TextAt(
+            drawList,
+            this.fonts.Icon,
+            new Vector2(min.X + ((size - gs.X) * 0.5f), min.Y + ((size - gs.Y) * 0.5f)),
+            color.U32(),
+            glyph);
+        return clicked;
+    }
+
     // An indeterminate spinner: a three-quarter arc whose phase rides ImGui's frame clock, so it turns
     // every frame without any owned state. Drawn in the accent so it reads as active.
     private void Spinner(ImDrawListPtr drawList, Vector2 center, float radius)

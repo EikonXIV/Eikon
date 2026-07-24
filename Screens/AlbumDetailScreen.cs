@@ -9,11 +9,14 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Screens;
 
-// Owner's album detail: the access bar, the photo grid with an add tile and a cover marker, and the
-// per-photo and album menus. Album photos go live on upload (no review); tapping a photo opens a menu
-// to view it, set it as the cover, or remove it. Reached from the albums manager.
+// Owner's album detail: the name field, the photo grid with a cover marker and an add tile, and the
+// per-photo menu. Album photos go live on upload (no review); tapping a photo opens a menu to view it,
+// set it as the cover, or remove it. Visibility toggles from the header, and private albums carry an
+// access row through to sharing. Deleting an album lives in the albums list. Reached from there too.
 internal sealed class AlbumDetailScreen : IScreen
 {
+    private const int MaxAlbumPhotos = 24;   // mirrors the server cap in albums/routes.ts
+
     private readonly ScreenRouter router;
     private readonly ThemeService theme;
     private readonly Kit kit;
@@ -22,20 +25,16 @@ internal sealed class AlbumDetailScreen : IScreen
     private readonly Selection selection;
     private readonly Lightbox lightbox;
     private readonly Media media;
-    private readonly WindowController windowController;
 
-    private bool openOverflow;
-    private Vector2 overflowPos;
     private bool openPhotoMenu;
     private Vector2 photoMenuPos;
     private Guid photoMenuId;
     private bool openAdd;
     private string? pendingPath;
-    private bool openRename;
-    private string renameText = string.Empty;
-    private bool openDelete;
+    private Guid? nameFor;
+    private string nameText = string.Empty;
 
-    public AlbumDetailScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, Lightbox lightbox, Media media, WindowController windowController)
+    public AlbumDetailScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AlbumService albums, Selection selection, Lightbox lightbox, Media media)
     {
         this.router = router;
         this.theme = theme;
@@ -45,7 +44,6 @@ internal sealed class AlbumDetailScreen : IScreen
         this.selection = selection;
         this.lightbox = lightbox;
         this.media = media;
-        this.windowController = windowController;
     }
 
     public Screen Id => Screen.AlbumDetail;
@@ -67,8 +65,8 @@ internal sealed class AlbumDetailScreen : IScreen
 
         var avail = ImGui.GetContentRegionAvail();
         var pad = Ui.Px(16f);
-        var headerHeight = Ui.Px(54f);
-        this.DrawHeader(avail.X, pad, name, album is null);
+        var headerHeight = Ui.Px(52f);
+        this.DrawHeader(avail.X, pad, headerHeight, name, album);
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
         using (var body = ImRaii.Child("album_detail_body", new Vector2(avail.X, avail.Y - headerHeight)))
@@ -76,112 +74,158 @@ internal sealed class AlbumDetailScreen : IScreen
             if (body.Success && album is { } al)
             {
                 ImGui.Indent(pad);
-                var contentWidth = avail.X - (pad * 2f);
-                ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-
-                this.DrawAccessBar(al, contentWidth);
-                ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-                this.DrawGrid(al, contentWidth);
-
-                ImGui.Dummy(new Vector2(0f, Ui.Px(13f)));
-                using (this.fonts.Caption.Push())
-                using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                    ImGui.TextWrapped(al.Visibility == AlbumVisibilityEnum.Public
-                        ? "Public albums show on your profile. No requests needed."
-                        : "Star marks the cover. Only people you unlock this album for can see it.");
-
+                using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+                    this.DrawBody(al, avail.X - (pad * 2f));
                 ImGui.Unindent(pad);
             }
         }
 
-        this.DrawOverflowMenu(album);
         this.DrawPhotoMenu(id.Value);
         this.DrawAddDialog(id.Value);
-        this.DrawRenameDialog(id.Value);
-        this.DrawDeleteDialog(id.Value, name, album);
         this.lightbox.Draw();
     }
 
-    private void DrawHeader(float fullWidth, float pad, string name, bool loading)
+    private void DrawBody(AlbumDto album, float contentWidth)
+    {
+        ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+
+        this.kit.SectionLabel("Album name");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.DrawNameField(album, contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.DrawMetaRow(album, contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+        if (album.Visibility == AlbumVisibilityEnum.Private)
+        {
+            this.DrawAccessRow(album, contentWidth);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+        }
+
+        this.DrawGrid(album, contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(13f)));
+        using (this.fonts.Caption.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+            ImGui.TextWrapped(album.Visibility == AlbumVisibilityEnum.Public
+                ? "Public albums show on your profile. Tap a photo to view it, set it as the cover, or remove it."
+                : "Only people you unlock this album for can see it. Tap a photo to view it, set it as the cover, or remove it.");
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
+    }
+
+    // Renaming is inline: the field commits when it loses focus after an edit, and an empty name snaps
+    // back rather than clearing the album's name.
+    private void DrawNameField(AlbumDto album, float contentWidth)
+    {
+        if (this.nameFor != album.Id)
+        {
+            this.nameFor = album.Id;
+            this.nameText = album.Name;
+        }
+
+        this.kit.TextField("##ad_name", ref this.nameText, "Album name", contentWidth);
+        if (!ImGui.IsItemDeactivatedAfterEdit())
+            return;
+
+        var trimmed = this.nameText.Trim();
+        if (trimmed.Length > 0 && trimmed != album.Name)
+            this.albums.Rename(album.Id, trimmed);
+        else
+            this.nameText = album.Name;
+    }
+
+    private void DrawMetaRow(AlbumDto album, float contentWidth)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var origin = ImGui.GetCursorScreenPos();
+        var count = this.albums.Photos(album.Id).Count;
+
+        var photos = count == 1 ? "1 photo" : $"{count} photos";
+        var visibility = album.Visibility == AlbumVisibilityEnum.Public ? "public" : "private";
+        Ui.TextAt(drawList, this.fonts.Caption, origin, Palette.TextMuted.U32(), $"{photos} · {visibility}");
+
+        var tally = $"{count:00}/{MaxAlbumPhotos}";
+        var ts = Ui.Measure(this.fonts.Mono, tally);
+        Ui.TextAt(drawList, this.fonts.Mono, new Vector2(origin.X + contentWidth - ts.X, origin.Y), Palette.TextMuted.U32(), tally);
+
+        ImGui.Dummy(new Vector2(contentWidth, Ui.Measure(this.fonts.Caption, "X").Y));
+    }
+
+    // Private albums tap through to the access sheet (share, requests, revoke).
+    private void DrawAccessRow(AlbumDto album, float contentWidth)
+    {
+        var height = Ui.Px(46f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##ad_access", new Vector2(contentWidth, height));
+        var hovered = ImGui.IsItemHovered();
+        var drawList = ImGui.GetWindowDrawList();
+        var max = pos + new Vector2(contentWidth, height);
+
+        drawList.AddRectFilled(pos, max, Palette.WithAlpha(this.theme.Accent, hovered ? 0.16f : 0.12f).U32());
+        drawList.AddRect(pos, max, Palette.WithAlpha(this.theme.Accent, 0.22f).U32(), 0f, ImDrawFlags.None, 1f);
+
+        var midY = pos.Y + (height * 0.5f);
+        var users = FontAwesomeIcon.Users.ToIconString();
+        var us = Ui.Measure(this.fonts.Icon, users);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(13f), midY - (us.Y * 0.5f)), this.theme.AccentText.U32(), users);
+
+        var label = album.SharedCount switch
+        {
+            0 => "Not shared yet",
+            1 => "Shared with 1 person",
+            _ => $"Shared with {album.SharedCount}",
+        };
+        var ls = Ui.Measure(this.fonts.Body, label);
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(40f), midY - (ls.Y * 0.5f)), Palette.TextPrimary.U32(), label);
+
+        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chs = Ui.Measure(this.fonts.Icon, chevron);
+        var chevronX = pos.X + contentWidth - Ui.Px(13f) - chs.X;
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(chevronX, midY - (chs.Y * 0.5f)), Palette.TextMuted.U32(), chevron);
+
+        if (album.RequestCount > 0)
+        {
+            var badge = album.RequestCount == 1 ? "1 request" : $"{album.RequestCount} requests";
+            var bs = Ui.Measure(this.fonts.Caption, badge);
+            var bx = chevronX - Ui.Px(10f) - bs.X - Ui.Px(14f);
+            drawList.AddRectFilled(new Vector2(bx, midY - Ui.Px(9f)), new Vector2(bx + bs.X + Ui.Px(14f), midY + Ui.Px(9f)), Palette.DangerFill.U32());
+            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(bx + Ui.Px(7f), midY - (bs.Y * 0.5f)), Palette.White.U32(), badge);
+        }
+
+        if (clicked)
+            this.router.Navigate(Screen.AlbumAccess);
+    }
+
+    private void DrawHeader(float fullWidth, float pad, float height, string name, AlbumDto? album)
     {
         var origin = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
-        var midY = origin.Y + Ui.Px(27f);
+        var midY = origin.Y + (height * 0.5f);
 
         var back = FontAwesomeIcon.ChevronLeft.ToIconString();
         var backSize = Ui.Measure(this.fonts.Icon, back);
         ImGui.SetCursorScreenPos(new Vector2(origin.X + pad, midY - (backSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##ad_back", backSize))
             this.router.Navigate(this.selection.AlbumReturn);
-        Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
+        Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        var titleSize = Ui.Measure(this.fonts.Body, name);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextPrimary.U32(), name);
+        var title = $"ALBUM · {name.ToUpperInvariant()}";
+        var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
-        // Right side, corner inward: minimize (always, collapses to the orb), a hairline, then the
-        // overflow menu once the album has loaded.
-        var btn = Ui.Px(30f);
-        var minTL = new Vector2(origin.X + fullWidth - pad - btn, midY - (btn * 0.5f));
-        if (this.kit.HeaderIconButton(drawList, "##ad_min", FontAwesomeIcon.Minus.ToIconString(), minTL, btn))
-            this.windowController.Minimize();
-        if (!loading)
+        if (album is { } al)
         {
-            var divX = minTL.X - Ui.Px(8f);
-            drawList.AddLine(new Vector2(divX, midY - Ui.Px(9f)), new Vector2(divX, midY + Ui.Px(9f)), Palette.Border.U32(), 1f);
-            var dotsTL = new Vector2(divX - Ui.Px(8f) - btn, midY - (btn * 0.5f));
-            if (this.kit.HeaderIconButton(drawList, "##ad_overflow", FontAwesomeIcon.EllipsisH.ToIconString(), dotsTL, btn))
-            {
-                this.overflowPos = new Vector2(dotsTL.X + btn, dotsTL.Y + btn + Ui.Px(4f));
-                this.openOverflow = true;
-            }
+            var button = Ui.Px(30f);
+            var topLeft = new Vector2(origin.X + fullWidth - pad - button, midY - (button * 0.5f));
+            var isPublic = al.Visibility == AlbumVisibilityEnum.Public;
+            var glyph = (isPublic ? FontAwesomeIcon.Eye : FontAwesomeIcon.Lock).ToIconString();
+            if (this.kit.RowIconButton(drawList, "##ad_vis", glyph, topLeft, button))
+                this.albums.SetVisibility(al.Id, isPublic ? "private" : "public");
         }
 
-        drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
-    }
-
-    private void DrawAccessBar(AlbumDto album, float contentWidth)
-    {
-        var height = Ui.Px(46f);
-        var pos = ImGui.GetCursorScreenPos();
-        var drawList = ImGui.GetWindowDrawList();
-
-        if (album.Visibility == AlbumVisibilityEnum.Public)
-        {
-            drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, height), Palette.Surface1.U32(), Ui.Px(11f));
-            drawList.AddRect(pos, pos + new Vector2(contentWidth, height), Palette.Border.U32(), Ui.Px(11f), ImDrawFlags.None, 1f);
-            var globe = FontAwesomeIcon.Globe.ToIconString();
-            Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(13f), pos.Y + (height * 0.5f) - (Ui.Measure(this.fonts.Icon, globe).Y * 0.5f)), new Vector4(0.56f, 0.84f, 0.65f, 1f).U32(), globe);
-            Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(40f), pos.Y + Ui.Px(8f)), Palette.TextPrimary.U32(), "Public");
-            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + Ui.Px(40f), pos.Y + Ui.Px(26f)), Palette.TextMuted.U32(), "Anyone who can see your profile can view");
-            ImGui.Dummy(new Vector2(contentWidth, height));
-            return;
-        }
-
-        // Private: the bar taps through to the access sheet (share, requests, revoke).
-        var clicked = ImGui.InvisibleButton("##ad_accessbar", new Vector2(contentWidth, height));
-        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.12f).U32(), Ui.Px(11f));
-        drawList.AddRect(pos, pos + new Vector2(contentWidth, height), Palette.WithAlpha(this.theme.Accent, 0.22f).U32(), Ui.Px(11f), ImDrawFlags.None, 1f);
-        var users = FontAwesomeIcon.Users.ToIconString();
-        var barMidY = pos.Y + (height * 0.5f);
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(13f), barMidY - (Ui.Measure(this.fonts.Icon, users).Y * 0.5f)), this.theme.AccentText.U32(), users);
-        var barLabel = album.SharedCount == 1 ? "Shared with 1 person" : $"Shared with {album.SharedCount}";
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(40f), barMidY - (Ui.Measure(this.fonts.Body, barLabel).Y * 0.5f)), Palette.TextPrimary.U32(), barLabel);
-
-        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
-        var chs = Ui.Measure(this.fonts.Icon, chevron);
-        var chX = pos.X + contentWidth - Ui.Px(13f) - chs.X;
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(chX, barMidY - (chs.Y * 0.5f)), Palette.TextMuted.U32(), chevron);
-        if (album.RequestCount > 0)
-        {
-            var badge = album.RequestCount == 1 ? "1 request" : $"{album.RequestCount} requests";
-            var bs = Ui.Measure(this.fonts.Caption, badge);
-            var bx = chX - Ui.Px(10f) - bs.X - Ui.Px(14f);
-            drawList.AddRectFilled(new Vector2(bx, barMidY - Ui.Px(9f)), new Vector2(bx + bs.X + Ui.Px(14f), barMidY + Ui.Px(9f)), Palette.DangerFill.U32(), Ui.Px(9f));
-            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(bx + Ui.Px(7f), barMidY - (bs.Y * 0.5f)), Palette.White.U32(), badge);
-        }
-
-        if (clicked)
-            this.router.Navigate(Screen.AlbumAccess);
+        drawList.AddLine(new Vector2(origin.X, origin.Y + height), new Vector2(origin.X + fullWidth, origin.Y + height), Palette.Border.U32(), 1f);
     }
 
     private void DrawGrid(AlbumDto album, float contentWidth)
@@ -193,69 +237,63 @@ internal sealed class AlbumDetailScreen : IScreen
         var tile = (contentWidth - (gap * (columns - 1))) / columns;
         var size = new Vector2(tile, tile);
 
-        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(gap, gap)))
+        var col = 0;
+        for (var i = 0; i < photos.Count; i++)
         {
-            this.DrawAddTile(size, photos.Count >= MaxAlbumPhotos);
-            var col = 1;
-            foreach (var photo in photos)
-            {
-                if (col % columns != 0)
-                    ImGui.SameLine(0f, gap);
-                this.DrawPhotoTile(album.Id, photo.Id, photo.Id == coverId, size);
-                col++;
-            }
+            if (col % columns != 0)
+                ImGui.SameLine(0f, gap);
+            this.DrawPhotoTile(album.Id, photos[i].Id, photos[i].Id == coverId, i + 1, size);
+            col++;
+            if (col % columns == 0)
+                ImGui.Dummy(new Vector2(0f, gap));
         }
+
+        if (col % columns != 0)
+            ImGui.SameLine(0f, gap);
+        this.DrawAddTile(size, photos.Count >= MaxAlbumPhotos);
     }
 
-    private const int MaxAlbumPhotos = 24;   // mirrors the server cap in albums/routes.ts
-
-    private void DrawAddTile(Vector2 size, bool atCap)
-    {
-        var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton("##ad_add", size);
-        var drawList = ImGui.GetWindowDrawList();
-        var tint = atCap ? Palette.TextMuted : Palette.TextSecondary;
-        drawList.AddRect(pos, pos + size, Palette.WithAlpha(Palette.Overlay, atCap ? 0.1f : 0.2f).U32(), Ui.Px(9f), ImDrawFlags.None, 1f);
-        var glyph = (atCap ? FontAwesomeIcon.Lock : FontAwesomeIcon.Plus).ToIconString();
-        var gs = Ui.Measure(this.fonts.Icon, glyph);
-        Ui.TextAt(drawList, this.fonts.Icon, pos + (size * 0.5f) - (gs * 0.5f), tint.U32(), glyph);
-        if (clicked)
-        {
-            if (atCap)
-                this.openAdd = true;   // the dialog explains the limit
-            else
-                this.media.PickImage(p => { this.pendingPath = p; this.openAdd = true; });
-        }
-    }
-
-    private void DrawPhotoTile(Guid albumId, Guid photoId, bool isCover, Vector2 size)
+    private void DrawPhotoTile(Guid albumId, Guid photoId, bool isCover, int index, Vector2 size)
     {
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##ad_p_" + photoId, size);
+        var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
-        var rounding = Ui.Px(9f);
-        var tex = this.albums.Texture(albumId, photoId);
-        drawList.AddRectFilled(pos, pos + size, Palette.Surface2.U32(), rounding);
-        if (tex is { Width: > 0, Height: > 0 })
+        var max = pos + size;
+        var texture = this.albums.Texture(albumId, photoId);
+
+        drawList.AddRectFilled(pos, max, Palette.Surface2.U32());
+        if (texture is { Width: > 0, Height: > 0 })
         {
-            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, size.X / size.Y);
-            drawList.AddImageRounded(tex.Handle, pos, pos + size, uvMin, uvMax, 0xFFFFFFFFu, rounding);
+            var (uvMin, uvMax) = Ui.CoverUv(texture.Width, texture.Height, size.X / size.Y);
+            drawList.AddImage(texture.Handle, pos, max, uvMin, uvMax);
         }
         else
         {
             var glyph = FontAwesomeIcon.Image.ToIconString();
             var gs = Ui.Measure(this.fonts.Icon, glyph);
-            Ui.TextAt(drawList, this.fonts.Icon, pos + (size * 0.5f) - (gs * 0.5f), Palette.TextMuted.U32(), glyph);
+            Ui.TextAt(drawList, this.fonts.Icon, pos + ((size - gs) * 0.5f), Palette.TextMuted.U32(), glyph);
         }
+
+        if (hovered)
+            drawList.AddRectFilled(pos, max, Palette.WithAlpha(Palette.Scrim, 0.3f).U32());
+        drawList.AddRect(pos, max, (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+
+        // Position index, mono, on a scrim chip so it reads over any photo.
+        var number = $"{index:00}";
+        var ns = Ui.Measure(this.fonts.Mono, number);
+        var numberPos = new Vector2(max.X - Ui.Px(5f) - ns.X, pos.Y + Ui.Px(6f));
+        drawList.AddRectFilled(numberPos - new Vector2(Ui.Px(4f), Ui.Px(3f)), numberPos + ns + new Vector2(Ui.Px(4f), Ui.Px(3f)), Palette.WithAlpha(Palette.Scrim, 0.72f).U32());
+        Ui.TextAt(drawList, this.fonts.Mono, numberPos, Palette.White.U32(), number);
 
         if (isCover)
         {
-            var star = FontAwesomeIcon.Star.ToIconString();
-            var ss = Ui.Measure(this.fonts.Icon, star);
-            var radius = (MathF.Max(ss.X, ss.Y) * 0.5f) + Ui.Px(4f);
-            var center = new Vector2(pos.X + size.X - radius - Ui.Px(5f), pos.Y + radius + Ui.Px(5f));
-            drawList.AddCircleFilled(center, radius, Palette.WithAlpha(Palette.Bg, 0.66f).U32(), 16);
-            Ui.TextAt(drawList, this.fonts.Icon, center - (ss * 0.5f), this.theme.AccentText.U32(), star);
+            const string cover = "COVER";
+            var cs = Ui.Measure(this.fonts.Eyebrow, cover);
+            var chipPos = new Vector2(pos.X + Ui.Px(5f), pos.Y + Ui.Px(6f));
+            var chipPad = new Vector2(Ui.Px(5f), Ui.Px(3f));
+            drawList.AddRectFilled(chipPos, chipPos + cs + (chipPad * 2f), this.theme.Accent.U32());
+            Ui.TextAt(drawList, this.fonts.Eyebrow, chipPos + chipPad, Palette.Paper.U32(), cover);
         }
 
         if (clicked)
@@ -266,39 +304,32 @@ internal sealed class AlbumDetailScreen : IScreen
         }
     }
 
-    private void DrawOverflowMenu(AlbumDto? album)
+    private void DrawAddTile(Vector2 size, bool atCap)
     {
-        if (this.openOverflow)
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##ad_add", size);
+        var hovered = ImGui.IsItemHovered();
+        var drawList = ImGui.GetWindowDrawList();
+        var tint = atCap ? Palette.TextMuted : (hovered ? Palette.TextPrimary : Palette.TextSecondary);
+
+        if (hovered && !atCap)
+            drawList.AddRectFilled(pos, pos + size, Palette.WithAlpha(Palette.Overlay, 0.04f).U32());
+        drawList.AddRect(pos, pos + size, Palette.WithAlpha(Palette.Overlay, atCap ? 0.1f : 0.2f).U32(), 0f, ImDrawFlags.None, 1f);
+
+        var glyph = (atCap ? FontAwesomeIcon.Lock : FontAwesomeIcon.Plus).ToIconString();
+        var gs = Ui.Measure(this.fonts.Icon, glyph);
+        var label = atCap ? "FULL" : "ADD";
+        var ls = Ui.Measure(this.fonts.Eyebrow, label);
+        var center = pos + (size * 0.5f);
+        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (gs.X * 0.5f), center.Y - gs.Y), tint.U32(), glyph);
+        Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(center.X - (ls.X * 0.5f), center.Y + Ui.Px(5f)), tint.U32(), label);
+
+        if (clicked)
         {
-            this.openOverflow = false;
-            ImGui.OpenPopup("##ad_overflow_menu");
-        }
-        ImGui.SetNextWindowPos(this.overflowPos, ImGuiCond.Always, new Vector2(1f, 0f));
-        using (this.MenuStyle())
-        {
-            if (!ImGui.BeginPopup("##ad_overflow_menu"))
-                return;
-            if (album is { } al)
-            {
-                if (this.MenuRow(FontAwesomeIcon.Pen, "Rename album", false))
-                {
-                    this.renameText = al.Name;
-                    this.openRename = true;
-                    ImGui.CloseCurrentPopup();
-                }
-                var makePublic = al.Visibility == AlbumVisibilityEnum.Private;
-                if (this.MenuRow(makePublic ? FontAwesomeIcon.Globe : FontAwesomeIcon.Lock, makePublic ? "Make public" : "Make private", false))
-                {
-                    this.albums.SetVisibility(al.Id, makePublic ? "public" : "private");
-                    ImGui.CloseCurrentPopup();
-                }
-                if (this.MenuRow(FontAwesomeIcon.TrashAlt, "Delete album", true))
-                {
-                    this.openDelete = true;
-                    ImGui.CloseCurrentPopup();
-                }
-            }
-            ImGui.EndPopup();
+            if (atCap)
+                this.openAdd = true;   // the dialog explains the limit
+            else
+                this.media.PickImage(p => { this.pendingPath = p; this.openAdd = true; });
         }
     }
 
@@ -402,86 +433,10 @@ internal sealed class AlbumDetailScreen : IScreen
         }
     }
 
-    private void DrawRenameDialog(Guid albumId)
-    {
-        if (this.openRename)
-        {
-            this.openRename = false;
-            ImGui.OpenPopup("##ad_rename");
-        }
-        ImGui.SetNextWindowPos(ImGui.GetWindowPos() + (ImGui.GetWindowSize() * 0.5f), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
-        var open = true;
-        using (this.DialogStyle())
-        {
-            if (!ImGui.BeginPopupModal("##ad_rename", ref open, DialogFlags))
-                return;
-
-            var width = Ui.Px(288f);
-            ImGui.Dummy(new Vector2(width, 0f));
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Rename album");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-            this.kit.TextField("##ad_rename_name", ref this.renameText, "Album name", width);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-            var half = (width - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##ad_rename_cancel", "Cancel", half))
-                ImGui.CloseCurrentPopup();
-            ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.PrimaryButton("##ad_rename_ok", "Save", half) && this.renameText.Trim().Length > 0)
-            {
-                this.albums.Rename(albumId, this.renameText.Trim());
-                ImGui.CloseCurrentPopup();
-            }
-
-            ImGui.EndPopup();
-        }
-    }
-
-    private void DrawDeleteDialog(Guid albumId, string name, AlbumDto? album)
-    {
-        if (this.openDelete)
-        {
-            this.openDelete = false;
-            ImGui.OpenPopup("##ad_delete");
-        }
-        ImGui.SetNextWindowPos(ImGui.GetWindowPos() + (ImGui.GetWindowSize() * 0.5f), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
-        var open = true;
-        using (this.DialogStyle())
-        {
-            if (!ImGui.BeginPopupModal("##ad_delete", ref open, DialogFlags))
-                return;
-
-            var width = Ui.Px(288f);
-            ImGui.Dummy(new Vector2(width, 0f));
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, $"Delete {name}?");
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            var shared = album?.SharedCount ?? 0;
-            var body = shared > 0
-                ? $"This deletes the album and revokes access for {shared}. Your photos are removed with it."
-                : "This deletes the album and its photos.";
-            using (this.fonts.Caption.Push())
-            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-                ImGui.TextWrapped(body);
-
-            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-            var half = (width - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##ad_del_cancel", "Cancel", half))
-                ImGui.CloseCurrentPopup();
-            ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.DangerButton("##ad_del_ok", "Delete", half))
-            {
-                this.albums.Delete(albumId);
-                ImGui.CloseCurrentPopup();
-                this.router.Navigate(this.selection.AlbumReturn);
-            }
-
-            ImGui.EndPopup();
-        }
-    }
-
     private const ImGuiWindowFlags DialogFlags =
         ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.AlwaysAutoResize;
 
-    // Popup chrome shared by the two menus: a surface-1 card with a hairline border.
+    // Popup chrome shared by the menu and the dialog: a surface-1 card with a hairline border.
     private IDisposable MenuStyle()
     {
         var disposables = new List<IDisposable>
@@ -489,7 +444,7 @@ internal sealed class AlbumDetailScreen : IScreen
             ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1),
             ImRaii.PushColor(ImGuiCol.Border, Palette.Border),
             ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(6f), Ui.Px(6f))),
-            ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(12f)),
+            ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f),
             ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f),
         };
         return new Composite(disposables);
@@ -502,7 +457,7 @@ internal sealed class AlbumDetailScreen : IScreen
             ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1),
             ImRaii.PushColor(ImGuiCol.Border, Palette.Border),
             ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(18f), Ui.Px(18f))),
-            ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)),
+            ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f),
             ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f),
         };
         return new Composite(disposables);
@@ -517,8 +472,8 @@ internal sealed class AlbumDetailScreen : IScreen
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         if (hovered)
-            drawList.AddRectFilled(pos, pos + new Vector2(width, height), Palette.WithAlpha(Palette.Overlay, 0.05f).U32(), Ui.Px(8f));
-        var color = danger ? new Vector4(0.95f, 0.7f, 0.73f, 1f) : Palette.TextSecondary;
+            drawList.AddRectFilled(pos, pos + new Vector2(width, height), Palette.WithAlpha(Palette.Overlay, 0.05f).U32());
+        var color = danger ? Palette.Danger : Palette.TextSecondary;
         var glyph = icon.ToIconString();
         var gs = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(10f), pos.Y + ((height - gs.Y) * 0.5f)), color.U32(), glyph);
