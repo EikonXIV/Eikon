@@ -22,6 +22,12 @@ internal sealed class Configuration : IPluginConfiguration
     // new builds read each other's config; an unknown value falls back to Expanded.
     public int GridLayout { get; set; }
 
+    // Member-chosen UI text size as a percentage (TextScale.Min..Max, 100 = default). Scales the whole UI,
+    // fonts and layout together, so text and its surrounding boxes grow as one. Local and cosmetic;
+    // additive and optional, so old and new builds read each other's config (an out-of-range value is
+    // clamped on load).
+    public int TextScalePercent { get; set; } = 100;
+
     // The plugin version whose "What's new" the member last acknowledged, as "Major.Minor.Build". Null on
     // a fresh install (the screen is then skipped and this is set silently). Additive and optional, so old
     // and new builds read each other's config.

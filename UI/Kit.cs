@@ -88,17 +88,33 @@ internal sealed class Kit
     // A square header icon button matching the main window's title-bar chrome: a faint hover fill and a
     // muted glyph that brightens on hover. `glyph` is a FontAwesome icon string. Positioned in screen
     // space at topLeft, so a screen drawing its own header (minimize, overflow) can place it precisely.
-    public bool HeaderIconButton(ImDrawListPtr drawList, string id, string glyph, Vector2 topLeft, float size)
+    public bool HeaderIconButton(ImDrawListPtr drawList, string id, string glyph, Vector2 topLeft, float size, bool busy = false)
     {
         ImGui.SetCursorScreenPos(topLeft);
         var clicked = ImGui.InvisibleButton(id, new Vector2(size, size));
         var hovered = ImGui.IsItemHovered();
         var min = ImGui.GetItemRectMin();
+        // Busy swaps the glyph for a spinner and swallows clicks, so a background action reads as in-flight
+        // and cannot be re-triggered mid-run.
+        if (busy)
+        {
+            this.Spinner(drawList, min + new Vector2(size * 0.5f, size * 0.5f), size * 0.28f);
+            return false;
+        }
         if (hovered)
             drawList.AddRectFilled(min, min + new Vector2(size, size), Palette.WithAlpha(Palette.White, 0.06f).U32(), Ui.Px(8f));
         var gs = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(min.X + ((size - gs.X) * 0.5f), min.Y + ((size - gs.Y) * 0.5f)), (hovered ? Palette.TextSecondary : Palette.TextMuted).U32(), glyph);
         return clicked;
+    }
+
+    // An indeterminate spinner: a three-quarter arc whose phase rides ImGui's frame clock, so it turns
+    // every frame without any owned state. Drawn in the accent so it reads as active.
+    private void Spinner(ImDrawListPtr drawList, Vector2 center, float radius)
+    {
+        var start = ((float)ImGui.GetTime() * 5f) % (MathF.PI * 2f);
+        drawList.PathArcTo(center, radius, start, start + (MathF.PI * 1.5f), 20);
+        drawList.PathStroke(this.theme.Secondary.Base.U32(), ImDrawFlags.None, Ui.Px(2f));
     }
 
     // Editorial primary CTA: a cream (ink) fill with paper-dark text, matching the drawn CTAs on the

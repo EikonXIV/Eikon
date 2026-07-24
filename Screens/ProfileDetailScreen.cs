@@ -69,7 +69,8 @@ internal sealed class ProfileDetailScreen : IScreen
         if (loaded is null)
         {
             ImGui.SetCursorPos(new Vector2(0f, headerHeight + Ui.Px(120f)));
-            Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextMuted, "Loading profile…");
+            Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextMuted,
+                this.details.Failed ? "Couldn't load this profile." : "Loading profile…");
             return;
         }
 

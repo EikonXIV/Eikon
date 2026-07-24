@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
@@ -7,11 +8,12 @@ namespace Eikon.UI;
 
 // The Eikon type scale, ported to the warm-editorial families (Lovable prototype): Instrument Serif
 // for the wordmark, titles and names (with an italic cut for the two-tone treatment), Inter Tight for
-// UI and body, JetBrains Mono for eyebrows, counters and meta. Each handle is built at its real
-// on-screen pixel size so text stays crisp. Fonts are bundled as embedded resources (see the csproj).
-// The member-text handles additionally merge the game's Axis glyphs (see Make's cjk flag) so non-Latin
-// names and bios fall back to the game font rather than rendering as tofu. On a global client Axis
-// covers Japanese; full Chinese/Korean would need a bundled Noto CJK face, left out to keep this small.
+// UI and body, JetBrains Mono for eyebrows, counters and meta. Each handle is rasterized at its real
+// on-screen pixel size (design px x the game HUD scale x buildScale) so text stays crisp; a Text size
+// change re-rasterizes in the background (Rebuild) while Ui scales the draw-list text instantly, so the
+// change reads at once and then sharpens. Fonts are bundled as embedded resources (see the csproj). The
+// member-text handles merge the game's Axis glyphs (see Make's cjk flag) so non-Latin names and bios
+// fall back to the game font rather than tofu; full Chinese/Korean would need a bundled Noto CJK face.
 internal sealed class UiFonts : IDisposable
 {
     private const string SerifFile = "Eikon.Fonts.InstrumentSerif-Regular.ttf";
@@ -32,25 +34,28 @@ internal sealed class UiFonts : IDisposable
         0,
     };
 
-    private readonly IDalamudPluginInterface pluginInterface;
+    private readonly IFontAtlas atlas;
     private readonly List<IFontHandle> owned = new();
+    private float buildScale;   // the factor the build delegates rasterize at (the rebuild target)
 
     public UiFonts(IDalamudPluginInterface pluginInterface)
     {
-        this.pluginInterface = pluginInterface;
-        var atlas = pluginInterface.UiBuilder.FontAtlas;
+        this.atlas = pluginInterface.UiBuilder.FontAtlas;
+        this.buildScale = Ui.Scale;
+        Ui.FontBakedScale = Ui.Scale;   // the first build rasterizes at the startup Text size
 
-        this.Title = this.Make(atlas, SerifFile, 22f);
-        this.SerifTitle = this.Make(atlas, SerifFile, 28f, cjk: true);
-        this.SerifName = this.Make(atlas, SerifFile, 22f, cjk: true);
-        this.SerifItalicTitle = this.Make(atlas, SerifItalicFile, 28f, cjk: true);
-        this.Body = this.Make(atlas, SansFile, 18f, cjk: true);
-        this.Caption = this.Make(atlas, SansFile, 15f, cjk: true);
-        this.Label = this.Make(atlas, SansFile, 15f, cjk: true);
-        this.LabelSmall = this.Make(atlas, SansFile, 13f);
-        this.Eyebrow = this.Make(atlas, MonoFile, 15f);
-        this.Mono = this.Make(atlas, MonoFile, 12f);
-        this.Count = this.Make(atlas, MonoFile, 18f);
+        this.Title = this.Make(SerifFile, 22f);
+        this.SerifTitle = this.Make(SerifFile, 28f, cjk: true);
+        this.SerifName = this.Make(SerifFile, 22f, cjk: true);
+        this.SerifItalicTitle = this.Make(SerifItalicFile, 28f, cjk: true);
+        this.Body = this.Make(SansFile, 18f, cjk: true);
+        this.Caption = this.Make(SansFile, 15f, cjk: true);
+        this.Label = this.Make(SansFile, 15f, cjk: true);
+        this.LabelSmall = this.Make(SansFile, 13f);
+        this.Eyebrow = this.Make(MonoFile, 15f);
+        this.Mono = this.Make(MonoFile, 12f);
+        this.Count = this.Make(MonoFile, 18f);
+        this.Icon = this.MakeIcon(17f);
     }
 
     public IFontHandle Title { get; }             // Instrument Serif 22 — wordmark, legacy headers
@@ -65,14 +70,29 @@ internal sealed class UiFonts : IDisposable
     public IFontHandle Mono { get; }              // JetBrains Mono 12 — version tag (locked)
     public IFontHandle Count { get; }             // JetBrains Mono 18 — counters
 
-    // The shared FontAwesome icon font. Owned by Dalamud, so it is not disposed here.
-    public IFontHandle Icon => this.pluginInterface.UiBuilder.IconFontHandle;
+    // Our own scaled FontAwesome handle rather than Dalamud's fixed-size shared one, so icons grow with
+    // the text when the member enlarges it.
+    public IFontHandle Icon { get; }
 
-    private IFontHandle Make(IFontAtlas atlas, string resource, float designPx, bool cjk = false)
+    // Re-rasterize every handle at targetScale in the background. The build delegates read buildScale, so
+    // the rebuild bakes at the new size; Ui.FontBakedScale flips to match only once the build finishes, so
+    // draw-list text (scaled by Scale/FontBakedScale in Ui) reads at the new size immediately and sharpens
+    // then.
+    public void Rebuild(float targetScale)
     {
-        var handle = atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk =>
+        this.buildScale = targetScale;
+        this.atlas.BuildFontsAsync().ContinueWith(
+            t => { if (t.Status == TaskStatus.RanToCompletion) Ui.FontBakedScale = targetScale; },
+            TaskScheduler.Default);
+    }
+
+    private float ScaledPx(float designPx) => designPx * ImGuiHelpers.GlobalScale * this.buildScale;
+
+    private IFontHandle Make(string resource, float designPx, bool cjk = false)
+    {
+        var handle = this.atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk =>
         {
-            var px = designPx * ImGuiHelpers.GlobalScale;
+            var px = this.ScaledPx(designPx);
             var font = tk.AddFontFromStream(
                 typeof(UiFonts).Assembly.GetManifestResourceStream(resource)
                     ?? throw new InvalidOperationException($"Missing embedded font resource: {resource}"),
@@ -86,6 +106,14 @@ internal sealed class UiFonts : IDisposable
             if (cjk)
                 tk.AddGameGlyphs(new GameFontStyle(GameFontFamily.Axis, px), CjkRanges, font);
         }));
+        this.owned.Add(handle);
+        return handle;
+    }
+
+    private IFontHandle MakeIcon(float designPx)
+    {
+        var handle = this.atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk =>
+            tk.AddFontAwesomeIconFont(new SafeFontConfig { SizePx = this.ScaledPx(designPx) })));
         this.owned.Add(handle);
         return handle;
     }

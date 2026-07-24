@@ -9,7 +9,7 @@ namespace Eikon.Tests.Fakes;
 // from that peer's local KeyVault (as the real server would from what the peer published). Every other
 // endpoint throws, since the round-trip never calls it. The peer directory is mutable so a test can
 // simulate a server that later serves a different identity for the same user id (a MITM / key swap).
-internal sealed class StubApiClient : IApiClient
+internal class StubApiClient : IApiClient
 {
     private readonly Dictionary<Guid, KeyVault> peers = new();
 
@@ -65,8 +65,8 @@ internal sealed class StubApiClient : IApiClient
     public Task<ModerationKeyResponse?> GetModerationKeyAsync(CancellationToken ct) => throw new NotImplementedException();
     public Task SaveProfileAsync(string accessToken, SaveProfileRequest profile, CancellationToken ct) => throw new NotImplementedException();
     public Task<SaveProfileRequest?> GetMyProfileAsync(string accessToken, CancellationToken ct) => throw new NotImplementedException();
-    public Task<DiscoverResult> DiscoverAsync(string accessToken, DiscoverQuery query, CancellationToken ct) => throw new NotImplementedException();
-    public Task<ProfileDetailDto> GetProfileAsync(string accessToken, string userId, CancellationToken ct) => throw new NotImplementedException();
+    public virtual Task<DiscoverResult> DiscoverAsync(string accessToken, DiscoverQuery query, CancellationToken ct) => throw new NotImplementedException();
+    public virtual Task<ProfileDetailDto> GetProfileAsync(string accessToken, string userId, CancellationToken ct) => throw new NotImplementedException();
     public Task PublishOneTimePreKeysAsync(string accessToken, IReadOnlyList<PreKeyPublic> keys, CancellationToken ct) => throw new NotImplementedException();
     public Task<PhotoDto> UploadPhotoAsync(string accessToken, byte[] image, string contentType, CancellationToken ct) => throw new NotImplementedException();
     public Task<List<PhotoDto>> ListPhotosAsync(string accessToken, CancellationToken ct) => throw new NotImplementedException();

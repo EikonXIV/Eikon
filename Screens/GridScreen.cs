@@ -174,6 +174,12 @@ internal sealed class GridScreen : IScreen
         if (this.PillChip(dl, "##chip_favs", "Favorites", false, false, ref x, y, chipH))
             this.router.Navigate(Screen.Favorites);
 
+        // Refresh: re-pull discovery from the top so members who just came online surface. Right-aligned
+        // and sized to the chip height so it sits level; spins and swallows clicks while reloading.
+        var refreshPos = new Vector2((origin.X + width - pad) - chipH, y);
+        if (this.kit.HeaderIconButton(dl, "##grid_refresh", FontAwesomeIcon.SyncAlt.ToIconString(), refreshPos, chipH, this.discovery.Reloading))
+            this.discovery.Refresh();
+
         var hairY = origin.Y + padY + chipH + padY;
         dl.AddLine(new Vector2(origin.X, hairY), new Vector2(origin.X + width, hairY), Palette.Border.U32(), 1f);
         ImGui.SetCursorScreenPos(new Vector2(origin.X, hairY));
