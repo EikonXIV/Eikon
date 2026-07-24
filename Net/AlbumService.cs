@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Threading;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -18,14 +19,17 @@ internal sealed class AlbumService : IDisposable
     private readonly HttpClient http = new();
     private readonly CancellationToken lifetime;
 
-    private readonly Dictionary<Guid, List<AlbumPhotoDto>> photosByAlbum = new();
-    private readonly Dictionary<Guid, List<AlbumGranteeDto>> grantsByAlbum = new();
-    private readonly Dictionary<Guid, List<PeerAlbumDto>> peerByUser = new();
-    private readonly Dictionary<string, IDalamudTextureWrap?> textures = new();
-    private readonly HashSet<string> loadingTextures = new();
-    private readonly HashSet<Guid> loadingPhotos = new();
-    private readonly HashSet<Guid> loadingGrants = new();
-    private readonly HashSet<Guid> loadingPeers = new();
+    // Read on the UI thread while background Fire/LoadTexture tasks write, so every cache and its
+    // in-flight guard set must be concurrent (byte value = a set). A plain Dictionary/HashSet corrupts
+    // under the concurrent access and throws from TryGetValue.
+    private readonly ConcurrentDictionary<Guid, List<AlbumPhotoDto>> photosByAlbum = new();
+    private readonly ConcurrentDictionary<Guid, List<AlbumGranteeDto>> grantsByAlbum = new();
+    private readonly ConcurrentDictionary<Guid, List<PeerAlbumDto>> peerByUser = new();
+    private readonly ConcurrentDictionary<string, IDalamudTextureWrap?> textures = new();
+    private readonly ConcurrentDictionary<string, byte> loadingTextures = new();
+    private readonly ConcurrentDictionary<Guid, byte> loadingPhotos = new();
+    private readonly ConcurrentDictionary<Guid, byte> loadingGrants = new();
+    private readonly ConcurrentDictionary<Guid, byte> loadingPeers = new();
     private bool mineLoading;
     private bool requestsLoading;
     private bool requestsLoaded;
@@ -88,11 +92,11 @@ internal sealed class AlbumService : IDisposable
     {
         if (this.photosByAlbum.TryGetValue(albumId, out var list))
             return list;
-        if (this.loadingPhotos.Add(albumId))
+        if (this.loadingPhotos.TryAdd(albumId, 0))
             this.Fire(async token =>
             {
                 this.photosByAlbum[albumId] = await this.api.ListAlbumPhotosAsync(token, albumId.ToString(), CancellationToken.None);
-            }, "Listing album photos failed.", () => this.loadingPhotos.Remove(albumId));
+            }, "Listing album photos failed.", () => this.loadingPhotos.TryRemove(albumId, out _));
         return Array.Empty<AlbumPhotoDto>();
     }
 
@@ -100,11 +104,11 @@ internal sealed class AlbumService : IDisposable
     {
         if (this.grantsByAlbum.TryGetValue(albumId, out var list))
             return list;
-        if (this.loadingGrants.Add(albumId))
+        if (this.loadingGrants.TryAdd(albumId, 0))
             this.Fire(async token =>
             {
                 this.grantsByAlbum[albumId] = await this.api.ListAlbumGrantsAsync(token, albumId.ToString(), CancellationToken.None);
-            }, "Listing album grants failed.", () => this.loadingGrants.Remove(albumId));
+            }, "Listing album grants failed.", () => this.loadingGrants.TryRemove(albumId, out _));
         return Array.Empty<AlbumGranteeDto>();
     }
 
@@ -112,11 +116,11 @@ internal sealed class AlbumService : IDisposable
     {
         if (this.peerByUser.TryGetValue(userId, out var list))
             return list;
-        if (this.loadingPeers.Add(userId))
+        if (this.loadingPeers.TryAdd(userId, 0))
             this.Fire(async token =>
             {
                 this.peerByUser[userId] = await this.api.ListPeerAlbumsAsync(token, userId.ToString(), CancellationToken.None);
-            }, "Listing peer albums failed.", () => this.loadingPeers.Remove(userId));
+            }, "Listing peer albums failed.", () => this.loadingPeers.TryRemove(userId, out _));
         return Array.Empty<PeerAlbumDto>();
     }
 
@@ -128,11 +132,11 @@ internal sealed class AlbumService : IDisposable
     // scroll to the top.
     public void InvalidatePeer(Guid userId)
     {
-        if (this.loadingPeers.Add(userId))
+        if (this.loadingPeers.TryAdd(userId, 0))
             this.Fire(async token =>
             {
                 this.peerByUser[userId] = await this.api.ListPeerAlbumsAsync(token, userId.ToString(), CancellationToken.None);
-            }, "Refreshing peer albums failed.", () => this.loadingPeers.Remove(userId));
+            }, "Refreshing peer albums failed.", () => this.loadingPeers.TryRemove(userId, out _));
     }
 
     // Album-photo texture through the album's own grant-checked mint. Cached by album+photo so the same
@@ -142,7 +146,7 @@ internal sealed class AlbumService : IDisposable
         var key = albumId + ":" + photoId;
         if (this.textures.TryGetValue(key, out var wrap))
             return wrap;
-        if (this.loadingTextures.Add(key))
+        if (this.loadingTextures.TryAdd(key, 0))
             _ = this.LoadTexture(albumId, photoId, key);
         return null;
     }
@@ -166,8 +170,8 @@ internal sealed class AlbumService : IDisposable
         this.Fire(async token =>
         {
             await this.api.DeleteAlbumAsync(token, albumId.ToString(), CancellationToken.None);
-            this.photosByAlbum.Remove(albumId);
-            this.grantsByAlbum.Remove(albumId);
+            this.photosByAlbum.TryRemove(albumId, out _);
+            this.grantsByAlbum.TryRemove(albumId, out _);
             this.Reload();
         }, "Deleting album failed.");
 

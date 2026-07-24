@@ -12,6 +12,31 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 0, 0),
+            "July 2026",
+            New:
+            [
+                "Seventy-three themes, grouped into sets you can open one at a time: pastels, metallics, neons, earth, jewel tones, colour blends and more pride flags. Paper light is a full daytime theme.",
+                "Delete a thread. Messages has a Deleted tab now, and a thread's menu can delete it, put it back, or clear it for good.",
+                "Favorites is a filter on the grid, so starred people show up in the same layout as everyone else.",
+                "Show your passphrase while you type it, with the eye in the field.",
+                "Type an age straight in instead of clicking the arrows.",
+            ],
+            Improved:
+            [
+                "A new look right through the app: warm near-black, cream text and a single gold accent, with square edges and editorial type.",
+                "The minimised launcher is a solid plate carrying the Eikon mark, and it takes the colour of whichever theme you pick.",
+                "Albums have been rebuilt. The list shows each cover, count and who can see it, and an album is renamed in place.",
+                "Settings has been rebuilt around the same look, with the theme picker on its own screen.",
+            ],
+            Fixed:
+            [
+                "Your theme carries over when you update. A theme picked in an older version maps onto the new set instead of resetting.",
+                "Your albums are reachable again from Your profile.",
+                "Opening an album no longer flashes 0 photos before the real count arrives.",
+                "Fixed a crash that could happen while photos were still loading.",
+            ]),
+        new Release(
             new Version(1, 7, 0),
             "July 2026",
             New:

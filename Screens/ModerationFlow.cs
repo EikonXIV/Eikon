@@ -50,6 +50,9 @@ internal sealed class ModerationFlow
     private Action? onSharedMedia;    // optional "Shared media" row (chat only)
     private Action? onShareAlbum;     // optional "Share an album" row (chat only)
     private Action? onSafetyNumber;   // optional "Safety number" row (chat only)
+    private Action? onDeleteThread;   // optional "Delete thread" row (chat only)
+    private Action? onRestoreThread;  // optional "Restore thread" row, when the thread is already deleted
+    private Action? onPurgeThread;    // optional "Delete permanently" row, when the thread is already deleted
     private bool chatActions;         // host is the chat screen: show the chat-wallpaper rows
     private bool openMenu, openBlock, openReport;
     private int reason = -1;
@@ -68,7 +71,7 @@ internal sealed class ModerationFlow
         this.media = media;
     }
 
-    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null, Action? onShareAlbum = null)
+    public void Open(Guid userId, string name, Vector2 anchor, Action? onViewProfile = null, Action? onSafetyNumber = null, bool chatActions = false, Action? onSharedMedia = null, Action? onShareAlbum = null, Action? onDeleteThread = null, Action? onRestoreThread = null, Action? onPurgeThread = null)
     {
         this.targetId = userId;
         this.target = name;
@@ -77,6 +80,9 @@ internal sealed class ModerationFlow
         this.onSharedMedia = onSharedMedia;
         this.onShareAlbum = onShareAlbum;
         this.onSafetyNumber = onSafetyNumber;
+        this.onDeleteThread = onDeleteThread;
+        this.onRestoreThread = onRestoreThread;
+        this.onPurgeThread = onPurgeThread;
         this.chatActions = chatActions;
         this.openMenu = true;
         this.moderationKeys.EnsureLoaded();   // warm the verified seal key before a report is sealed
@@ -164,21 +170,26 @@ internal sealed class ModerationFlow
     {
         var key = this.targetId.ToString();
         var hasBackground = this.chatActions && this.config.ChatBackgrounds.ContainsKey(key);
+        var groupA = this.onViewProfile != null || this.onSharedMedia != null || this.onShareAlbum != null;
         var width = Ui.Px(206f);
         var row = Ui.Px(40f);
+        var div = Ui.Px(9f);
         var height = Ui.Px(12f)                                  // window padding (top + bottom)
             + (this.onViewProfile != null ? row : 0f)
             + (this.onSharedMedia != null ? row : 0f)
             + (this.onShareAlbum != null ? row : 0f)
-            + (this.chatActions ? Ui.Px(24f) : 0f)              // "Preferences" section label
+            + (groupA ? div : 0f)                                // divider after the view / share group
             + row                                                // mute / unmute
             + (this.chatActions ? row : 0f)                     // set / change chat background
             + (hasBackground ? row : 0f)                        // clear chat background
+            + div                                                // divider before safety / block / report
             + (this.onSafetyNumber != null ? row : 0f)
-            + Ui.Px(9f)                                          // divider
+            + (this.onDeleteThread != null ? row : 0f)
+            + (this.onRestoreThread != null ? row : 0f)
+            + (this.onPurgeThread != null ? row : 0f)
             + row                                                // block
             + row;                                               // report
-        var rounding = Ui.Px(14f);
+        var rounding = 0f;
         var winMin = ImGui.GetWindowPos();
         var winMax = winMin + ImGui.GetWindowSize();
         var x = Math.Clamp(this.menuAnchor.X - width, winMin.X + Ui.Px(8f), winMax.X - width - Ui.Px(12f));
@@ -216,9 +227,8 @@ internal sealed class ModerationFlow
             dl.AddRectFilled(min, max, Palette.Surface1.U32(), rounding);
             dl.AddRect(min, max, Palette.Border.U32(), rounding, ImDrawFlags.None, 1f);
 
-            // Top group: the things you look at (the person, the media you've shared). Self-evident, so
-            // no section label.
-            if (this.onViewProfile is { } view && this.MenuRow("##mm_view", FontAwesomeIcon.User, "View profile", false, width))
+            // Group 1: the things you look at (the person, the media, the albums you can share).
+            if (this.onViewProfile is { } view && this.MenuRow("##mm_view", FontAwesomeIcon.UserCircle, "View profile", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 view();
@@ -230,17 +240,16 @@ internal sealed class ModerationFlow
                 sharedMedia();
             }
 
-            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.LayerGroup, "Share an album", false, width))
+            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.ShareAlt, "Share an album", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 shareAlbum();
             }
 
-            // Preferences group: the per-conversation settings. Only the chat overflow carries the fuller
-            // set, so the label appears there; the profile overflow just shows mute on its own.
-            if (this.chatActions)
-                this.MenuLabel("Preferences", width);
+            if (groupA)
+                this.MenuDivider(width);
 
+            // Group 2: per-conversation preferences.
             var muted = this.config.MutedConversations.Contains(this.targetId.ToString());
             if (this.MenuRow("##mm_mute", muted ? FontAwesomeIcon.Bell : FontAwesomeIcon.BellSlash, muted ? "Unmute notifications" : "Mute notifications", false, width))
             {
@@ -275,21 +284,40 @@ internal sealed class ModerationFlow
                 }
             }
 
+            this.MenuDivider(width);
+
+            // Group 3: safety and moderation.
             if (this.onSafetyNumber is { } verify && this.MenuRow("##mm_verify", FontAwesomeIcon.ShieldAlt, "Safety number", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 verify();
             }
 
-            this.MenuDivider(width);
+            if (this.onRestoreThread is { } restore && this.MenuRow("##mm_restore", FontAwesomeIcon.TrashRestore, "Restore thread", false, width))
+            {
+                ImGui.CloseCurrentPopup();
+                restore();
+            }
 
-            if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, "Block", true, width))
+            if (this.onDeleteThread is { } deleteThread && this.MenuRow("##mm_delete_thread", FontAwesomeIcon.TrashAlt, "Delete thread", true, width))
+            {
+                ImGui.CloseCurrentPopup();
+                deleteThread();
+            }
+
+            if (this.onPurgeThread is { } purge && this.MenuRow("##mm_purge_thread", FontAwesomeIcon.TrashAlt, "Delete permanently", true, width))
+            {
+                ImGui.CloseCurrentPopup();
+                purge();
+            }
+
+            if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, "Block", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 this.openBlock = true;
             }
 
-            if (this.MenuRow("##mm_report", FontAwesomeIcon.Flag, "Report", true, width))
+            if (this.MenuRow("##mm_report", FontAwesomeIcon.Flag, "Report", false, width))
             {
                 ImGui.CloseCurrentPopup();
                 this.ResetReport();
@@ -311,8 +339,8 @@ internal sealed class ModerationFlow
 
         if (ImGui.IsItemHovered())
         {
-            var tint = destructive ? Palette.WithAlpha(Palette.Danger, 0.12f) : Palette.WithAlpha(Palette.White, 0.06f);
-            drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), Ui.Px(8f));
+            var tint = destructive ? Palette.WithAlpha(Palette.Danger, 0.12f) : Palette.WithAlpha(Palette.Overlay, 0.06f);
+            drawList.AddRectFilled(pos + new Vector2(Ui.Px(6f), Ui.Px(1f)), pos + new Vector2(width - Ui.Px(6f), rowHeight - Ui.Px(1f)), tint.U32(), 0f);
         }
 
         var iconColor = (destructive ? Palette.Danger : Palette.TextSecondary).U32();
@@ -334,17 +362,6 @@ internal sealed class ModerationFlow
         ImGui.Dummy(new Vector2(width, Ui.Px(8f)));
     }
 
-    // A muted section heading inside the overflow menu, aligned with the rows below and sitting near the
-    // baseline so it reads as a group header rather than a row.
-    private void MenuLabel(string label, float width)
-    {
-        var height = Ui.Px(24f);
-        var pos = ImGui.GetCursorScreenPos();
-        var size = Ui.Measure(this.fonts.Caption, label);
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(pos.X + Ui.Px(16f), pos.Y + height - size.Y - Ui.Px(3f)), Palette.TextMuted.U32(), label);
-        ImGui.Dummy(new Vector2(width, height));
-    }
-
     private void DrawBlock()
     {
         ImGui.SetNextWindowPos(HostCenter(), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
@@ -354,7 +371,7 @@ internal sealed class ModerationFlow
         using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(18f), Ui.Px(18f))))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
         {
             if (!ImGui.BeginPopupModal("##mod_block", ref open, flags))
@@ -394,7 +411,7 @@ internal sealed class ModerationFlow
         using (ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1))
         using (ImRaii.PushColor(ImGuiCol.Border, Palette.Border))
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(18f), Ui.Px(18f))))
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, Ui.Px(16f)))
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f))
         {
             if (!ImGui.BeginPopupModal("##mod_report", ref open, flags))
@@ -523,7 +540,7 @@ internal sealed class ModerationFlow
         }
         else if (hovered)
         {
-            drawList.AddRectFilled(pos, pos + new Vector2(width, rowHeight), Palette.WithAlpha(Palette.White, 0.05f).U32(), rounding);
+            drawList.AddRectFilled(pos, pos + new Vector2(width, rowHeight), Palette.WithAlpha(Palette.Overlay, 0.05f).U32(), rounding);
         }
 
         var center = new Vector2(pos.X + Ui.Px(20f), pos.Y + (rowHeight * 0.5f));

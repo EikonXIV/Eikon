@@ -74,6 +74,7 @@ internal sealed class FavoritesScreen : IScreen
                 {
                     this.selection.ProfileUserId = profiles[i].UserId;
                     this.selection.ProfileDisplayName = profiles[i].DisplayName;
+                    this.selection.ProfileReturn = Screen.Favorites;
                     this.router.Navigate(Screen.ProfileDetail);
                 }
             }
@@ -85,7 +86,7 @@ internal sealed class FavoritesScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##fav_" + profile.UserId, size);
         var drawList = ImGui.GetWindowDrawList();
-        var rounding = Ui.Px(12f);
+        var rounding = 0f;
 
         drawList.AddRectFilled(pos, pos + size, Palette.Surface2.U32(), rounding);
 

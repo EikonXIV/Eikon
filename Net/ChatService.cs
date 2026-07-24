@@ -100,6 +100,21 @@ internal sealed class ChatService
         }
     }
 
+    // Drop a peer's decrypted history and rewrite the store without it. This is the only durable copy -
+    // the server keeps a delivery queue, not an archive - so a permanent delete happens here, not there.
+    // A later message from the peer simply starts the thread again, empty.
+    public void ForgetThread(Guid peer)
+    {
+        lock (this.gate)
+        {
+            this.EnsureLoaded();
+            if (!this.threads.Remove(peer))
+                return;
+
+            this.Save();
+        }
+    }
+
     public void Send(Guid peer, string text)
     {
         var clientMsgId = Guid.NewGuid().ToString();

@@ -68,6 +68,11 @@ internal sealed class KeyVault
 
     public void CreateIdentity(string passphrase)
     {
+        // A fresh identity re-seals under a new vault key, orphaning any stores from a prior identity
+        // (ratchet sessions, decrypted threads, identity pins). Clear them so the owning services start
+        // clean rather than failing closed on a file they can no longer decrypt.
+        ClearDependentStores(this.path);
+
         var (sPriv, sPub) = Crypto.GenerateSignKeyPair();
         var (dPriv, dPub) = Crypto.GenerateDhKeyPair();
 
@@ -208,18 +213,32 @@ internal sealed class KeyVault
     public void Reset()
     {
         this.Lock();
-        var dir = Path.GetDirectoryName(this.path)!;
-        foreach (var file in new[] { this.path, Path.Combine(dir, "sessions.bin"), Path.Combine(dir, "sessions.bin.bak"), Path.Combine(dir, "threads.bin"), Path.Combine(dir, "threads.bin.bak") })
+        TryDelete(this.path);
+        ClearDependentStores(this.path);
+    }
+
+    // The local stores sealed to the vault key: the message ratchet sessions, the decrypted thread
+    // cache, and the identity pins. Each re-seals under the vault key, so a store left behind from a
+    // prior identity is unreadable and the service that owns it fails closed (IdentityService refuses
+    // every peer; MessageCrypto blocks all messaging). Clearing them whenever the identity changes lets
+    // those services re-TOFU / re-establish cleanly. Called on reset and before a fresh identity is minted.
+    private static void ClearDependentStores(string vaultPath)
+    {
+        var dir = Path.GetDirectoryName(vaultPath)!;
+        foreach (var name in new[] { "sessions.bin", "sessions.bin.bak", "threads.bin", "threads.bin.bak", "pins.bin", "pins.bin.bak" })
+            TryDelete(Path.Combine(dir, name));
+    }
+
+    private static void TryDelete(string file)
+    {
+        try
         {
-            try
-            {
-                if (File.Exists(file))
-                    File.Delete(file);
-            }
-            catch
-            {
-                // Best effort; a stale file is overwritten / unreadable under the new vault key.
-            }
+            if (File.Exists(file))
+                File.Delete(file);
+        }
+        catch
+        {
+            // Best effort; a stale file is unreadable under the new vault key anyway.
         }
     }
 

@@ -7,12 +7,12 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Windows;
 
-// Minimized launcher. When the main window is hidden, this small floating phone stays on screen: drag
-// it anywhere, tap it to reopen the app, right-click it to close the app fully (no orb). It's drawn
-// from primitives (rounded body, lit screen, speaker and home-bar lines, plus an unread-count badge -
-// or a lock symbol while the vault is locked). The window is borderless and transparent so only the
-// phone shows; it stays movable because the body (a Dummy, not a button) is draggable, and a tap is
-// told from a drag by how far the cursor moved between press and release.
+// Minimized launcher. When the main window is hidden, this small floating tomestone stays on screen:
+// drag it anywhere, tap it to reopen the app, right-click it to close the app fully (no orb). It's
+// drawn from primitives (an accent plate with the Eikon diamond knocked out of it, plus an
+// unread-count badge - or a lock symbol while the vault is locked). The window is borderless and
+// transparent so only the plate shows; it stays movable because the body (a Dummy, not a button) is
+// draggable, and a tap is told from a drag by how far the cursor moved between press and release.
 internal sealed class OrbWindow : Window
 {
     private readonly ThemeService theme;
@@ -57,7 +57,7 @@ internal sealed class OrbWindow : Window
             unread += c.Unread;
 
         var w = Ui.Px(48f);
-        var h = Ui.Px(80f);
+        var h = Ui.Px(72f);
         ImGui.Dummy(new Vector2(w, h));
         var min = ImGui.GetItemRectMin();
         var max = min + new Vector2(w, h);
@@ -68,48 +68,49 @@ internal sealed class OrbWindow : Window
 
         var bodyRound = Ui.Px(13f);
 
-        // soft drop shadow
-        for (var i = 4; i >= 1; i--)
-        {
-            var s = i * Ui.Px(1.6f);
-            drawList.AddRectFilled(new Vector2(min.X - s, min.Y - s + Ui.Px(2f)), new Vector2(max.X + s, max.Y + s + Ui.Px(2f)), new Vector4(0f, 0f, 0f, 0.05f * (5 - i)).U32(), bodyRound + s);
-        }
+        // One soft seat rather than a stacked shadow: enough to lift the plate off bright scenery
+        // without the soft-UI depth the rest of the editorial surface has dropped.
+        drawList.AddRectFilled(
+            new Vector2(min.X - Ui.Px(2f), min.Y - Ui.Px(1f)),
+            new Vector2(max.X + Ui.Px(2f), max.Y + Ui.Px(3f)),
+            new Vector4(0f, 0f, 0f, 0.38f).U32(),
+            bodyRound + Ui.Px(2f));
 
-        // phone body + hairline edge
-        drawList.AddRectFilled(min, max, Palette.Surface2.U32(), bodyRound);
-        drawList.AddRect(min, max, Palette.WithAlpha(Palette.White, 0.12f).U32(), bodyRound, ImDrawFlags.None, Ui.Px(1f));
+        // The plate is a solid accent tomestone with the mark's diamond knocked out of it, and the gem
+        // punching back through in the plate color. Every color is a theme token, so the launcher
+        // recolors with the picked theme: OnAccent is whichever of paper or white reads on that accent,
+        // which is what keeps the cut legible on light themes as well as dark ones.
+        var locked = !this.vault.IsUnlocked;
+        var plate = locked ? Palette.WithAlpha(this.theme.Accent, 0.55f) : this.theme.Accent;
+        var cut = locked ? Palette.WithAlpha(this.theme.OnAccent, 0.62f) : this.theme.OnAccent;
 
-        // speaker slit
-        var spkW = Ui.Px(14f);
-        var spkH = Ui.Px(3f);
-        var spkMin = new Vector2(min.X + ((w - spkW) * 0.5f), min.Y + Ui.Px(6f));
-        drawList.AddRectFilled(spkMin, spkMin + new Vector2(spkW, spkH), Palette.WithAlpha(Palette.White, 0.22f).U32(), spkH * 0.5f);
+        drawList.AddRectFilled(min, max, plate.U32(), bodyRound);
 
-        // lit screen
-        var screenMin = new Vector2(min.X + Ui.Px(7f), min.Y + Ui.Px(12f));
-        var screenMax = new Vector2(max.X - Ui.Px(7f), max.Y - Ui.Px(11f));
-        drawList.AddRectFilled(screenMin, screenMax, this.theme.AccentDeep.U32(), Ui.Px(8f));
+        var center = (min + max) * 0.5f;
+        var armX = w * 0.325f;
+        var armY = h * 0.233f;
+        drawList.AddQuadFilled(
+            new Vector2(center.X, center.Y - armY),
+            new Vector2(center.X + armX, center.Y),
+            new Vector2(center.X, center.Y + armY),
+            new Vector2(center.X - armX, center.Y),
+            cut.U32());
+        drawList.AddCircleFilled(center, w * 0.08f, plate.U32(), 16);
 
-        // The Eikon mark on the lit screen: stone tablet outline (white) with a glowing accent core.
-        Ui.AetherCore(drawList, (screenMin + screenMax) * 0.5f, Ui.Px(40f),
-            Palette.WithAlpha(Palette.White, 0.92f).U32(), this.theme.AccentText.U32());
-
-        // home indicator
-        var homeW = Ui.Px(18f);
-        var homeH = Ui.Px(3f);
-        var homeMin = new Vector2(min.X + ((w - homeW) * 0.5f), max.Y - Ui.Px(7f));
-        drawList.AddRectFilled(homeMin, homeMin + new Vector2(homeW, homeH), Palette.WithAlpha(Palette.White, 0.18f).U32(), homeH * 0.5f);
-
-        // Top-right corner: a lock symbol while the vault is locked, otherwise the unread count.
+        // Top-right corner: a lock symbol while the vault is locked, otherwise the unread count. Both sit
+        // on the theme's own ground with an accent ring, so they read against the plate and against
+        // whatever is behind the orb, on light and dark themes alike. Red is deliberately not used here:
+        // on an accent-filled plate the ground is the stronger contrast, and red is kept for destructive
+        // actions elsewhere.
         var badgeCenter = new Vector2(max.X - Ui.Px(1f), min.Y + Ui.Px(1f));
-        if (!this.vault.IsUnlocked)
+        if (locked)
         {
             var d = Ui.Px(22f);
             drawList.AddCircleFilled(badgeCenter, d * 0.5f, Palette.Bg.U32(), 16);
-            drawList.AddCircle(badgeCenter, d * 0.5f, Palette.WithAlpha(Palette.White, 0.25f).U32(), 16, Ui.Px(1.5f));
+            drawList.AddCircle(badgeCenter, d * 0.5f, Palette.WithAlpha(this.theme.Accent, 0.55f).U32(), 16, Ui.Px(1.4f));
             var lockGlyph = FontAwesomeIcon.Lock.ToIconString();
             var lockSize = Ui.Measure(this.fonts.Icon, lockGlyph);
-            Ui.TextAt(drawList, this.fonts.Icon, badgeCenter - (lockSize * 0.5f), Palette.TextSecondary.U32(), lockGlyph);
+            Ui.TextAt(drawList, this.fonts.Icon, badgeCenter - (lockSize * 0.5f), Palette.TextPrimary.U32(), lockGlyph);
         }
         else if (unread > 0)
         {
@@ -119,9 +120,9 @@ internal sealed class OrbWindow : Window
             var badgeW = MathF.Max(badgeH, labelSize.X + Ui.Px(10f));
             var badgeMin = badgeCenter - new Vector2(badgeW * 0.5f, badgeH * 0.5f);
             var badgeMax = badgeMin + new Vector2(badgeW, badgeH);
-            drawList.AddRectFilled(badgeMin, badgeMax, Palette.Danger.U32(), badgeH * 0.5f);
-            drawList.AddRect(badgeMin, badgeMax, Palette.Bg.U32(), badgeH * 0.5f, ImDrawFlags.None, Ui.Px(2f));
-            Ui.TextAt(drawList, this.fonts.Caption, badgeMin + ((new Vector2(badgeW, badgeH) - labelSize) * 0.5f), Palette.White.U32(), label);
+            drawList.AddRectFilled(badgeMin, badgeMax, Palette.Bg.U32(), badgeH * 0.5f);
+            drawList.AddRect(badgeMin, badgeMax, this.theme.Accent.U32(), badgeH * 0.5f, ImDrawFlags.None, Ui.Px(1.4f));
+            Ui.TextAt(drawList, this.fonts.Caption, badgeMin + ((new Vector2(badgeW, badgeH) - labelSize) * 0.5f), Palette.TextPrimary.U32(), label);
         }
 
         drawList.PopClipRect();

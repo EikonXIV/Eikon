@@ -210,7 +210,7 @@ internal sealed class SharedMediaScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##sm_" + id, size);
         var drawList = ImGui.GetWindowDrawList();
-        var rounding = Ui.Px(8f);
+        var rounding = 0f;
 
         var blurred = message.Nsfw && !this.revealed.Contains(id);
         var texture = blurred ? null : this.mediaCache.Texture(id);

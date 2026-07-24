@@ -86,7 +86,7 @@ internal sealed class PhotoManager
         var clicked = ImGui.InvisibleButton("##photo" + index, new Vector2(width, height));
         var drawList = ImGui.GetWindowDrawList();
         var max = pos + new Vector2(width, height);
-        var rounding = Ui.Px(12f);
+        var rounding = 0f;
 
         if (index >= this.photoSvc.Mine.Count)
         {
@@ -198,13 +198,13 @@ internal sealed class PhotoManager
             }
 
             var (uvMin, uvMax) = CoverUv(texture.Width, texture.Height, PhotoAspect, photo.Zoom, photo.CenterX, photo.CenterY);
-            drawList.AddImageRounded(texture.Handle, framePos, frameMax, uvMin, uvMax, 0xFFFFFFFFu, Ui.Px(12f));
+            drawList.AddImage(texture.Handle, framePos, frameMax, uvMin, uvMax);
         }
         else
         {
-            drawList.AddRectFilled(framePos, frameMax, Palette.Surface2.U32(), Ui.Px(12f));
+            drawList.AddRectFilled(framePos, frameMax, Palette.Surface2.U32());
         }
-        drawList.AddRect(framePos, frameMax, Palette.Border.U32(), Ui.Px(12f), ImDrawFlags.None, 1f);
+        drawList.AddRect(framePos, frameMax, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
         ImGui.SetCursorScreenPos(new Vector2(origin.X, framePos.Y + frameHeight + Ui.Px(12f)));
         using (this.fonts.Caption.Push())

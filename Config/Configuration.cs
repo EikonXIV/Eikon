@@ -6,15 +6,19 @@ namespace Eikon.Config;
 // Persisted plugin configuration. Stored by Dalamud per character-independent plugin config.
 internal sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    // A fresh install starts at the current version so no migration runs against defaults; a config
+    // saved by an older build carries its own lower number and is migrated on load.
+    public int Version { get; set; } = 3;
 
-    // Index into AccentPresets.All. 0 is Blue, the default.
+    // Index into the retired AccentPresets table (0 = Blue, the old default). Kept only so the Version
+    // 2 -> 3 migration can read an older build's accent choice and resolve it to a catalog theme; the
+    // app itself no longer reads or writes it.
     public int AccentPresetIndex { get; set; }
 
-    // Selected pride-flag theme id (e.g. "pride", "trans"), or null for a plain solid accent. When a
-    // flag is active we also write AccentPresetIndex to the flag's nearest solid, so an older build
-    // that cannot read this field still renders a sensible color. Additive and optional, so old and new
-    // builds read each other's config.
+    // Selected theme id from the theme catalog (e.g. "editorial-dark", "paper-light", "sky", "pride"),
+    // or null for the default editorial dark. Drives the whole palette, not just the accent. Additive and
+    // optional, so old and new builds read each other's config; an id an older build cannot resolve falls
+    // back to its default.
     public string? ThemeId { get; set; }
 
     // Discovery grid layout: 0 = Expanded (2-column portrait tiles, the default), 1 = Compact
@@ -64,6 +68,14 @@ internal sealed class Configuration : IPluginConfiguration
 
     // Peers (user id strings) muted from the chat overflow menu: no toast, no sound.
     public List<string> MutedConversations { get; set; } = new();
+
+    // Threads deleted from the inbox, as peer user id -> the last message time (unix seconds) when it
+    // was deleted. Local by design: the server keeps a delivery queue that ages out, not an archive, and
+    // a durable per-conversation "deleted, and when" row on the server would be exactly the metadata
+    // trail the retention policy exists to destroy. The watermark is what brings a thread back when the
+    // peer writes again - anything newer than it means there is something unseen. Additive and optional,
+    // so old and new builds read each other's config; an older build just shows the thread as normal.
+    public Dictionary<string, long> DeletedConversations { get; set; } = new();
 
     // Per-conversation chat wallpaper: peer user id string -> absolute path of a local image the
     // viewer picked from the chat overflow menu. Local and cosmetic only - never uploaded, never sent

@@ -7,43 +7,38 @@ using Eikon.UI.Theme;
 
 namespace Eikon.Screens;
 
-// My profile and its editors. The main view is a photo manager plus tappable rows; tapping a row
-// swaps the body for the matching editor subview (text, long text, single select, stepper,
-// multi-select chips, or the after-dark sub-screen). State is local and committed on Save;
-// persistence and upload land in later phases.
+// My profile (warm-editorial). A self-preview of the profile-detail view — "how others see you":
+// a hero, the portraits grid, data table, albums, about, interests, looking-for and after-dark, pinned
+// under a preview strip and above a sticky Edit CTA. Edit swaps the body for a single scrolling form:
+// the 6-slot photo manager plus inline pickers for every field. Save pushes the whole profile, Cancel
+// reloads it. The preview reads the server's own ProfileDetailDto for the signed-in user, so unsupported
+// mockup fields (FFXIV job/role, tagline) are simply absent rather than faked.
 internal sealed class MyProfileScreen : IScreen
 {
-    private enum Editor
-    {
-        None, DisplayName, Bio, Pronouns, Gender, Age, Race, World, LookingFor, Into, Tribe, AfterDark,
-    }
-
     private readonly ScreenRouter router;
-    private readonly ThemeService theme;
     private readonly Kit kit;
     private readonly UiFonts fonts;
     private readonly Lightbox lightbox;
     private readonly ProfileService profiles;
     private readonly WorldCatalog catalog;
     private readonly PhotoManager photos;
+    private readonly PhotoService photoSvc;
     private readonly Selection selection;
     private readonly SessionStore session;
     private readonly ProfileDetailService details;
+    private readonly AlbumService albums;
 
     private int worldId;
     private bool applied;
+    private bool editing;
     private int editDc = -1;
-    private int editWorldId;
+    private int heroIndex;
+    private Guid previewFor;
 
-    // Profile state. Empty until the server profile hydrates: Draw renders a loading state and no
-    // editable rows before then, so a Save can never serialize these placeholders over the real
-    // profile (POST /api/profile is a full-row overwrite).
     private string displayName = string.Empty;
     private string bio = string.Empty;
     private int pronoun;
-    private string pronounCustom = string.Empty;
     private int gender;
-    private string genderCustom = string.Empty;
     private int age = 27;
     private readonly bool[] races = new bool[Options.Races.Length];
     private readonly bool[] tribes = new bool[Options.Tribes.Length];
@@ -56,34 +51,20 @@ internal sealed class MyProfileScreen : IScreen
     private readonly bool[] meet = new bool[Options.Meet.Length];
     private readonly bool[] kinks = new bool[Options.Kinks.Length];
 
-    // Editor scratch (so Cancel discards).
-    private Editor editor = Editor.None;
-    private float listScrollY;          // profile list scroll, captured on open so we can restore it on back
-    private bool restoreListScroll;
-    private string editText = string.Empty;
-    private bool bioWrapped;
-    private int editSingle;
-    private string editCustom = string.Empty;
-    private int editAge;
-    private bool[] editMulti = System.Array.Empty<bool>();
-    private bool adNsfw;
-    private int adPos, adRole, adSize;
-    private bool[] adMeet = System.Array.Empty<bool>();
-    private bool[] adKinks = System.Array.Empty<bool>();
-
-    public MyProfileScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, Lightbox lightbox, ProfileService profiles, WorldCatalog catalog, PhotoManager photos, Selection selection, SessionStore session, ProfileDetailService details)
+    public MyProfileScreen(ScreenRouter router, Kit kit, UiFonts fonts, Lightbox lightbox, ProfileService profiles, WorldCatalog catalog, PhotoManager photos, PhotoService photoSvc, Selection selection, SessionStore session, ProfileDetailService details, AlbumService albums)
     {
         this.router = router;
-        this.theme = theme;
         this.kit = kit;
         this.fonts = fonts;
         this.lightbox = lightbox;
         this.profiles = profiles;
         this.catalog = catalog;
         this.photos = photos;
+        this.photoSvc = photoSvc;
         this.selection = selection;
         this.session = session;
         this.details = details;
+        this.albums = albums;
     }
 
     public Screen Id => Screen.MyProfile;
@@ -92,19 +73,16 @@ internal sealed class MyProfileScreen : IScreen
 
     public void Draw()
     {
-        var contentWidth = ImGui.GetContentRegionAvail().X - Ui.Px(16f);
+        var pad = Ui.Px(16f);
+        var contentWidth = ImGui.GetContentRegionAvail().X - (pad * 2f);
 
-        // Hydrate from the server before anything is editable. Until the profile has loaded we show a
-        // loading state and render no rows, so the user can't open an editor and Save placeholder
-        // state over their real profile (POST /api/profile is a full-row overwrite). A 404 (no profile
-        // yet) loads as null: we still mark applied and start from empty defaults, correct for setup.
         this.profiles.EnsureLoaded();
         if (!this.applied)
         {
             if (!this.profiles.Loaded)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading...");
+                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading…");
                 return;
             }
 
@@ -119,270 +97,788 @@ internal sealed class MyProfileScreen : IScreen
             return;
         }
 
-        if (this.editor != Editor.None)
-        {
-            this.DrawEditor(contentWidth);
-            return;
-        }
-
-        // Returning from an editor: jump back to where the list was, not the top.
-        if (this.restoreListScroll)
-        {
-            ImGui.SetScrollY(this.listScrollY);
-            this.restoreListScroll = false;
-        }
-
         this.catalog.EnsureLoaded();
 
-        this.DrawPreviewButton(contentWidth);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.kit.SectionLabel("Photos");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.photos.DrawGrid(contentWidth);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.SettingRow("##r_albums", "Albums", string.Empty, contentWidth)) this.router.Navigate(Screen.Albums);
+        if (this.editing)
+        {
+            ImGui.Indent(pad);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+            this.DrawForm(contentWidth);
+            ImGui.Unindent(pad);
+        }
+        else
+        {
+            this.DrawPreview(ImGui.GetContentRegionAvail());
+        }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("About you");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.SettingRow("##r_name", "Display name", this.displayName, contentWidth)) this.Open(Editor.DisplayName);
-        if (this.SettingRow("##r_pn", "Pronouns", this.PronounValue(), contentWidth)) this.Open(Editor.Pronouns);
-        if (this.SettingRow("##r_gn", "Gender", this.GenderValue(), contentWidth)) this.Open(Editor.Gender);
-        if (this.SettingRow("##r_age", "Age", this.age.ToString(), contentWidth)) this.Open(Editor.Age);
-        if (this.SettingRow("##r_race", "Race", this.RaceValue(), contentWidth)) this.Open(Editor.Race);
-        if (this.SettingRow("##r_world", "Home world", this.WorldValue(), contentWidth)) this.Open(Editor.World);
-        if (this.SettingRow("##r_bio", "Bio", this.bio.Length > 0 ? this.bio : "Add", contentWidth)) this.Open(Editor.Bio);
-
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("Matching");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.SettingRow("##r_lf", "Looking for", Summary(Options.LookingFor, this.lookingFor), contentWidth)) this.Open(Editor.LookingFor);
-        if (this.SettingRow("##r_into", "Into", Summary(Options.Interests, this.interests), contentWidth)) this.Open(Editor.Into);
-        if (this.SettingRow("##r_tribe", "Tribe", Summary(Options.Tribes, this.tribes), contentWidth)) this.Open(Editor.Tribe);
-
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("After dark");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.SettingRow("##r_ad", "After dark", this.nsfwEnabled ? this.AfterDarkSummary() : "Off", contentWidth)) this.Open(Editor.AfterDark);
-
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         this.lightbox.Draw();
     }
 
-    // ---- main view pieces ----
+    // ---- preview (how others see you) ----
 
-    private void DrawPreviewButton(float contentWidth)
+    private void DrawPreview(Vector2 avail)
     {
-        var width = Ui.Px(110f);
-        var start = ImGui.GetCursorPosX();
-        ImGui.SetCursorPosX(start + contentWidth - width);
-        // Open profile detail in self-view ("see as others"). Needs the selection set to our own id;
-        // invalidate the detail cache so edits made this session are reflected.
-        if (this.kit.SecondaryButton("##preview", "Preview", width) && this.session.UserId is { } me)
+        this.photoSvc.EnsureLoaded();
+        this.albums.EnsureLoaded();
+
+        var stripH = Ui.Px(44f);
+        var ctaH = Ui.Px(64f);
+        var rootPos = ImGui.GetCursorScreenPos();
+
+        this.DrawPreviewStrip(avail.X, stripH);
+
+        ProfileDetailDto? loaded = null;
+        if (this.session.UserId is { } me)
         {
-            this.selection.ProfileUserId = me;
-            this.selection.ProfileDisplayName = this.displayName;
-            this.details.Invalidate();
-            this.router.Navigate(Screen.ProfileDetail);
+            this.details.Ensure(me);
+            loaded = this.details.Current;
+        }
+
+        var bodyH = avail.Y - stripH - ctaH;
+        ImGui.SetCursorPos(new Vector2(0f, stripH));
+        using (var body = ImRaii.Child("mp_preview", new Vector2(avail.X, bodyH), false, ImGuiWindowFlags.NoScrollbar))
+        {
+            if (body.Success)
+            {
+                if (loaded is null)
+                {
+                    ImGui.Dummy(new Vector2(0f, Ui.Px(80f)));
+                    Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextMuted, "Loading preview…");
+                }
+                else
+                {
+                    if (this.previewFor != loaded.UserId)
+                    {
+                        this.previewFor = loaded.UserId;
+                        this.heroIndex = 0;
+                    }
+
+                    this.DrawHero(avail.X, loaded);
+                    this.DrawPortraits(avail.X, loaded);
+                    this.DrawDataTable(avail.X, loaded);
+                    this.DrawSections(avail.X, loaded);
+                }
+            }
+        }
+
+        // Sticky Edit CTA, pinned above the bottom nav with a hairline separating it from the scroll body.
+        var footerY = rootPos.Y + stripH + bodyH;
+        ImGui.GetWindowDrawList().AddLine(new Vector2(rootPos.X, footerY), new Vector2(rootPos.X + avail.X, footerY), Palette.Border.U32(), 1f);
+        var ctaPad = Ui.Px(16f);
+        ImGui.SetCursorPos(new Vector2(ctaPad, stripH + bodyH + Ui.Px(10f)));
+        if (this.EditCta(avail.X - (ctaPad * 2f), Ui.Px(44f)))
+            this.OpenForm();
+    }
+
+    private void DrawPreviewStrip(float fullWidth, float height)
+    {
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var pad = Ui.Px(20f);
+        var midY = origin.Y + (height * 0.5f);
+
+        const string label = "YOUR PROFILE PREVIEW · HOW OTHERS SEE YOU";
+        var ls = Ui.Measure(this.fonts.Eyebrow, label);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, midY - (ls.Y * 0.5f)), Palette.TextSecondary.U32(), label);
+
+        var pen = FontAwesomeIcon.Pen.ToIconString();
+        var ps = Ui.Measure(this.fonts.Icon, pen);
+        ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth - pad) - ps.X, midY - (ps.Y * 0.5f)));
+        if (ImGui.InvisibleButton("##mp_edit_top", ps))
+            this.OpenForm();
+        Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), pen);
+
+        dl.AddLine(new Vector2(origin.X, origin.Y + height - 1f), new Vector2(origin.X + fullWidth, origin.Y + height - 1f), Palette.Border.U32(), 1f);
+    }
+
+    private void DrawHero(float fullWidth, ProfileDetailDto dto)
+    {
+        var heroHeight = fullWidth * 1.25f;
+        var pos = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        dl.AddRectFilled(pos, pos + new Vector2(fullWidth, heroHeight), Palette.Surface2.U32());
+
+        var photos = dto.PhotoIds;
+        var count = photos.Count;
+        this.heroIndex = count > 0 ? Math.Clamp(this.heroIndex, 0, count - 1) : 0;
+        var photoId = count > 0 ? photos[this.heroIndex] : dto.MainPhotoId;
+        var texture = photoId is { } id ? this.photoSvc.Texture(id) : null;
+        if (texture != null)
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(texture.Width, texture.Height, fullWidth / heroHeight, offsetY: 0.2f);
+            dl.AddImage(texture.Handle, pos, pos + new Vector2(fullWidth, heroHeight), uvMin, uvMax);
+        }
+        else
+        {
+            var initial = dto.DisplayName.Length > 0 ? dto.DisplayName[..1].ToUpperInvariant() : "?";
+            var isz = Ui.Measure(this.fonts.SerifTitle, initial);
+            Ui.TextAt(dl, this.fonts.SerifTitle, pos + new Vector2((fullWidth - isz.X) * 0.5f, (heroHeight * 0.35f) - (isz.Y * 0.5f)), Palette.TextMuted.U32(), initial);
+        }
+
+        // Photo counter chip, top-right (NN / NN).
+        if (count > 0)
+        {
+            var counter = $"{this.heroIndex + 1:00} / {count:00}";
+            var cs = Ui.Measure(this.fonts.Count, counter);
+            var chipPad = new Vector2(Ui.Px(8f), Ui.Px(4f));
+            var chipSize = cs + (chipPad * 2f);
+            var chipPos = new Vector2((pos.X + fullWidth) - Ui.Px(12f) - chipSize.X, pos.Y + Ui.Px(12f));
+            dl.AddRectFilled(chipPos, chipPos + chipSize, Palette.Scrim.U32());
+            Ui.TextAt(dl, this.fonts.Count, chipPos + chipPad, Palette.WithAlpha(Palette.White, 0.9f).U32(), counter);
+        }
+
+        // Gradient + overlaid status eyebrow and the two-tone name, anchored bottom-left.
+        var gradTop = pos + new Vector2(0f, heroHeight * 0.55f);
+        var clear = Palette.WithAlpha(Palette.Bg, 0f).U32();
+        var solid = Palette.WithAlpha(Palette.Bg, 0.96f).U32();
+        dl.AddRectFilledMultiColor(gradTop, pos + new Vector2(fullWidth, heroHeight), clear, clear, solid, solid);
+
+        var ox = pos.X + Ui.Px(20f);
+        var (first, rest) = SplitName(dto.DisplayName);
+        var firstH = Ui.Measure(this.fonts.SerifTitle, first).Y;
+        var restH = rest.Length > 0 ? Ui.Measure(this.fonts.SerifItalicTitle, rest).Y : 0f;
+        var restY = (pos.Y + heroHeight) - Ui.Px(20f) - restH;
+        var firstY = restY - firstH + Ui.Px(4f);
+        if (rest.Length > 0)
+            Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(ox, restY), Palette.Signal.U32(), rest);
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(ox, firstY), Palette.TextPrimary.U32(), first);
+
+        if (dto.Online)
+        {
+            const string status = "ONLINE NOW";
+            var eH = Ui.Measure(this.fonts.Eyebrow, status).Y;
+            var ey = firstY - Ui.Px(8f) - eH;
+            dl.AddCircleFilled(new Vector2(ox + Ui.Px(3f), ey + (eH * 0.5f)), Ui.Px(3f), Palette.Online.U32(), 12);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(ox + Ui.Px(13f), ey), Palette.WithAlpha(Palette.TextPrimary, 0.85f).U32(), status);
+        }
+
+        // Paging taps: left/right thirds step photos, centre opens the viewer; one photo opens on tap.
+        if (count > 1)
+        {
+            var third = fullWidth / 3f;
+            ImGui.SetCursorScreenPos(pos);
+            if (ImGui.InvisibleButton("##mp_hero_prev", new Vector2(third, heroHeight)))
+                this.heroIndex = (this.heroIndex - 1 + count) % count;
+            ImGui.SetCursorScreenPos(pos + new Vector2(third, 0f));
+            if (ImGui.InvisibleButton("##mp_hero_open", new Vector2(third, heroHeight)))
+                this.lightbox.OpenPhotos(photos, this.heroIndex);
+            ImGui.SetCursorScreenPos(pos + new Vector2(third * 2f, 0f));
+            if (ImGui.InvisibleButton("##mp_hero_next", new Vector2(fullWidth - (third * 2f), heroHeight)))
+                this.heroIndex = (this.heroIndex + 1) % count;
+        }
+        else
+        {
+            ImGui.SetCursorScreenPos(pos);
+            if (ImGui.InvisibleButton("##mp_hero", new Vector2(fullWidth, heroHeight)) && count > 0)
+                this.lightbox.OpenPhotos(photos, this.heroIndex);
+        }
+
+        ImGui.SetCursorScreenPos(pos);
+        ImGui.Dummy(new Vector2(fullWidth, heroHeight));
+    }
+
+    private void DrawPortraits(float fullWidth, ProfileDetailDto dto)
+    {
+        var pad = Ui.Px(20f);
+        var dl = ImGui.GetWindowDrawList();
+        var photos = dto.PhotoIds;
+        var count = photos.Count;
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
+        var head = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(head.X + pad, head.Y), Palette.TextSecondary.U32(), "PORTRAITS");
+        var slots = $"{count:00} slots";
+        var ss = Ui.Measure(this.fonts.Eyebrow, slots);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2((head.X + fullWidth) - pad - ss.X, head.Y), Palette.TextMuted.U32(), slots);
+        ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(14f)));
+
+        if (count == 0)
+            return;
+
+        const int cols = 3;
+        var gap = Ui.Px(8f);
+        var innerWidth = fullWidth - (pad * 2f);
+        var tileW = (innerWidth - (gap * (cols - 1))) / cols;
+        var tileH = tileW * 1.3f;
+        var basePos = ImGui.GetCursorScreenPos();
+        var originX = basePos.X + pad;
+        var rows = (count + cols - 1) / cols;
+
+        for (var i = 0; i < count; i++)
+        {
+            var col = i % cols;
+            var row = i / cols;
+            var tp = new Vector2(originX + (col * (tileW + gap)), basePos.Y + (row * (tileH + gap)));
+            var tmax = tp + new Vector2(tileW, tileH);
+            dl.AddRectFilled(tp, tmax, Palette.Surface2.U32());
+            var tex = this.photoSvc.Texture(photos[i]);
+            if (tex != null)
+            {
+                var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, tileW / tileH);
+                dl.AddImage(tex.Handle, tp, tmax, uvMin, uvMax);
+            }
+            dl.AddRect(tp, tmax, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
+            var num = $"{i + 1:00}";
+            var ns = Ui.Measure(this.fonts.Mono, num);
+            var badgePad = new Vector2(Ui.Px(5f), Ui.Px(3f));
+            var badgePos = tp + new Vector2(Ui.Px(6f), Ui.Px(6f));
+            dl.AddRectFilled(badgePos, badgePos + ns + (badgePad * 2f), Palette.Scrim.U32());
+            Ui.TextAt(dl, this.fonts.Mono, badgePos + badgePad, Palette.WithAlpha(Palette.White, 0.85f).U32(), num);
+
+            ImGui.SetCursorScreenPos(tp);
+            if (ImGui.InvisibleButton($"##mp_portrait_{i}", new Vector2(tileW, tileH)))
+                this.lightbox.OpenPhotos(photos, i);
+        }
+
+        ImGui.SetCursorScreenPos(basePos);
+        ImGui.Dummy(new Vector2(fullWidth, (rows * tileH) + ((rows - 1) * gap)));
+    }
+
+    private void DrawDataTable(float fullWidth, ProfileDetailDto dto)
+    {
+        // Only fields the profile model actually carries — the mockup's FFXIV job/role cells have no data.
+        var cells = new (string Label, string Value, bool Mono)[]
+        {
+            ("World", dto.World, false),
+            ("Data Center", dto.Dc, false),
+            ("Age", dto.Age.ToString(), true),
+            ("Last Seen", dto.Online ? "Now" : LastSeen(dto.LastSeenAt), false),
+        };
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
+        this.FullRule(fullWidth);
+
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var cellW = fullWidth / 2f;
+        var cellH = Ui.Px(54f);
+        var pad = Ui.Px(20f);
+        var rows = (cells.Length + 1) / 2;
+
+        for (var i = 0; i < cells.Length; i++)
+        {
+            var col = i % 2;
+            var row = i / 2;
+            var cx = origin.X + (col * cellW);
+            var cy = origin.Y + (row * cellH);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + pad, cy + Ui.Px(12f)), Palette.TextSecondary.U32(), cells[i].Label.ToUpperInvariant());
+            var valueFont = cells[i].Mono ? this.fonts.Eyebrow : this.fonts.Label;
+            Ui.TextAt(dl, valueFont, new Vector2(cx + pad, cy + Ui.Px(28f)), Palette.TextPrimary.U32(), cells[i].Value);
+            if (col == 0)
+                dl.AddLine(new Vector2(cx + cellW, cy), new Vector2(cx + cellW, cy + cellH), Palette.Border.U32(), 1f);
+            dl.AddLine(new Vector2(cx, cy + cellH), new Vector2(cx + cellW, cy + cellH), Palette.Border.U32(), 1f);
+        }
+
+        ImGui.Dummy(new Vector2(fullWidth, rows * cellH));
+    }
+
+    private void DrawSections(float fullWidth, ProfileDetailDto dto)
+    {
+        var pad = Ui.Px(20f);
+        var innerWidth = fullWidth - (pad * 2f);
+        ImGui.Indent(pad);
+
+        this.DrawAlbums(fullWidth, innerWidth);
+
+        if (!string.IsNullOrWhiteSpace(dto.Bio))
+        {
+            this.SectionTop();
+            this.Eyebrow("About");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.WithAlpha(Palette.TextPrimary, 0.9f)))
+            {
+                ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + innerWidth);
+                ImGui.TextUnformatted(dto.Bio);
+                ImGui.PopTextWrapPos();
+            }
+            this.SectionBottom(fullWidth);
+        }
+
+        if (dto.Interests.Count > 0)
+            this.TagSection(fullWidth, innerWidth, "Interests", dto.Interests.ToArray(), signal: false);
+
+        if (dto.LookingFor.Count > 0)
+            this.TagSection(fullWidth, innerWidth, "Looking for", ProfileMapper.Labels(dto.LookingFor).ToArray(), signal: true);
+
+        if (dto.AfterDark is { } ad)
+            this.DrawAfterDark(fullWidth, innerWidth, ad);
+
+        ImGui.Unindent(pad);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+    }
+
+    private void DrawAlbums(float fullWidth, float innerWidth)
+    {
+        var mine = this.albums.Mine;
+
+        this.SectionTop();
+        this.DrawAlbumsHeader(innerWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+
+        if (mine.Count == 0)
+        {
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+                ImGui.TextUnformatted("No albums yet.");
+        }
+        else
+        {
+            foreach (var album in mine)
+                this.DrawAlbumRow(album, innerWidth);
+        }
+
+        this.SectionBottom(fullWidth);
+    }
+
+    // The section eyebrow with a Manage affordance opening the albums manager, so creating, renaming and
+    // sharing stay reachable - including before the first album exists, when there are no rows to tap.
+    private void DrawAlbumsHeader(float innerWidth)
+    {
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+
+        const string title = "ALBUMS";
+        const string label = "Manage";
+        var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
+        var labelSize = Ui.Measure(this.fonts.LabelSmall, label);
+        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chevronSize = Ui.Measure(this.fonts.Icon, chevron);
+        var rowHeight = MathF.Max(titleSize.Y, MathF.Max(labelSize.Y, chevronSize.Y));
+        var midY = origin.Y + (rowHeight * 0.5f);
+
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X, midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
+
+        var actionWidth = labelSize.X + Ui.Px(6f) + chevronSize.X;
+        var actionX = origin.X + innerWidth - actionWidth;
+        ImGui.SetCursorScreenPos(new Vector2(actionX, origin.Y));
+        if (ImGui.InvisibleButton("##mp_albums_manage", new Vector2(actionWidth, rowHeight)))
+            this.router.Navigate(Screen.Albums);
+
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(actionX, midY - (labelSize.Y * 0.5f)), Palette.Signal.U32(), label);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(actionX + labelSize.X + Ui.Px(6f), midY - (chevronSize.Y * 0.5f)), Palette.Signal.U32(), chevron);
+
+        ImGui.SetCursorScreenPos(origin);
+        ImGui.Dummy(new Vector2(innerWidth, rowHeight));
+    }
+
+    private void DrawAlbumRow(AlbumDto album, float innerWidth)
+    {
+        var rowH = Ui.Px(56f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##mp_album_" + album.Id, new Vector2(innerWidth, rowH));
+        var dl = ImGui.GetWindowDrawList();
+
+        var isPublic = album.Visibility == AlbumVisibilityEnum.Public;
+        var thumb = Ui.Px(44f);
+        var tmin = new Vector2(pos.X, pos.Y + ((rowH - thumb) * 0.5f));
+        var tmax = tmin + new Vector2(thumb, thumb);
+        dl.AddRectFilled(tmin, tmax, Palette.Surface2.U32());
+        dl.AddRect(tmin, tmax, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+        var tex = album.CoverPhotoId is { } cover ? this.albums.Texture(album.Id, cover) : null;
+        if (tex is { Width: > 0, Height: > 0 })
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, 1f);
+            dl.AddImage(tex.Handle, tmin, tmax, uvMin, uvMax);
+        }
+        else
+        {
+            var glyph = (isPublic ? FontAwesomeIcon.Star : FontAwesomeIcon.Lock).ToIconString();
+            var gs = Ui.Measure(this.fonts.Icon, glyph);
+            Ui.TextAt(dl, this.fonts.Icon, ((tmin + tmax) * 0.5f) - (gs * 0.5f), Palette.TextMuted.U32(), glyph);
+        }
+
+        var textX = pos.X + thumb + Ui.Px(12f);
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(textX, pos.Y + Ui.Px(11f)), Palette.TextPrimary.U32(), album.Name);
+        var vis = isPublic ? "public" : "private";
+        var meta = album.PhotoCount == 1 ? $"1 photo · {vis}" : $"{album.PhotoCount} photos · {vis}";
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, pos.Y + Ui.Px(30f)), Palette.TextMuted.U32(), meta);
+
+        // Self-preview: every album is viewable to me, so the affordance is always View (the public/private
+        // state a visitor keys off is carried in the meta line above).
+        var midY = pos.Y + (rowH * 0.5f);
+        const string label = "View";
+        var lsz = Ui.Measure(this.fonts.LabelSmall, label);
+        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chs = Ui.Measure(this.fonts.Icon, chevron);
+        var ax = (pos.X + innerWidth) - lsz.X - Ui.Px(6f) - chs.X;
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(ax, midY - (lsz.Y * 0.5f)), Palette.Signal.U32(), label);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(ax + lsz.X + Ui.Px(6f), midY - (chs.Y * 0.5f)), Palette.Signal.U32(), chevron);
+
+        if (clicked)
+        {
+            this.selection.AlbumId = album.Id;
+            this.selection.AlbumName = album.Name;
+            this.selection.AlbumReturn = Screen.MyProfile;
+            this.router.Navigate(Screen.AlbumViewer);
         }
     }
 
-    private bool SettingRow(string id, string label, string value, float contentWidth)
+    private void DrawAfterDark(float fullWidth, float innerWidth, AfterDarkDto ad)
     {
-        var rowHeight = Ui.Px(50f);
+        this.SectionTop();
+
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var moon = FontAwesomeIcon.Moon.ToIconString();
+        var moonSize = Ui.Measure(this.fonts.Icon, moon);
+        Ui.TextAt(dl, this.fonts.Icon, origin, Palette.Signal.U32(), moon);
+        var labelX = origin.X + moonSize.X + Ui.Px(8f);
+        var eSize = Ui.Measure(this.fonts.Eyebrow, "AFTER DARK");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(labelX, origin.Y + ((moonSize.Y - eSize.Y) * 0.5f)), Palette.TextSecondary.U32(), "AFTER DARK");
+        var pillX = labelX + eSize.X + Ui.Px(10f);
+        var pillText = Ui.Measure(this.fonts.Eyebrow, "18+");
+        var pillSize = new Vector2(pillText.X + Ui.Px(10f), moonSize.Y);
+        var pillPos = new Vector2(pillX, origin.Y);
+        dl.AddRectFilled(pillPos, pillPos + pillSize, Palette.WithAlpha(Palette.Signal, 0.10f).U32());
+        dl.AddRect(pillPos, pillPos + pillSize, Palette.WithAlpha(Palette.Signal, 0.40f).U32(), 0f, ImDrawFlags.None, 1f);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pillPos.X + Ui.Px(5f), pillPos.Y + ((pillSize.Y - pillText.Y) * 0.5f)), Palette.Signal.U32(), "18+");
+        ImGui.Dummy(new Vector2(0f, moonSize.Y));
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        if (ad.Position is { } p) this.AfterDarkRow("Position", ProfileMapper.Label(p));
+        if (ad.Role is { } r) this.AfterDarkRow("Role", ProfileMapper.Label(r));
+        if (ad.Size is { } s) this.AfterDarkRow("Size", ProfileMapper.Label(s));
+        if (ad.Meet.Count > 0) this.AfterDarkRow("Meet", string.Join(" · ", ad.Meet.Select(ProfileMapper.Label)));
+
+        if (ad.Kinks.Count > 0)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+            this.Eyebrow("Kinks");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+            this.TagFlow(ad.Kinks.ToArray(), signal: true, innerWidth);
+        }
+
+        this.SectionBottom(fullWidth);
+    }
+
+    private void AfterDarkRow(string label, string value)
+    {
+        using (this.fonts.LabelSmall.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+            ImGui.TextUnformatted(label);
+        ImGui.SameLine(Ui.Px(96f));
+        using (this.fonts.LabelSmall.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
+            ImGui.TextUnformatted(value);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
+    }
+
+    private void TagSection(float fullWidth, float innerWidth, string label, IReadOnlyList<string> labels, bool signal)
+    {
+        this.SectionTop();
+        this.Eyebrow(label);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.TagFlow(labels, signal, innerWidth);
+        this.SectionBottom(fullWidth);
+    }
+
+    private void TagFlow(IReadOnlyList<string> labels, bool signal, float innerWidth)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var origin = ImGui.GetCursorScreenPos();
+        var gap = Ui.Px(6f);
+        var h = Ui.Px(28f);
+        var x = origin.X;
+        var y = origin.Y;
+        var rows = 1;
+
+        foreach (var label in labels)
+        {
+            var ts = Ui.Measure(this.fonts.LabelSmall, label);
+            var w = ts.X + Ui.Px(20f);
+            if (x > origin.X && (x + w) > (origin.X + innerWidth))
+            {
+                x = origin.X;
+                y += h + gap;
+                rows++;
+            }
+
+            var pos = new Vector2(x, y);
+            if (signal)
+            {
+                dl.AddRectFilled(pos, pos + new Vector2(w, h), Palette.WithAlpha(Palette.Signal, 0.10f).U32());
+                dl.AddRect(pos, pos + new Vector2(w, h), Palette.WithAlpha(Palette.Signal, 0.40f).U32(), 0f, ImDrawFlags.None, 1f);
+                Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(10f), (h - ts.Y) * 0.5f), Palette.Signal.U32(), label);
+            }
+            else
+            {
+                dl.AddRect(pos, pos + new Vector2(w, h), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+                Ui.TextAt(dl, this.fonts.LabelSmall, pos + new Vector2(Ui.Px(10f), (h - ts.Y) * 0.5f), Palette.TextSecondary.U32(), label);
+            }
+
+            x += w + gap;
+        }
+
+        ImGui.Dummy(new Vector2(innerWidth, (rows * h) + ((rows - 1) * gap)));
+    }
+
+    private bool EditCta(float width, float height)
+    {
         var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton(id, new Vector2(contentWidth, rowHeight));
-        var drawList = ImGui.GetWindowDrawList();
+        var clicked = ImGui.InvisibleButton("##mp_edit_cta", new Vector2(width, height));
+        var dl = ImGui.GetWindowDrawList();
+        var bg = (ImGui.IsItemHovered() ? Palette.WithAlpha(Palette.TextPrimary, 0.9f) : Palette.TextPrimary).U32();
+        dl.AddRectFilled(pos, pos + new Vector2(width, height), bg);
 
-        var labelSize = Ui.Measure(this.fonts.Body, label);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), label);
-
-        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
-        var chevronSize = Ui.Measure(this.fonts.Icon, chevron);
-        var chevronX = pos.X + contentWidth - chevronSize.X;
-        Ui.TextAt(drawList, this.fonts.Icon, new Vector2(chevronX, pos.Y + ((rowHeight - chevronSize.Y) * 0.5f)), Palette.TextMuted.U32(), chevron);
-
-        var maxValueWidth = MathF.Max(Ui.Px(40f), contentWidth - labelSize.X - Ui.Px(16f) - chevronSize.X - Ui.Px(10f));
-        var shown = this.Fit(value, maxValueWidth);
-        var valueSize = Ui.Measure(this.fonts.Body, shown);
-        var valueColor = (value == "Add" ? this.theme.Accent : Palette.TextSecondary).U32();
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(chevronX - Ui.Px(10f) - valueSize.X, pos.Y + ((rowHeight - valueSize.Y) * 0.5f)), valueColor, shown);
-
-        drawList.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        var pen = FontAwesomeIcon.Pen.ToIconString();
+        const string label = "Edit profile";
+        var ps = Ui.Measure(this.fonts.Icon, pen);
+        var lsz = Ui.Measure(this.fonts.Label, label);
+        var gap = Ui.Px(8f);
+        var startX = pos.X + ((width - (ps.X + gap + lsz.X)) * 0.5f);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(startX, pos.Y + ((height - ps.Y) * 0.5f)), Palette.Paper.U32(), pen);
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(startX + ps.X + gap, pos.Y + ((height - lsz.Y) * 0.5f)), Palette.Paper.U32(), label);
         return clicked;
     }
 
-    private string Fit(string text, float maxWidth)
+    private void Eyebrow(string text)
     {
-        if (Ui.Measure(this.fonts.Body, text).X <= maxWidth)
-            return text;
-        var s = text;
-        while (s.Length > 1 && Ui.Measure(this.fonts.Body, s + "…").X > maxWidth)
-            s = s[..^1];
-        return s + "…";
+        using (this.fonts.Eyebrow.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+            ImGui.TextUnformatted(text.ToUpperInvariant());
     }
 
-    // ---- editor ----
+    private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
 
-    private void DrawEditor(float contentWidth)
+    private void SectionBottom(float fullWidth)
     {
-        var rowStart = ImGui.GetCursorPosX();
-        var buttonWidth = Ui.Px(96f);
-        if (this.kit.SecondaryButton("##ed_cancel", "Cancel", buttonWidth))
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
+        var y = ImGui.GetCursorScreenPos().Y;
+        var wx = ImGui.GetWindowPos().X;
+        ImGui.GetWindowDrawList().AddLine(new Vector2(wx, y), new Vector2(wx + fullWidth, y), Palette.Border.U32(), 1f);
+        ImGui.Dummy(new Vector2(0f, 1f));
+    }
+
+    private void FullRule(float fullWidth)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        ImGui.GetWindowDrawList().AddLine(pos, new Vector2(pos.X + fullWidth, pos.Y), Palette.Border.U32(), 1f);
+        ImGui.Dummy(new Vector2(0f, 1f));
+    }
+
+    private static (string First, string Surname) SplitName(string name)
+    {
+        var sp = name.IndexOf(' ');
+        return sp > 0 ? (name[..sp], name[(sp + 1)..]) : (name, string.Empty);
+    }
+
+    private static string LastSeen(DateTimeOffset? at)
+    {
+        if (at is null)
+            return "—";
+        var d = DateTimeOffset.UtcNow - at.Value;
+        if (d.TotalMinutes < 1) return "Now";
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
+        return at.Value.LocalDateTime.ToString("MMM d");
+    }
+
+    // ---- form ----
+
+    private void OpenForm()
+    {
+        this.editing = true;
+        this.editDc = this.DcIndexOf(this.worldId);
+    }
+
+    private void CloseForm(bool save)
+    {
+        if (save)
+            this.profiles.Save(this.BuildRequest());
+        else if (this.profiles.Mine is { } mine)
+            this.ApplyFromServer(mine);
+
+        // Force the preview to refetch so it reflects what was just saved (and clears cropped/new photos).
+        this.details.Invalidate();
+        this.previewFor = Guid.Empty;
+        this.editing = false;
+    }
+
+    private void DrawForm(float contentWidth)
+    {
+        // Header: cancel (left), save (right).
+        var buttonWidth = Ui.Px(84f);
+        var rowX = ImGui.GetCursorPosX();
+        if (this.kit.SecondaryButton("##f_cancel", "Cancel", buttonWidth))
         {
-            this.editor = Editor.None;
-            this.restoreListScroll = true;
+            this.CloseForm(false);
             return;
         }
-
         ImGui.SameLine();
-        ImGui.SetCursorPosX(rowStart + contentWidth - buttonWidth);
-        if (this.kit.PrimaryButton("##ed_save", "Save", buttonWidth))
+        ImGui.SetCursorPosX(rowX + contentWidth - buttonWidth);
+        if (this.kit.PrimaryButton("##f_save", "Save", buttonWidth))
         {
-            this.Save();
+            this.CloseForm(true);
             return;
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        this.kit.SectionLabel(this.EditorTitle());
+        this.kit.SectionLabel("Photos");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.photos.DrawGrid(contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+        this.kit.SectionLabel("Identity");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.kit.TextField("##f_name", ref this.displayName, "Display name", contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Pronouns");
+        this.Single("f_pn", Options.Pronouns, ref this.pronoun, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Gender");
+        this.Single("f_gn", Options.Genders, ref this.gender, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Age");
+        this.age = this.kit.Stepper("##f_age", this.age, 18, 99);
 
-        switch (this.editor)
+        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+        this.kit.SectionLabel("World");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.DrawWorld(contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+        this.kit.SectionLabel("Matching");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.Field("Looking for");
+        this.Multi("f_lf", Options.LookingFor, this.lookingFor, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Into");
+        this.Multi("f_into", Options.Interests, this.interests, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Tribe");
+        this.Multi("f_tribe", Options.Tribes, this.tribes, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Race");
+        this.Multi("f_race", Options.Races, this.races, contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+        this.kit.SectionLabel("About");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
+        using (this.fonts.Caption.Push())
+            ImGui.InputTextMultiline("##f_bio", ref this.bio, 300, new Vector2(contentWidth, Ui.Px(110f)));
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+        this.kit.SectionLabel("After dark");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.DrawAfterDark(contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
+        var half = (contentWidth - Ui.Px(10f)) * 0.5f;
+        if (this.kit.PrimaryButton("##f_save2", "Save changes", half))
         {
-            case Editor.DisplayName:
-                this.kit.TextField("##ed_name", ref this.editText, "Display name", contentWidth);
-                ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-                this.Helper($"{this.editText.Length}/20  Shown to others. Not your character name.");
-                break;
-            case Editor.Bio:
-            {
-                // InputTextMultiline does not word-wrap, so we keep a wrapped view in the field and
-                // collapse the soft wraps back to spaces on save (see Save).
-                var wrapWidth = contentWidth - Ui.Px(24f);
-                if (!this.bioWrapped)
-                {
-                    this.editText = this.WordWrap(this.editText, wrapWidth);
-                    this.bioWrapped = true;
-                }
-
-                bool changed;
-                using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface1))
-                using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, Ui.Px(10f)))
-                using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
-                using (this.fonts.Body.Push())
-                    changed = ImGui.InputTextMultiline("##ed_bio", ref this.editText, 360, new Vector2(contentWidth, Ui.Px(130f)));
-
-                if (changed)
-                    this.editText = this.WordWrap(this.editText, wrapWidth);
-
-                ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-                this.Helper($"{CollapseNewlines(this.editText).Length}/300  Shown on your profile.");
-                break;
-            }
-            case Editor.Pronouns:
-                this.DrawSingle("ed_pn", Options.Pronouns, contentWidth);
-                this.DrawCustom(contentWidth);
-                break;
-            case Editor.Gender:
-                this.DrawSingle("ed_gn", Options.Genders, contentWidth);
-                this.DrawCustom(contentWidth);
-                break;
-            case Editor.Race:
-                this.DrawMulti("ed_race", Options.Races, contentWidth);
-                break;
-            case Editor.World:
-                this.DrawWorldEditor(contentWidth);
-                break;
-            case Editor.Age:
-                this.editAge = this.kit.Stepper("##ed_age", this.editAge, 18, 99);
-                break;
-            case Editor.LookingFor:
-                this.DrawMulti("ed_lf", Options.LookingFor, contentWidth);
-                break;
-            case Editor.Into:
-                this.DrawMulti("ed_into", Options.Interests, contentWidth);
-                break;
-            case Editor.Tribe:
-                this.DrawMulti("ed_tribe", Options.Tribes, contentWidth);
-                break;
-            case Editor.AfterDark:
-                this.DrawAfterDarkEditor(contentWidth);
-                break;
+            this.CloseForm(true);
+            return;
+        }
+        ImGui.SameLine(0f, Ui.Px(10f));
+        if (this.kit.SecondaryButton("##f_cancel2", "Cancel", half))
+        {
+            this.CloseForm(false);
+            return;
         }
 
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        if (this.kit.SecondaryButton("##f_preview", "Preview as others see it", contentWidth) && this.session.UserId is { } me)
+        {
+            this.selection.ProfileUserId = me;
+            this.selection.ProfileDisplayName = this.displayName;
+            this.selection.ProfileReturn = Screen.MyProfile;
+            this.details.Invalidate();
+            this.router.Navigate(Screen.ProfileDetail);
+        }
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
     }
 
-    private void DrawSingle(string idPrefix, string[] labels, float contentWidth)
+    private void DrawWorld(float contentWidth)
     {
-        var selected = this.kit.ChipFlow(idPrefix, labels, i => i == this.editSingle, contentWidth);
-        if (selected >= 0)
-            this.editSingle = selected;
+        if (!this.catalog.Ready)
+        {
+            this.Helper("Loading worlds…");
+            return;
+        }
+
+        var dcs = this.catalog.DataCenters;
+        if (this.editDc < 0)
+            this.editDc = this.DcIndexOf(this.worldId);
+
+        this.Field("Data center");
+        var dc = this.kit.ChipFlow("f_dc", dcs.Select(d => d.Name).ToArray(), i => i == this.editDc, contentWidth);
+        if (dc >= 0)
+        {
+            this.editDc = dc;
+            this.worldId = 0;
+        }
+
+        if (this.editDc >= 0 && this.editDc < dcs.Count)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+            this.Field("Home world");
+            var worlds = dcs[this.editDc].Worlds;
+            var w = this.kit.ChipFlow("f_world", worlds.Select(x => x.Name).ToArray(), i => worlds[i].Id == this.worldId, contentWidth);
+            if (w >= 0)
+                this.worldId = worlds[w].Id;
+        }
     }
 
-    private void DrawCustom(float contentWidth)
-    {
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Custom (optional)");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        this.kit.TextField("##ed_custom", ref this.editCustom, "Your own words", contentWidth);
-    }
-
-    private void DrawMulti(string idPrefix, string[] labels, float contentWidth)
-    {
-        var count = 0;
-        foreach (var on in this.editMulti)
-            if (on) count++;
-        this.Helper($"{count} selected  Pick all that apply.");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        var hit = this.kit.ChipFlow(idPrefix, labels, i => this.editMulti[i], contentWidth);
-        if (hit >= 0)
-            this.editMulti[hit] = !this.editMulti[hit];
-    }
-
-    private void DrawAfterDarkEditor(float contentWidth)
+    private void DrawAfterDark(float contentWidth)
     {
         using (this.fonts.Body.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
             ImGui.TextUnformatted("Enable after dark (18+)");
         ImGui.SameLine(0f, Ui.Px(10f));
-        this.adNsfw = this.kit.Toggle("##ad_en", this.adNsfw);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
-        this.Helper("Off removes the after-dark section from your profile.");
-
-        if (!this.adNsfw)
+        this.nsfwEnabled = this.kit.Toggle("##f_nsfw", this.nsfwEnabled);
+        if (!this.nsfwEnabled)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
+            this.Helper("Off removes the after-dark section from your profile.");
             return;
+        }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Position");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var p = this.kit.ChipFlow("ad_pos", Options.Positions, i => i == this.adPos, contentWidth);
-        if (p >= 0) this.adPos = p;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        this.Field("Position");
+        this.Single("f_pos", Options.Positions, ref this.position, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.Field("Role");
+        this.Single("f_role", Options.Roles, ref this.roleIndex, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.Field("Size");
+        this.Single("f_size", Options.Sizes, ref this.size, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.Field("Meet");
+        this.Multi("f_meet", Options.Meet, this.meet, contentWidth);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.Field("Kinks");
+        this.Multi("f_kinks", Options.Kinks, this.kinks, contentWidth);
+    }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Role");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var r = this.kit.ChipFlow("ad_role", Options.Roles, i => i == this.adRole, contentWidth);
-        if (r >= 0) this.adRole = r;
+    private void Single(string id, string[] labels, ref int selected, float contentWidth)
+    {
+        var current = selected;
+        var hit = this.kit.ChipFlow(id, labels, i => i == current, contentWidth);
+        if (hit >= 0)
+            selected = hit;
+    }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Size (optional)");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var s = this.kit.ChipFlow("ad_size", Options.Sizes, i => i == this.adSize, contentWidth);
-        if (s >= 0) this.adSize = s;
+    private void Multi(string id, string[] labels, bool[] flags, float contentWidth)
+    {
+        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth);
+        if (hit >= 0)
+            flags[hit] = !flags[hit];
+    }
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Meet");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var m = this.kit.ChipFlow("ad_meet", Options.Meet, i => this.adMeet[i], contentWidth);
-        if (m >= 0) this.adMeet[m] = !this.adMeet[m];
+    // ---- small pieces ----
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Kinks");
+    private void Field(string text)
+    {
+        using (this.fonts.Label.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
+            ImGui.TextUnformatted(text);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var k = this.kit.ChipFlow("ad_kink", Options.Kinks, i => this.adKinks[i], contentWidth);
-        if (k >= 0) this.adKinks[k] = !this.adKinks[k];
     }
 
     private void Helper(string text)
@@ -392,96 +888,7 @@ internal sealed class MyProfileScreen : IScreen
             ImGui.TextWrapped(text);
     }
 
-    // ---- state helpers ----
-
-    private void Open(Editor target)
-    {
-        // Remember where we were in the list so closing the editor returns there, not the top.
-        this.listScrollY = ImGui.GetScrollY();
-        this.editor = target;
-        switch (target)
-        {
-            case Editor.DisplayName: this.editText = this.displayName; break;
-            case Editor.Bio: this.editText = this.bio; this.bioWrapped = false; break;
-            case Editor.Pronouns: this.editSingle = this.pronoun; this.editCustom = this.pronounCustom; break;
-            case Editor.Gender: this.editSingle = this.gender; this.editCustom = this.genderCustom; break;
-            case Editor.Race: this.editMulti = (bool[])this.races.Clone(); break;
-            case Editor.World:
-                this.catalog.EnsureLoaded();
-                this.editWorldId = this.worldId;
-                this.editDc = this.DcIndexOf(this.worldId);
-                break;
-            case Editor.Age: this.editAge = this.age; break;
-            case Editor.LookingFor: this.editMulti = (bool[])this.lookingFor.Clone(); break;
-            case Editor.Into: this.editMulti = (bool[])this.interests.Clone(); break;
-            case Editor.Tribe: this.editMulti = (bool[])this.tribes.Clone(); break;
-            case Editor.AfterDark:
-                this.adNsfw = this.nsfwEnabled;
-                this.adPos = this.position; this.adRole = this.roleIndex; this.adSize = this.size;
-                this.adMeet = (bool[])this.meet.Clone();
-                this.adKinks = (bool[])this.kinks.Clone();
-                break;
-        }
-    }
-
-    private void Save()
-    {
-        switch (this.editor)
-        {
-            case Editor.DisplayName: this.displayName = this.editText.Trim(); break;
-            case Editor.Bio: this.bio = CollapseNewlines(this.editText).Trim(); break;
-            case Editor.Pronouns: this.pronoun = this.editSingle; this.pronounCustom = this.editCustom.Trim(); break;
-            case Editor.Gender: this.gender = this.editSingle; this.genderCustom = this.editCustom.Trim(); break;
-            case Editor.Race: System.Array.Copy(this.editMulti, this.races, this.races.Length); break;
-            case Editor.World: this.worldId = this.editWorldId; break;
-            case Editor.Age: this.age = this.editAge; break;
-            case Editor.LookingFor: System.Array.Copy(this.editMulti, this.lookingFor, this.lookingFor.Length); break;
-            case Editor.Into: System.Array.Copy(this.editMulti, this.interests, this.interests.Length); break;
-            case Editor.Tribe: System.Array.Copy(this.editMulti, this.tribes, this.tribes.Length); break;
-            case Editor.AfterDark:
-                this.nsfwEnabled = this.adNsfw;
-                this.position = this.adPos; this.roleIndex = this.adRole; this.size = this.adSize;
-                System.Array.Copy(this.adMeet, this.meet, this.meet.Length);
-                System.Array.Copy(this.adKinks, this.kinks, this.kinks.Length);
-                break;
-        }
-
-        this.PushToServer();
-        this.editor = Editor.None;
-        this.restoreListScroll = true;
-    }
-
-    private string EditorTitle() => this.editor switch
-    {
-        Editor.DisplayName => "Display name",
-        Editor.Bio => "Bio",
-        Editor.Pronouns => "Pronouns",
-        Editor.Gender => "Gender",
-        Editor.Race => "Race",
-        Editor.World => "Home world",
-        Editor.Age => "Age",
-        Editor.LookingFor => "Looking for",
-        Editor.Into => "Into",
-        Editor.Tribe => "Tribe",
-        Editor.AfterDark => "After dark",
-        _ => string.Empty,
-    };
-
-    private string PronounValue() => this.pronounCustom.Length > 0 ? this.pronounCustom : Options.Pronouns[this.pronoun];
-
-    private string GenderValue() => this.genderCustom.Length > 0 ? this.genderCustom : Options.Genders[this.gender];
-
-    private string RaceValue()
-    {
-        var sel = new List<string>();
-        for (var i = 0; i < this.races.Length; i++)
-            if (this.races[i]) sel.Add(Options.Races[i]);
-        return sel.Count > 0 ? string.Join(", ", sel) : "Add";
-    }
-
-    private string AfterDarkSummary() => $"{Options.Positions[this.position]} · {Options.Roles[this.roleIndex]}";
-
-    private string WorldValue() => this.worldId > 0 ? this.catalog.WorldName(this.worldId) : "Add";
+    // ---- server state (reused) ----
 
     private int DcIndexOf(int world)
     {
@@ -493,40 +900,11 @@ internal sealed class MyProfileScreen : IScreen
         return -1;
     }
 
-    private void DrawWorldEditor(float contentWidth)
-    {
-        this.catalog.EnsureLoaded();
-        if (!this.catalog.Ready)
-        {
-            this.Helper("Loading worlds...");
-            return;
-        }
-
-        var dcs = this.catalog.DataCenters;
-        var dc = this.kit.ChipFlow("ed_dc", dcs.Select(d => d.Name).ToArray(), i => i == this.editDc, contentWidth);
-        if (dc >= 0)
-        {
-            this.editDc = dc;
-            this.editWorldId = 0;
-        }
-
-        if (this.editDc >= 0 && this.editDc < dcs.Count)
-        {
-            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            var worlds = dcs[this.editDc].Worlds;
-            var w = this.kit.ChipFlow("ed_world", worlds.Select(x => x.Name).ToArray(), i => worlds[i].Id == this.editWorldId, contentWidth);
-            if (w >= 0)
-                this.editWorldId = worlds[w].Id;
-        }
-    }
-
     private void ApplyFromServer(SaveProfileRequest m)
     {
         this.displayName = m.DisplayName;
         this.pronoun = ProfileMapper.IndexOfPronoun(m.Pronoun);
-        this.pronounCustom = m.PronounCustom ?? string.Empty;
         this.gender = ProfileMapper.IndexOfGender(m.Gender);
-        this.genderCustom = m.GenderCustom ?? string.Empty;
         this.age = (int)m.Age;
         CopyInto(this.races, ProfileMapper.FromRaces(m.Races ?? new List<RaceElement>()));
         this.worldId = (int)(m.WorldId ?? 0);
@@ -545,15 +923,11 @@ internal sealed class MyProfileScreen : IScreen
         }
     }
 
-    private void PushToServer() => this.profiles.Save(this.BuildRequest());
-
     private SaveProfileRequest BuildRequest() => new()
     {
         DisplayName = this.displayName.Trim(),
         Pronoun = ProfileMapper.Pronoun(this.pronoun),
-        PronounCustom = string.IsNullOrWhiteSpace(this.pronounCustom) ? null : this.pronounCustom,
         Gender = ProfileMapper.Gender(this.gender),
-        GenderCustom = string.IsNullOrWhiteSpace(this.genderCustom) ? null : this.genderCustom,
         Age = this.age,
         Races = ProfileMapper.RacesOf(this.races),
         WorldId = this.worldId > 0 ? this.worldId : null,
@@ -578,45 +952,5 @@ internal sealed class MyProfileScreen : IScreen
     {
         for (var i = 0; i < dst.Length && i < src.Length; i++)
             dst[i] = src[i];
-    }
-
-    // Greedy word wrap to a pixel width using the body font. Idempotent: it first flattens any
-    // existing soft wraps, so it can run on every edit without corrupting the text.
-    private string WordWrap(string text, float maxWidth)
-    {
-        var flat = CollapseNewlines(text);
-        var lines = new List<string>();
-        var line = string.Empty;
-        foreach (var word in flat.Split(' '))
-        {
-            var candidate = line.Length == 0 ? word : line + " " + word;
-            if (Ui.Measure(this.fonts.Body, candidate).X <= maxWidth)
-            {
-                line = candidate;
-                continue;
-            }
-
-            if (line.Length > 0)
-                lines.Add(line);
-            line = word;
-        }
-
-        lines.Add(line);
-        return string.Join("\n", lines);
-    }
-
-    private static string CollapseNewlines(string text) =>
-        text.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
-
-    private static string Summary(string[] labels, bool[] flags)
-    {
-        var picked = new List<string>();
-        for (var i = 0; i < flags.Length; i++)
-            if (flags[i]) picked.Add(labels[i]);
-        if (picked.Count == 0)
-            return "Add";
-        if (picked.Count <= 2)
-            return string.Join(", ", picked);
-        return $"{picked[0]}, {picked[1]} +{picked.Count - 2}";
     }
 }
