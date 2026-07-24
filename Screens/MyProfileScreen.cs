@@ -412,15 +412,55 @@ internal sealed class MyProfileScreen : IScreen
     private void DrawAlbums(float fullWidth, float innerWidth)
     {
         var mine = this.albums.Mine;
-        if (mine.Count == 0)
-            return;
 
         this.SectionTop();
-        this.Eyebrow("Albums");
+        this.DrawAlbumsHeader(innerWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        foreach (var album in mine)
-            this.DrawAlbumRow(album, innerWidth);
+
+        if (mine.Count == 0)
+        {
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+                ImGui.TextUnformatted("No albums yet.");
+        }
+        else
+        {
+            foreach (var album in mine)
+                this.DrawAlbumRow(album, innerWidth);
+        }
+
         this.SectionBottom(fullWidth);
+    }
+
+    // The section eyebrow with a Manage affordance opening the albums manager, so creating, renaming and
+    // sharing stay reachable - including before the first album exists, when there are no rows to tap.
+    private void DrawAlbumsHeader(float innerWidth)
+    {
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+
+        const string title = "ALBUMS";
+        const string label = "Manage";
+        var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
+        var labelSize = Ui.Measure(this.fonts.LabelSmall, label);
+        var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chevronSize = Ui.Measure(this.fonts.Icon, chevron);
+        var rowHeight = MathF.Max(titleSize.Y, MathF.Max(labelSize.Y, chevronSize.Y));
+        var midY = origin.Y + (rowHeight * 0.5f);
+
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X, midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
+
+        var actionWidth = labelSize.X + Ui.Px(6f) + chevronSize.X;
+        var actionX = origin.X + innerWidth - actionWidth;
+        ImGui.SetCursorScreenPos(new Vector2(actionX, origin.Y));
+        if (ImGui.InvisibleButton("##mp_albums_manage", new Vector2(actionWidth, rowHeight)))
+            this.router.Navigate(Screen.Albums);
+
+        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(actionX, midY - (labelSize.Y * 0.5f)), Palette.Signal.U32(), label);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(actionX + labelSize.X + Ui.Px(6f), midY - (chevronSize.Y * 0.5f)), Palette.Signal.U32(), chevron);
+
+        ImGui.SetCursorScreenPos(origin);
+        ImGui.Dummy(new Vector2(innerWidth, rowHeight));
     }
 
     private void DrawAlbumRow(AlbumDto album, float innerWidth)
