@@ -282,10 +282,11 @@ internal sealed class AlbumDetailScreen : IScreen
             drawList.AddRectFilled(pos, max, Palette.WithAlpha(Palette.Scrim, 0.3f).U32());
         drawList.AddRect(pos, max, (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
 
-        // Position index, mono, on a scrim chip so it reads over any photo.
+        // Position index, mono, on a scrim chip so it reads over any photo. Its chip top is set from the
+        // same inset as the cover chip's so the two line up on the tile that carries both.
         var number = $"{index:00}";
         var ns = Ui.Measure(this.fonts.Mono, number);
-        var numberPos = new Vector2(max.X - Ui.Px(5f) - ns.X, pos.Y + Ui.Px(6f));
+        var numberPos = new Vector2(max.X - Ui.Px(5f) - ns.X, pos.Y + Ui.Px(9f));
         drawList.AddRectFilled(numberPos - new Vector2(Ui.Px(4f), Ui.Px(3f)), numberPos + ns + new Vector2(Ui.Px(4f), Ui.Px(3f)), Palette.WithAlpha(Palette.Scrim, 0.72f).U32());
         Ui.TextAt(drawList, this.fonts.Mono, numberPos, Palette.White.U32(), number);
 
