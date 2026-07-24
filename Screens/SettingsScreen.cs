@@ -1,7 +1,10 @@
+using System.Linq;
 using System.Threading;
 using Dalamud.Interface;
+using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Plugin.Services;
 using Eikon.Config;
+using Eikon.Contracts;
 using Eikon.Content;
 using Eikon.Crypto;
 using Eikon.Navigation;
@@ -20,9 +23,6 @@ internal sealed class SettingsScreen : IScreen
 {
     private static readonly Vector4 Danger = new(0.91f, 0.36f, 0.36f, 1f);
 
-    // Muted fill for the mini layout-preview tiles in the unselected Browse-layout card (#26313F).
-    private static readonly Vector4 PreviewTile = new(0.149f, 0.192f, 0.247f, 1f);
-
     private readonly ScreenRouter router;
     private readonly ThemeService theme;
     private readonly Kit kit;
@@ -34,13 +34,18 @@ internal sealed class SettingsScreen : IScreen
     private readonly SoundService sound;
     private readonly IPluginLog log;
     private readonly DeleteAccountFlow deleteFlow;
+    private readonly ProfileService profiles;
+    private readonly PhotoService photoSvc;
+    private readonly WorldCatalog catalog;
 
     private bool discreet;
     private bool onlyVerifiedMessage;
     private bool settingsLoaded;   // privacy prefs fetched from the server this session
     private int textStep;          // live Text size slider step; committed to config (and applied) on release
+    private bool inDataCenter;     // the Data center picker sub-view is open over the main list
+    private int pickerDc = -1;     // selected data center in the picker (its world list expands below)
 
-    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow)
+    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow, ProfileService profiles, PhotoService photoSvc, WorldCatalog catalog)
     {
         this.router = router;
         this.theme = theme;
@@ -53,6 +58,9 @@ internal sealed class SettingsScreen : IScreen
         this.sound = sound;
         this.log = log;
         this.deleteFlow = deleteFlow;
+        this.profiles = profiles;
+        this.photoSvc = photoSvc;
+        this.catalog = catalog;
         this.textStep = TextScale.NearestStepIndex(config.TextScalePercent);
     }
 
@@ -62,11 +70,23 @@ internal sealed class SettingsScreen : IScreen
 
     public void Draw()
     {
-        var contentWidth = ImGui.GetContentRegionAvail().X - Ui.Px(16f);
+        var pad = Ui.Px(16f);
+        var contentWidth = ImGui.GetContentRegionAvail().X - (pad * 2f);
+        ImGui.Indent(pad);
+
+        if (this.inDataCenter)
+        {
+            this.DrawDataCenterPicker(contentWidth);
+            ImGui.Unindent(pad);
+            this.deleteFlow.Draw();
+            return;
+        }
+
+        this.DrawHeader(contentWidth);
 
         this.kit.SectionLabel("Appearance");
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.NavRow("##s_appearance", "Theme", this.theme.CurrentThemeName, Palette.TextPrimary, true, contentWidth))
+        if (this.DrawThemeRow("##s_appearance", contentWidth))
             this.router.Navigate(Screen.Appearance);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
@@ -82,6 +102,7 @@ internal sealed class SettingsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Account");
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        this.DrawAccountRow(contentWidth);
         this.NavRow("##s_discord", "Discord", "Connected", Palette.TextPrimary, true, contentWidth);
 
         var verifyValue = this.auth.IsVerified
@@ -109,19 +130,13 @@ internal sealed class SettingsScreen : IScreen
             this.discreet = nextDiscreet;
             this.SaveSettings();
         }
+        this.Hint("Hides you from the grid; people you already talk to can still reach you.", contentWidth);
 
         var nextOnlyVerified = this.ToggleRow("##s_onlyverif", "Only verified can message me", this.onlyVerifiedMessage, contentWidth);
         if (nextOnlyVerified != this.onlyVerifiedMessage)
         {
             this.onlyVerifiedMessage = nextOnlyVerified;
             this.SaveSettings();
-        }
-        using (this.fonts.Caption.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-        {
-            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-            ImGui.TextWrapped("Discreet mode hides you from the grid; people you already talk to can still reach you.");
-            ImGui.PopTextWrapPos();
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
@@ -142,36 +157,30 @@ internal sealed class SettingsScreen : IScreen
             this.config.Save();
         }
 
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        this.EyebrowValue("Sound volume", $"{this.config.NotificationVolume}%", contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        using (this.fonts.Caption.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted($"Sound volume ({this.config.NotificationVolume}%)");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        var nextVolume = this.kit.Slider("##s_notifvol", this.config.NotificationVolume, 0, 100, contentWidth);
+        var volWidth = contentWidth - Ui.Px(78f);
+        var nextVolume = this.kit.Slider("##s_notifvol", this.config.NotificationVolume, 0, 100, volWidth);
         if (nextVolume != this.config.NotificationVolume)
         {
             this.config.NotificationVolume = nextVolume;
             this.config.Save();
         }
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        if (this.kit.SecondaryButton("##s_notiftest", "Test sound", Ui.Px(120f)))
+        ImGui.SameLine(0f, Ui.Px(10f));
+        if (this.kit.SecondaryButton("##s_notiftest", "Test", Ui.Px(68f)))
             this.sound.Play(this.config.NotificationVolume);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        using (this.fonts.Caption.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted("Where they appear");
+        this.kit.SectionLabel("Where they appear");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+        this.DrawNotifPosition(contentWidth);
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+        this.kit.SectionLabel("Connection");
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var corner = Math.Clamp(this.config.NotificationCorner, 0, 5);
-        var nextVert = this.kit.Segmented("##s_notif_v", new[] { "Top", "Bottom" }, corner / 3, contentWidth);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var nextHoriz = this.kit.Segmented("##s_notif_h", new[] { "Left", "Center", "Right" }, corner % 3, contentWidth);
-        var nextCorner = (nextVert * 3) + nextHoriz;
-        if (nextCorner != this.config.NotificationCorner)
-        {
-            this.config.NotificationCorner = nextCorner;
-            this.config.Save();
-        }
+        if (this.DrawDataCenterRow(contentWidth))
+            this.OpenDataCenterPicker();
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Content & safety");
@@ -188,13 +197,7 @@ internal sealed class SettingsScreen : IScreen
         var nextRequire = this.ToggleRow("##s_passlaunch", "Require passphrase on this PC", requirePassphrase, contentWidth);
         if (nextRequire != requirePassphrase && this.keyVault.IsUnlocked)
             this.keyVault.SetAutoUnlock(!nextRequire);
-        using (this.fonts.Caption.Push())
-        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-        {
-            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-            ImGui.TextWrapped("Off (default): unlocks automatically for your Windows account. On: asks for your passphrase every launch - turn on if others can use this PC under your Windows login.");
-            ImGui.PopTextWrapPos();
-        }
+        this.Hint("Off unlocks automatically for your Windows account. On asks for your passphrase every launch - enable if others can use this PC under your login.", contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("About");
@@ -205,9 +208,394 @@ internal sealed class SettingsScreen : IScreen
             this.router.Navigate(Screen.WhatsNew);
         this.NavRow("##s_version", "Version", PluginVersion.Display, Palette.TextSecondary, false, contentWidth);
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
+        this.DrawFooter(contentWidth);
 
+        ImGui.Unindent(pad);
         this.deleteFlow.Draw();
+    }
+
+    // ---- header / account / connection / footer ----
+
+    private void DrawHeader(float fullWidth)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var origin = ImGui.GetCursorScreenPos();
+        var eyebrowH = Ui.Measure(this.fonts.Eyebrow, "X").Y;
+        Ui.TextAt(dl, this.fonts.Eyebrow, origin, Palette.TextSecondary.U32(), "PREFERENCES");
+        var titleY = origin.Y + eyebrowH + Ui.Px(4f);
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(origin.X, titleY), Palette.TextPrimary.U32(), "Settings");
+        var titleH = Ui.Measure(this.fonts.SerifTitle, "Settings").Y;
+        var ruleY = titleY + titleH + Ui.Px(16f);
+        dl.AddLine(new Vector2(origin.X, ruleY), new Vector2(origin.X + fullWidth, ruleY), Palette.Border.U32(), 1f);
+        ImGui.Dummy(new Vector2(fullWidth, (ruleY - origin.Y) + Ui.Px(16f)));
+    }
+
+    private bool DrawThemeRow(string id, float contentWidth)
+    {
+        var rowHeight = Ui.Px(50f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton(id, new Vector2(contentWidth, rowHeight));
+        var dl = ImGui.GetWindowDrawList();
+
+        var labelSize = Ui.Measure(this.fonts.Body, "Theme");
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), "Theme");
+
+        var chev = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chSize = Ui.Measure(this.fonts.Icon, chev);
+        var rightX = pos.X + contentWidth - chSize.X;
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(rightX, pos.Y + ((rowHeight - chSize.Y) * 0.5f)), Palette.TextMuted.U32(), chev);
+        rightX -= Ui.Px(8f);
+
+        var name = this.theme.CurrentThemeName;
+        var nameSize = Ui.Measure(this.fonts.Body, name);
+        var nameX = rightX - nameSize.X;
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(nameX, pos.Y + ((rowHeight - nameSize.Y) * 0.5f)), Palette.TextSecondary.U32(), name);
+
+        var swatchW = Ui.Px(40f);
+        var swatchH = Ui.Px(16f);
+        var swatchPos = new Vector2(nameX - Ui.Px(10f) - swatchW, pos.Y + ((rowHeight - swatchH) * 0.5f));
+        this.DrawThemeSwatch(dl, swatchPos, swatchW, swatchH);
+
+        dl.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        return clicked;
+    }
+
+    private void DrawThemeSwatch(ImDrawListPtr dl, Vector2 pos, float w, float h)
+    {
+        var stripes = this.theme.Stripes;
+        if (stripes.Count > 0)
+        {
+            Ui.FlagBar(dl, pos, w, stripes, h);
+        }
+        else
+        {
+            var seg = w / 3f;
+            dl.AddRectFilled(pos, pos + new Vector2(seg, h), Palette.Surface1.U32());
+            dl.AddRectFilled(pos + new Vector2(seg, 0f), pos + new Vector2(seg * 2f, h), Palette.Surface2.U32());
+            dl.AddRectFilled(pos + new Vector2(seg * 2f, 0f), pos + new Vector2(w, h), this.theme.Accent.U32());
+        }
+
+        dl.AddRect(pos, pos + new Vector2(w, h), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+    }
+
+    // The signed-in member's own row: portrait, first name + age, the first line of their bio, opening
+    // the Profile tab.
+    private void DrawAccountRow(float contentWidth)
+    {
+        this.profiles.EnsureLoaded();
+        this.photoSvc.EnsureLoaded();
+        var mine = this.profiles.Mine;
+
+        var rowHeight = Ui.Px(64f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##s_account", new Vector2(contentWidth, rowHeight));
+        var dl = ImGui.GetWindowDrawList();
+
+        var av = Ui.Px(44f);
+        var avPos = new Vector2(pos.X, pos.Y + ((rowHeight - av) * 0.5f));
+        var avSize = new Vector2(av, av);
+        var main = this.photoSvc.Mine.FirstOrDefault(p => p.State == PhotoStateEnum.Approved);
+        var tex = main is null ? null : this.photoSvc.Texture(main.Id);
+        if (tex != null)
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, 1f);
+            dl.AddImage(tex.Handle, avPos, avPos + avSize, uvMin, uvMax);
+        }
+        else
+        {
+            dl.AddRectFilled(avPos, avPos + avSize, Palette.Surface2.U32());
+            var initial = (mine?.DisplayName is { Length: > 0 } dn ? dn[..1] : "?").ToUpperInvariant();
+            var isz = Ui.Measure(this.fonts.SerifName, initial);
+            Ui.TextAt(dl, this.fonts.SerifName, avPos + ((avSize - isz) * 0.5f), Palette.TextMuted.U32(), initial);
+        }
+
+        dl.AddRect(avPos, avPos + avSize, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
+        var textX = pos.X + av + Ui.Px(12f);
+        var firstName = mine?.DisplayName is { Length: > 0 } nm ? FirstWord(nm) : "Your profile";
+        var nameSize = Ui.Measure(this.fonts.Body, firstName);
+        var bioLine = BioFirstLine(mine?.Bio);
+        var blockH = nameSize.Y + (bioLine.Length > 0 ? Ui.Px(3f) + Ui.Measure(this.fonts.Caption, "X").Y : 0f);
+        var topY = pos.Y + ((rowHeight - blockH) * 0.5f);
+
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(textX, topY), Palette.TextPrimary.U32(), firstName);
+        if (mine is { } m)
+            Ui.TextAt(dl, this.fonts.Body, new Vector2(textX + nameSize.X, topY), Palette.TextMuted.U32(), $" · {m.Age}");
+
+        if (bioLine.Length > 0)
+        {
+            var maxW = contentWidth - (textX - pos.X) - Ui.Px(26f);
+            Ui.TextAt(dl, this.fonts.Caption, new Vector2(textX, topY + nameSize.Y + Ui.Px(3f)), Palette.TextMuted.U32(), this.Truncate(bioLine, this.fonts.Caption, maxW));
+        }
+
+        var chev = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chSize = Ui.Measure(this.fonts.Icon, chev);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(pos.X + contentWidth - chSize.X, pos.Y + ((rowHeight - chSize.Y) * 0.5f)), Palette.TextMuted.U32(), chev);
+
+        dl.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        if (clicked)
+            this.router.Navigate(Screen.MyProfile);
+    }
+
+    // Connection row: the current data center + region code, opening the in-Settings picker.
+    private bool DrawDataCenterRow(float contentWidth)
+    {
+        this.catalog.EnsureLoaded();
+        this.profiles.EnsureLoaded();
+        var (dcName, region) = this.CurrentDcRegion();
+
+        var rowHeight = Ui.Px(50f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##s_dc", new Vector2(contentWidth, rowHeight));
+        var dl = ImGui.GetWindowDrawList();
+
+        var labelSize = Ui.Measure(this.fonts.Body, "Data center");
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), "Data center");
+
+        var chev = FontAwesomeIcon.ChevronRight.ToIconString();
+        var chSize = Ui.Measure(this.fonts.Icon, chev);
+        var rightX = pos.X + contentWidth - chSize.X;
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(rightX, pos.Y + ((rowHeight - chSize.Y) * 0.5f)), Palette.TextMuted.U32(), chev);
+        rightX -= Ui.Px(8f);
+
+        if (region.Length > 0)
+        {
+            var rSize = Ui.Measure(this.fonts.Eyebrow, region);
+            rightX -= rSize.X;
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(rightX, pos.Y + ((rowHeight - rSize.Y) * 0.5f)), Palette.TextMuted.U32(), region);
+            rightX -= Ui.Px(8f);
+        }
+
+        var dcSize = Ui.Measure(this.fonts.Body, dcName);
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(rightX - dcSize.X, pos.Y + ((rowHeight - dcSize.Y) * 0.5f)), Palette.TextSecondary.U32(), dcName);
+
+        dl.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        return clicked;
+    }
+
+    private void OpenDataCenterPicker()
+    {
+        this.inDataCenter = true;
+        this.pickerDc = this.CurrentPickerDc();
+    }
+
+    // The Data center sub-view: pick a data center, then a home world within it. Selecting a world saves
+    // it straight to the profile (same field the profile editor writes) and returns to the list.
+    private void DrawDataCenterPicker(float contentWidth)
+    {
+        this.DrawSubHeader("Data center", contentWidth);
+
+        this.catalog.EnsureLoaded();
+        if (!this.catalog.Ready)
+        {
+            this.Hint("Loading worlds…", contentWidth);
+            return;
+        }
+
+        var dcs = this.catalog.DataCenters;
+        if (this.pickerDc < 0)
+            this.pickerDc = this.CurrentPickerDc();
+
+        this.kit.SectionLabel("Data center");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        var dc = this.kit.ChipFlow("s_pick_dc", dcs.Select(d => d.Name).ToArray(), i => i == this.pickerDc, contentWidth);
+        if (dc >= 0)
+            this.pickerDc = dc;
+
+        if (this.pickerDc >= 0 && this.pickerDc < dcs.Count)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
+            this.kit.SectionLabel("Home world");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            var worlds = dcs[this.pickerDc].Worlds;
+            var currentWorld = (int)(this.profiles.Mine?.WorldId ?? 0);
+            var w = this.kit.ChipFlow("s_pick_world", worlds.Select(x => x.Name).ToArray(), i => worlds[i].Id == currentWorld, contentWidth);
+            if (w >= 0)
+            {
+                this.SaveWorld(worlds[w].Id);
+                this.inDataCenter = false;
+                this.pickerDc = -1;
+            }
+        }
+    }
+
+    private void DrawSubHeader(string title, float contentWidth)
+    {
+        var h = Ui.Px(44f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##s_subback", new Vector2(contentWidth, h));
+        var dl = ImGui.GetWindowDrawList();
+        var color = (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32();
+        var cy = pos.Y + (h * 0.5f);
+        var cx = pos.X + Ui.Px(2f);
+        var r = Ui.Px(4f);
+        dl.AddLine(new Vector2(cx + r, cy - r), new Vector2(cx, cy), color, Ui.Px(1.5f));
+        dl.AddLine(new Vector2(cx, cy), new Vector2(cx + r, cy + r), color, Ui.Px(1.5f));
+        var ts = Ui.Measure(this.fonts.Eyebrow, title.ToUpperInvariant());
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + r + Ui.Px(10f), cy - (ts.Y * 0.5f)), Palette.TextSecondary.U32(), title.ToUpperInvariant());
+        dl.AddLine(new Vector2(pos.X, pos.Y + h), new Vector2(pos.X + contentWidth, pos.Y + h), Palette.Border.U32(), 1f);
+        if (clicked)
+        {
+            this.inDataCenter = false;
+            this.pickerDc = -1;
+        }
+
+        ImGui.Dummy(new Vector2(0f, h + Ui.Px(14f)));
+    }
+
+    private void SaveWorld(int worldId)
+    {
+        if (this.profiles.Mine is not { } mine)
+            return;
+        mine.WorldId = worldId;
+        this.profiles.Save(mine);
+    }
+
+    private (string Dc, string Region) CurrentDcRegion()
+    {
+        var worldId = (int)(this.profiles.Mine?.WorldId ?? 0);
+        foreach (var dc in this.catalog.DataCenters)
+            foreach (var w in dc.Worlds)
+                if (w.Id == worldId)
+                    return (dc.Name, RegionCode(dc.Region));
+        return ("Not set", string.Empty);
+    }
+
+    private int CurrentPickerDc()
+    {
+        var worldId = (int)(this.profiles.Mine?.WorldId ?? 0);
+        var dcs = this.catalog.DataCenters;
+        for (var i = 0; i < dcs.Count; i++)
+            foreach (var w in dcs[i].Worlds)
+                if (w.Id == worldId)
+                    return i;
+        return -1;
+    }
+
+    private static string RegionCode(string region) => region switch
+    {
+        "NorthAmerica" or "North America" or "NA" => "NA",
+        "Europe" or "EU" => "EU",
+        "Japan" or "JP" => "JP",
+        "Oceania" or "OCE" => "OCE",
+        _ => (region.Length > 3 ? region[..3] : region).ToUpperInvariant(),
+    };
+
+    private void DrawFooter(float fullWidth)
+    {
+        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+        const string text = "EIKON · DALAMUD PLUGIN";
+        var ts = Ui.Measure(this.fonts.Eyebrow, text);
+        var pos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + ((fullWidth - ts.X) * 0.5f), pos.Y), Palette.TextMuted.U32(), text);
+        ImGui.Dummy(new Vector2(fullWidth, ts.Y + Ui.Px(24f)));
+    }
+
+    // ---- small pieces ----
+
+    private void Hint(string text, float contentWidth)
+    {
+        using (this.fonts.Caption.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+        {
+            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
+            ImGui.TextWrapped(text);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(2f)));
+    }
+
+    // An eyebrow label with a right-aligned mono value on one line (Sound volume 70%).
+    private void EyebrowValue(string label, string value, float contentWidth)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var origin = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, origin, Palette.TextSecondary.U32(), label.ToUpperInvariant());
+        var vs = Ui.Measure(this.fonts.Mono, value);
+        Ui.TextAt(dl, this.fonts.Mono, new Vector2(origin.X + contentWidth - vs.X, origin.Y), Palette.TextMuted.U32(), value);
+        ImGui.Dummy(new Vector2(contentWidth, Ui.Measure(this.fonts.Eyebrow, "X").Y));
+    }
+
+    // The notification corner as one bordered box: Top / Bottom over Left / Center / Right; active fills ink.
+    private void DrawNotifPosition(float contentWidth)
+    {
+        var corner = Math.Clamp(this.config.NotificationCorner, 0, 5);
+        var vert = corner / 3;
+        var horiz = corner % 3;
+
+        var rowH = Ui.Px(36f);
+        var pos = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+
+        var cellW2 = contentWidth / 2f;
+        var topLabels = new[] { "Top", "Bottom" };
+        var newVert = vert;
+        for (var i = 0; i < 2; i++)
+            if (this.SegCell($"##np_v{i}", new Vector2(pos.X + (i * cellW2), pos.Y), cellW2, rowH, topLabels[i], i == vert))
+                newVert = i;
+
+        var row2Y = pos.Y + rowH;
+        var cellW3 = contentWidth / 3f;
+        var botLabels = new[] { "Left", "Center", "Right" };
+        var newHoriz = horiz;
+        for (var i = 0; i < 3; i++)
+            if (this.SegCell($"##np_h{i}", new Vector2(pos.X + (i * cellW3), row2Y), cellW3, rowH, botLabels[i], i == horiz))
+                newHoriz = i;
+
+        var border = Palette.Border.U32();
+        dl.AddRect(pos, new Vector2(pos.X + contentWidth, row2Y + rowH), border, 0f, ImDrawFlags.None, 1f);
+        dl.AddLine(new Vector2(pos.X, row2Y), new Vector2(pos.X + contentWidth, row2Y), border, 1f);
+        dl.AddLine(new Vector2(pos.X + cellW2, pos.Y), new Vector2(pos.X + cellW2, row2Y), border, 1f);
+        dl.AddLine(new Vector2(pos.X + cellW3, row2Y), new Vector2(pos.X + cellW3, row2Y + rowH), border, 1f);
+        dl.AddLine(new Vector2(pos.X + (cellW3 * 2f), row2Y), new Vector2(pos.X + (cellW3 * 2f), row2Y + rowH), border, 1f);
+
+        var next = (newVert * 3) + newHoriz;
+        if (next != this.config.NotificationCorner)
+        {
+            this.config.NotificationCorner = next;
+            this.config.Save();
+        }
+
+        ImGui.SetCursorScreenPos(pos);
+        ImGui.Dummy(new Vector2(contentWidth, rowH * 2f));
+    }
+
+    private bool SegCell(string id, Vector2 pos, float w, float h, string label, bool active)
+    {
+        ImGui.SetCursorScreenPos(pos);
+        var clicked = ImGui.InvisibleButton(id, new Vector2(w, h));
+        var dl = ImGui.GetWindowDrawList();
+        if (active)
+            dl.AddRectFilled(pos, pos + new Vector2(w, h), Palette.TextPrimary.U32());
+        var ts = Ui.Measure(this.fonts.Label, label);
+        var color = active ? Palette.Paper : (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary);
+        Ui.TextAt(dl, this.fonts.Label, pos + ((new Vector2(w, h) - ts) * 0.5f), color.U32(), label);
+        return clicked;
+    }
+
+    private static string FirstWord(string s)
+    {
+        var sp = s.IndexOf(' ');
+        return sp > 0 ? s[..sp] : s;
+    }
+
+    private static string BioFirstLine(string? bio)
+    {
+        if (string.IsNullOrWhiteSpace(bio))
+            return string.Empty;
+        var nl = bio.IndexOfAny(new[] { '\n', '\r' });
+        return (nl >= 0 ? bio[..nl] : bio).Trim();
+    }
+
+    private string Truncate(string text, IFontHandle font, float maxWidth)
+    {
+        if (Ui.Measure(font, text).X <= maxWidth)
+            return text;
+        var s = text;
+        while (s.Length > 1 && Ui.Measure(font, s + "…").X > maxWidth)
+            s = s[..^1];
+        return s + "…";
     }
 
     // Pull the privacy prefs from the server once per session so the toggles reflect saved state.
@@ -258,20 +646,19 @@ internal sealed class SettingsScreen : IScreen
         });
     }
 
-    // Two selectable cards (Expanded / Compact), each with a mini grid-preview, a title and a
-    // subtitle; the selected one gets an accent ring + check. Sets config.GridLayout, which the
-    // discovery grid reads. Drawn with draw lists to match the rest of Settings.
+    // Two selectable cards (Expanded / Compact): an icon, a title and a subtitle; the selected one gets
+    // an accent ring + check. Sets config.GridLayout, which the discovery grid reads.
     private void DrawLayoutCards(float contentWidth)
     {
         var gap = Ui.Px(10f);
         var cardWidth = (contentWidth - gap) / 2f;
-        var cardHeight = Ui.Px(120f);
-        this.DrawLayoutCard(0, "Expanded", "Big photos, more detail", cardWidth, cardHeight);
+        var cardHeight = Ui.Px(96f);
+        this.DrawLayoutCard(0, FontAwesomeIcon.ThList, "Expanded", "Big photos, more detail", cardWidth, cardHeight);
         ImGui.SameLine(0f, gap);
-        this.DrawLayoutCard(1, "Compact", "More profiles per screen", cardWidth, cardHeight);
+        this.DrawLayoutCard(1, FontAwesomeIcon.Th, "Compact", "More profiles per screen", cardWidth, cardHeight);
     }
 
-    private void DrawLayoutCard(int index, string title, string subtitle, float width, float height)
+    private void DrawLayoutCard(int index, FontAwesomeIcon icon, string title, string subtitle, float width, float height)
     {
         var selected = Math.Clamp(this.config.GridLayout, 0, 1) == index;
         var pos = ImGui.GetCursorScreenPos();
@@ -282,25 +669,19 @@ internal sealed class SettingsScreen : IScreen
         }
 
         var drawList = ImGui.GetWindowDrawList();
-        var rounding = Ui.Px(12f);
         var size = new Vector2(width, height);
-
-        var bg = selected ? Palette.WithAlpha(this.theme.Accent, 0.09f) : Palette.Surface1;
-        drawList.AddRectFilled(pos, pos + size, bg.U32(), rounding);
         if (selected)
-            drawList.AddRect(pos, pos + size, this.theme.Accent.U32(), rounding, ImDrawFlags.None, Ui.Px(1.5f));
+        {
+            drawList.AddRectFilled(pos, pos + size, Palette.WithAlpha(this.theme.Accent, 0.06f).U32());
+            drawList.AddRect(pos, pos + size, this.theme.Accent.U32(), 0f, ImDrawFlags.None, Ui.Px(1.5f));
+        }
         else
-            drawList.AddRect(pos, pos + size, Palette.Border.U32(), rounding, ImDrawFlags.None, 1f);
+        {
+            drawList.AddRect(pos, pos + size, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+        }
 
-        var pad = Ui.Px(11f);
-        var previewHeight = Ui.Px(44f);
-        var previewWidth = width - (pad * 2f);
-        var previewPos = pos + new Vector2(pad, pad);
-        var tileColor = selected ? Palette.WithAlpha(this.theme.Accent, 0.45f) : PreviewTile;
-        if (index == 0)
-            DrawPreviewTiles(drawList, previewPos, previewWidth, previewHeight, 2, 1, tileColor);
-        else
-            DrawPreviewTiles(drawList, previewPos, previewWidth, previewHeight, 3, 2, tileColor);
+        var pad = Ui.Px(12f);
+        Ui.TextAt(drawList, this.fonts.Icon, pos + new Vector2(pad, pad), (selected ? this.theme.Accent : Palette.TextSecondary).U32(), icon.ToIconString());
 
         if (selected)
         {
@@ -309,30 +690,18 @@ internal sealed class SettingsScreen : IScreen
             Ui.TextAt(drawList, this.fonts.Icon, pos + new Vector2(width - pad - checkSize.X, pad), this.theme.Accent.U32(), check);
         }
 
-        var titlePos = pos + new Vector2(pad, pad + previewHeight + Ui.Px(9f));
-        Ui.TextAt(drawList, this.fonts.Body, titlePos, Palette.TextPrimary.U32(), title);
         var titleSize = Ui.Measure(this.fonts.Body, title);
+        var subLines = this.WrapCaption(subtitle, width - (pad * 2f));
+        var subH = subLines.Count * Ui.Measure(this.fonts.Caption, "X").Y;
+        var titleY = pos.Y + height - pad - titleSize.Y - Ui.Px(3f) - subH;
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + pad, titleY), Palette.TextPrimary.U32(), title);
 
         var subColor = (selected ? Palette.TextSecondary : Palette.TextMuted).U32();
-        var lineY = titlePos.Y + titleSize.Y + Ui.Px(3f);
-        foreach (var line in this.WrapCaption(subtitle, previewWidth))
+        var lineY = titleY + titleSize.Y + Ui.Px(3f);
+        foreach (var line in subLines)
         {
-            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(titlePos.X, lineY), subColor, line);
+            Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + pad, lineY), subColor, line);
             lineY += Ui.Measure(this.fonts.Caption, line).Y;
-        }
-    }
-
-    private static void DrawPreviewTiles(ImDrawListPtr drawList, Vector2 pos, float width, float height, int cols, int rows, Vector4 color)
-    {
-        var gap = Ui.Px(rows > 1 ? 3f : 4f);
-        var tileWidth = (width - (gap * (cols - 1))) / cols;
-        var tileHeight = (height - (gap * (rows - 1))) / rows;
-        var rounding = Ui.Px(3f);
-        for (var row = 0; row < rows; row++)
-        for (var col = 0; col < cols; col++)
-        {
-            var tilePos = pos + new Vector2(col * (tileWidth + gap), row * (tileHeight + gap));
-            drawList.AddRectFilled(tilePos, tilePos + new Vector2(tileWidth, tileHeight), color.U32(), rounding);
         }
     }
 
@@ -427,11 +796,12 @@ internal sealed class SettingsScreen : IScreen
 
         var pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, boxH), Palette.Surface2.U32(), Ui.Px(10f));
+        drawList.AddRectFilled(pos, pos + new Vector2(contentWidth, boxH), Palette.Surface1.U32());
+        drawList.AddRect(pos, pos + new Vector2(contentWidth, boxH), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
         var av = new Vector2(pos.X + pad, pos.Y + ((boxH - avatar) * 0.5f));
-        drawList.AddCircleFilled(av + new Vector2(avatar * 0.5f, avatar * 0.5f), avatar * 0.5f, this.theme.AccentTint.U32(), 24);
-        Ui.TextAtSized(drawList, this.fonts.Title, new Vector2(av.X + (avatar * 0.32f), av.Y + (avatar * 0.24f)), avatar * 0.5f, this.theme.AccentText.U32(), "R");
+        drawList.AddRectFilled(av, av + new Vector2(avatar, avatar), Palette.Surface2.U32());
+        Ui.TextAtSized(drawList, this.fonts.SerifName, new Vector2(av.X + (avatar * 0.34f), av.Y + (avatar * 0.2f)), avatar * 0.54f, Palette.TextMuted.U32(), "R");
 
         var textX = av.X + avatar + pad;
         var textY = pos.Y + ((boxH - textH) * 0.5f);
