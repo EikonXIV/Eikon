@@ -8,9 +8,6 @@ internal sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
 
-    // Index into AccentPresets.All. 0 is Blue, the default.
-    public int AccentPresetIndex { get; set; }
-
     // Selected theme id from the theme catalog (e.g. "editorial-dark", "paper-light", "sky", "pride"),
     // or null for the default editorial dark. Drives the whole palette, not just the accent. Additive and
     // optional, so old and new builds read each other's config; an id an older build cannot resolve falls
