@@ -12,6 +12,18 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 1, 0),
+            "July 2026",
+            New:
+            [
+                "Side is an option under After dark now, alongside top, vers and bottom.",
+            ],
+            Improved:
+            [
+                "Vers is spelled the way people actually write it, in your profile and in the filters.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(2, 0, 1),
             "July 2026",
             New: [],
