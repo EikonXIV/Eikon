@@ -32,8 +32,10 @@ internal static class Options
         "PvP", "Roleplay", "Deep dungeons", "Music", "Lore", "Screenshots",
     };
 
+    // Display labels only; the wire value is PositionElement, mapped by index in ProfileMapper. "Vers"
+    // is the community's spelling of versatile, so a saved profile is unaffected by the wording here.
     public static readonly string[] Positions =
-        { "Top", "Verse top", "Verse", "Verse bottom", "Bottom" };
+        { "Top", "Vers top", "Vers", "Vers bottom", "Bottom", "Side" };
 
     public static readonly string[] Roles = { "Dom", "Sub", "Switch" };
 

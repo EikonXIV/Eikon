@@ -1023,7 +1023,7 @@ namespace Eikon.Contracts
 
     public enum LookingForElement { Chat, ContentBuddies, Dates, Erp, HangingOut, Hookups, JustFriends, Penpals, Relationship, RightNow, Rp };
 
-    public enum PositionElement { Bottom, Top, Verse, VerseBottom, VerseTop };
+    public enum PositionElement { Bottom, Side, Top, Verse, VerseBottom, VerseTop };
 
     public enum RaceElement { AuRa, Elezen, Hrothgar, Hyur, Lalafell, Miqote, Roegadyn, Viera };
 
@@ -1630,6 +1630,8 @@ namespace Eikon.Contracts
             {
                 case "bottom":
                     return PositionElement.Bottom;
+                case "side":
+                    return PositionElement.Side;
                 case "top":
                     return PositionElement.Top;
                 case "verse":
@@ -1648,6 +1650,9 @@ namespace Eikon.Contracts
             {
                 case PositionElement.Bottom:
                     JsonSerializer.Serialize(writer, "bottom", options);
+                    return;
+                case PositionElement.Side:
+                    JsonSerializer.Serialize(writer, "side", options);
                     return;
                 case PositionElement.Top:
                     JsonSerializer.Serialize(writer, "top", options);
