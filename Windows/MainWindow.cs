@@ -21,6 +21,10 @@ internal sealed class MainWindow : Window, IDisposable
     private readonly Dictionary<Screen, IScreen> screensById;
     private readonly string versionTag;
 
+    // The design's proportions, 400 x 780. Held while resizing so the app scales as a phone.
+    private const float WindowAspect = 780f / 400f;
+
+    private Vector2 lastSize;
     private int pushedColors;
     private int pushedVars;
     private double lastInboxRefresh;
@@ -28,7 +32,7 @@ internal sealed class MainWindow : Window, IDisposable
     public MainWindow(ScreenRouter router, ThemeService theme, UiFonts fonts, InboxService inbox, WindowController windowController, IEnumerable<IScreen> screens)
         : base("Eikon##main",
             ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
-            ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize)
+            ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoTitleBar)
     {
         this.router = router;
         this.theme = theme;
@@ -40,16 +44,43 @@ internal sealed class MainWindow : Window, IDisposable
         var v = typeof(BuildInfo).Assembly.GetName().Version;
         this.versionTag = (v is null ? "v0" : $"v{v.Major}·{v.Minor}") + (BuildInfo.IsLocal ? " · local" : string.Empty);
 
-        // A fixed, non-resizable, mobile-shaped frame (scaled with the UI). Min == max locks the size and
-        // NoResize drops the grip; Always re-applies it so a size saved by an older build is overridden.
-        var size = new Vector2(Ui.Px(400f), Ui.Px(780f));
-        this.Size = size;
-        this.SizeCondition = ImGuiCond.Always;
-        this.SizeConstraints = new WindowSizeConstraints { MinimumSize = size, MaximumSize = size };
+        // A mobile-shaped frame the member can scale. FirstUseEver rather than Always, so a size dragged
+        // here sticks instead of being overwritten every frame; the constraints bound how far it goes and
+        // Draw holds the proportions (see WindowAspect), so a grip rescales the app rather than
+        // stretching it out of shape.
+        this.Size = new Vector2(Ui.Px(400f), Ui.Px(780f));
+        this.SizeCondition = ImGuiCond.FirstUseEver;
+        this.SizeConstraints = new WindowSizeConstraints
+        {
+            MinimumSize = new Vector2(Ui.Px(300f), Ui.Px(300f * WindowAspect)),
+            MaximumSize = new Vector2(Ui.Px(820f), Ui.Px(820f * WindowAspect)),
+        };
     }
 
     public void Dispose()
     {
+    }
+
+    // Keep the frame's proportions while it is dragged. Whichever edge moved further leads, so the side,
+    // bottom and corner grips all rescale the app instead of one of them being dead.
+    private void HoldAspect()
+    {
+        var size = ImGui.GetWindowSize();
+        if (this.lastSize != Vector2.Zero)
+        {
+            var byHeight = MathF.Abs(size.Y - this.lastSize.Y) > MathF.Abs(size.X - this.lastSize.X);
+            var target = byHeight
+                ? new Vector2(size.Y / WindowAspect, size.Y)
+                : new Vector2(size.X, size.X * WindowAspect);
+
+            if (MathF.Abs(target.X - size.X) > 0.5f || MathF.Abs(target.Y - size.Y) > 0.5f)
+            {
+                ImGui.SetWindowSize(target);
+                size = target;
+            }
+        }
+
+        this.lastSize = size;
     }
 
     public override void PreDraw()
@@ -74,6 +105,8 @@ internal sealed class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
+        this.HoldAspect();
+
         // Once per session, when the app is usable, the What's new screen decides whether an update
         // happened and routes to itself.
         if (this.screensById.TryGetValue(Screen.WhatsNew, out var whatsNew) && whatsNew is WhatsNewScreen gate)
