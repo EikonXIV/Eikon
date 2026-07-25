@@ -1,5 +1,6 @@
 using Eikon.Contracts;
 using Eikon.Net;
+using Eikon.UI;
 using Xunit;
 
 namespace Eikon.Tests;
@@ -51,4 +52,26 @@ public class ProfileMapperTests
         Assert.Single(tribes);
         Assert.Equal(TribeElement.Twink, tribes[0]);
     }
+
+    // Options.Positions is display text; the wire value is PositionElement, matched by index. Label()
+    // indexes one list by the other, so a value added to one and not the other throws or mislabels at
+    // runtime. Round-tripping every label pins them together.
+    [Fact]
+    public void Every_position_label_round_trips_through_its_wire_value()
+    {
+        for (var i = 0; i < Options.Positions.Length; i++)
+            Assert.Equal(Options.Positions[i], ProfileMapper.Label(ProfileMapper.Position(i)));
+    }
+
+    // And every wire value has a label, so a position added to the contract cannot ship unlabelled.
+    [Fact]
+    public void Every_position_wire_value_has_a_label()
+    {
+        foreach (var value in Enum.GetValues<PositionElement>())
+            Assert.Contains(ProfileMapper.Label(value), Options.Positions);
+    }
+
+    [Fact]
+    public void Side_is_offered_as_a_position()
+        => Assert.Contains("Side", Options.Positions);
 }

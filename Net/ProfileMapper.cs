@@ -29,8 +29,9 @@ internal static class ProfileMapper
         LookingForElement.HangingOut, LookingForElement.ContentBuddies, LookingForElement.JustFriends, LookingForElement.Chat, LookingForElement.Penpals, LookingForElement.Rp,
     };
 
+    // Index-aligned with Options.Positions: the label at index i is this wire value.
     private static readonly PositionElement[] Positions =
-        { PositionElement.Top, PositionElement.VerseTop, PositionElement.Verse, PositionElement.VerseBottom, PositionElement.Bottom };
+        { PositionElement.Top, PositionElement.VerseTop, PositionElement.Verse, PositionElement.VerseBottom, PositionElement.Bottom, PositionElement.Side };
 
     private static readonly RoleEnum[] Roles = { RoleEnum.Dom, RoleEnum.Sub, RoleEnum.Switch };
 
