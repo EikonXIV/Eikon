@@ -84,12 +84,13 @@ internal sealed class ProfileDetailScreen : IScreen
         }
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var content = ImRaii.Child("pd_content", new Vector2(avail.X, avail.Y - headerHeight - actionHeight), false, ImGuiWindowFlags.NoScrollbar))
+        using (var content = ImRaii.Child("pd_content", new Vector2(avail.X, avail.Y - headerHeight - actionHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (content.Success)
             {
-                this.DrawHero(avail.X);
-                this.DrawInfo(avail.X);
+                var contentWidth = ImGui.GetContentRegionAvail().X;
+                this.DrawHero(contentWidth);
+                this.DrawInfo(contentWidth);
             }
         }
 

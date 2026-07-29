@@ -71,7 +71,13 @@ internal sealed class SettingsScreen : IScreen
     public void Draw()
     {
         var pad = Ui.Px(16f);
-        var contentWidth = ImGui.GetContentRegionAvail().X - (pad * 2f);
+        var avail = ImGui.GetContentRegionAvail();
+        var contentWidth = avail.X - (pad * 2f);
+
+        using var body = ImRaii.Child("settings_body", avail, false, ImGuiWindowFlags.AlwaysVerticalScrollbar);
+        if (!body.Success)
+            return;
+
         ImGui.Indent(pad);
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 

@@ -136,14 +136,15 @@ internal sealed class MyProfileScreen : IScreen
 
         var bodyH = avail.Y - stripH - ctaH;
         ImGui.SetCursorPos(new Vector2(0f, stripH));
-        using (var body = ImRaii.Child("mp_preview", new Vector2(avail.X, bodyH), false, ImGuiWindowFlags.NoScrollbar))
+        using (var body = ImRaii.Child("mp_preview", new Vector2(avail.X, bodyH), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {
+                var contentWidth = ImGui.GetContentRegionAvail().X;
                 if (loaded is null)
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(80f)));
-                    Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextMuted, "Loading preview…");
+                    Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading preview…");
                 }
                 else
                 {
@@ -153,10 +154,10 @@ internal sealed class MyProfileScreen : IScreen
                         this.heroIndex = 0;
                     }
 
-                    this.DrawHero(avail.X, loaded);
-                    this.DrawPortraits(avail.X, loaded);
-                    this.DrawDataTable(avail.X, loaded);
-                    this.DrawSections(avail.X, loaded);
+                    this.DrawHero(contentWidth, loaded);
+                    this.DrawPortraits(contentWidth, loaded);
+                    this.DrawDataTable(contentWidth, loaded);
+                    this.DrawSections(contentWidth, loaded);
                 }
             }
         }

@@ -75,10 +75,11 @@ internal sealed class MessagesScreen : IScreen
 
         this.DrawTabs(fullWidth, threads.Count, requests.Count, deleted.Count);
 
-        using var scroll = ImRaii.Child("inbox_scroll", ImGui.GetContentRegionAvail(), false, ImGuiWindowFlags.NoScrollbar);
+        using var scroll = ImRaii.Child("inbox_scroll", ImGui.GetContentRegionAvail(), false, ImGuiWindowFlags.AlwaysVerticalScrollbar);
         if (!scroll.Success)
             return;
 
+        var contentWidth = ImGui.GetContentRegionAvail().X;
         var pad = Ui.Px(20f);
         var list = this.tab switch
         {
@@ -96,12 +97,12 @@ internal sealed class MessagesScreen : IScreen
                 _ => "No messages yet.",
             };
             ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-            Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, empty);
+            Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, empty);
             return;
         }
 
         foreach (var conversation in list)
-            if (this.DrawRow(conversation, fullWidth, pad))
+            if (this.DrawRow(conversation, contentWidth, pad))
                 this.Open(conversation);
     }
 

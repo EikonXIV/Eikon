@@ -51,7 +51,7 @@ internal sealed class BlockedUsersScreen : IScreen
         var users = this.blocked.Users;
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("blocked_body", new Vector2(avail.X, avail.Y - headerHeight)))
+        using (var body = ImRaii.Child("blocked_body", new Vector2(avail.X, avail.Y - headerHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {

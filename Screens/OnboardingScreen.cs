@@ -96,7 +96,7 @@ internal sealed class OnboardingScreen : IScreen
 
         // Scrollable body.
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("ob_content", new Vector2(avail.X, avail.Y - headerHeight - navHeight)))
+        using (var body = ImRaii.Child("ob_content", new Vector2(avail.X, avail.Y - headerHeight - navHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {

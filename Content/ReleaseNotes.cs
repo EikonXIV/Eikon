@@ -12,6 +12,15 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 1, 1),
+            "July 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Every screen shows a scrollbar when there's more to see. On smaller windows some screens didn't always show one, so it wasn't obvious there was more to scroll.",
+            ]),
+        new Release(
             new Version(2, 1, 0),
             "July 2026",
             New:
