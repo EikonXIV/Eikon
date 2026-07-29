@@ -1077,20 +1077,21 @@ internal sealed class ChatScreen : IScreen
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
 
             var mine = this.albums.Mine;
-            using (var list = ImRaii.Child("##album_pick_list", new Vector2(width, Ui.Px(298f))))
+            using (var list = ImRaii.Child("##album_pick_list", new Vector2(width, Ui.Px(298f)), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
             {
                 if (list.Success)
                 {
+                    var rowWidth = ImGui.GetContentRegionAvail().X;
                     if (mine.Count == 0)
                     {
                         ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                        this.kit.EmptyState(FontAwesomeIcon.LayerGroup.ToIconString(), "No albums yet", "Create an album to share it here.", width);
+                        this.kit.EmptyState(FontAwesomeIcon.LayerGroup.ToIconString(), "No albums yet", "Create an album to share it here.", rowWidth);
                     }
                     else
                     {
                         foreach (var album in mine)
                         {
-                            if (this.DrawAlbumPickRow(album, width))
+                            if (this.DrawAlbumPickRow(album, rowWidth))
                             {
                                 var (id, albumName, count) = (album.Id, album.Name, (int)album.PhotoCount);
                                 _ = Task.Run(async () =>

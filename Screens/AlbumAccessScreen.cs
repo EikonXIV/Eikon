@@ -220,14 +220,15 @@ internal sealed class AlbumAccessScreen : IScreen
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
             var granted = this.albums.Grants(albumId).Select(g => g.UserId).ToHashSet();
-            using (ImRaii.Child("##acc_picker_list", new Vector2(width, listHeight)))
+            using (ImRaii.Child("##acc_picker_list", new Vector2(width, listHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
             {
+                var rowWidth = ImGui.GetContentRegionAvail().X;
                 if (people.Count == 0)
                     using (this.fonts.Caption.Push())
                     using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
                         ImGui.TextWrapped("You can only share with people you have messaged.");
                 foreach (var person in people)
-                    this.DrawPickerRow(albumId, person, granted.Contains(person.UserId), width);
+                    this.DrawPickerRow(albumId, person, granted.Contains(person.UserId), rowWidth);
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
