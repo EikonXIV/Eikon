@@ -71,7 +71,7 @@ internal sealed class SharedMediaScreen : IScreen
         this.DrawHeader(avail.X, pad, name, images.Count);
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("sm_body", new Vector2(avail.X, avail.Y - headerHeight)))
+        using (var body = ImRaii.Child("sm_body", new Vector2(avail.X, avail.Y - headerHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {

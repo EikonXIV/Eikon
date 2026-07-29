@@ -54,7 +54,7 @@ internal sealed class AlbumsScreen : IScreen
         this.DrawHeader(avail.X, pad, headerHeight);
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("albums_body", new Vector2(avail.X, avail.Y - headerHeight)))
+        using (var body = ImRaii.Child("albums_body", new Vector2(avail.X, avail.Y - headerHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {

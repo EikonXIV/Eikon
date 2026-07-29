@@ -74,7 +74,7 @@ internal sealed class WhatsNewScreen : IScreen
         this.DrawHeader(avail.X, pad, headerHeight);
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("whatsnew_body", new Vector2(avail.X, avail.Y - headerHeight - footerHeight)))
+        using (var body = ImRaii.Child("whatsnew_body", new Vector2(avail.X, avail.Y - headerHeight - footerHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {

@@ -65,22 +65,24 @@ internal sealed class GridScreen : IScreen
         this.DrawChips(width, pad);
 
         var bodyAvail = ImGui.GetContentRegionAvail();
-        using var scroll = ImRaii.Child("grid_scroll", bodyAvail, false, ImGuiWindowFlags.NoScrollbar);
+        using var scroll = ImRaii.Child("grid_scroll", bodyAvail, false, ImGuiWindowFlags.AlwaysVerticalScrollbar);
         if (!scroll.Success)
             return;
+
+        var contentWidth = ImGui.GetContentRegionAvail().X;
 
         var loading = this.favoritesOnly ? !this.favorites.Loaded : this.discovery.Loading;
         if (loading && this.Source.Count == 0)
         {
-            this.DrawStatus(bodyAvail.X, this.favoritesOnly ? "Loading favorites…" : "Finding people…");
+            this.DrawStatus(contentWidth, this.favoritesOnly ? "Loading favorites…" : "Finding people…");
             return;
         }
 
         var compact = this.config.GridLayout == 1;
-        var shown = this.DrawGrid(bodyAvail.X, compact);
+        var shown = this.DrawGrid(contentWidth, compact);
         if (shown == 0)
         {
-            this.DrawEmpty(bodyAvail.X);
+            this.DrawEmpty(contentWidth);
             return;
         }
 
@@ -89,7 +91,7 @@ internal sealed class GridScreen : IScreen
         if (!this.favoritesOnly && this.discovery.HasMore)
         {
             if (this.discovery.Loading)
-                this.DrawStatus(bodyAvail.X, "Loading more…");
+                this.DrawStatus(contentWidth, "Loading more…");
             else if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - Ui.Px(240f))
                 this.discovery.LoadMore();
         }

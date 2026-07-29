@@ -120,7 +120,7 @@ internal sealed class ChatScreen : IScreen
         this.DrawHeader(avail.X, pad, name, peer.Value);
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("chat_thread", new Vector2(avail.X, avail.Y - headerHeight - composerHeight)))
+        using (var body = ImRaii.Child("chat_thread", new Vector2(avail.X, avail.Y - headerHeight - composerHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
             {

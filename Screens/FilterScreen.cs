@@ -70,10 +70,13 @@ internal sealed class FilterScreen : IScreen
         this.DrawHeader(avail.X, headerHeight);
 
         ImGui.SetCursorPos(new Vector2(0f, headerHeight));
-        using (var body = ImRaii.Child("filter_body", new Vector2(avail.X, avail.Y - headerHeight - footerHeight), false, ImGuiWindowFlags.NoScrollbar))
+        using (var body = ImRaii.Child("filter_body", new Vector2(avail.X, avail.Y - headerHeight - footerHeight), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
         {
             if (body.Success)
-                this.DrawBlocks(avail.X);
+            {
+                var contentWidth = ImGui.GetContentRegionAvail().X;
+                this.DrawBlocks(contentWidth);
+            }
         }
 
         this.DrawFooter(avail, footerHeight);

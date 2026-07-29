@@ -88,13 +88,22 @@ internal sealed class MainWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.WindowBg, Palette.Bg);
         ImGui.PushStyleColor(ImGuiCol.Border, Palette.Border);
         ImGui.PushStyleColor(ImGuiCol.Text, Palette.TextPrimary);
-        this.pushedColors = 3;
+        // A slim, warm scrollbar so overflow reads the same on every screen: an invisible track and a
+        // muted grab that lifts on hover. The content screens reserve its gutter, so nothing reflows.
+        ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, Palette.TextMuted);
+        ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, Palette.TextSecondary);
+        ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, Palette.TextSecondary);
+        this.pushedColors = 7;
 
         // Editorial is square: no window rounding, a hairline border, zero padding (screens self-pad).
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-        this.pushedVars = 3;
+        ImGui.PushStyleVar(ImGuiStyleVar.ScrollbarSize, Ui.Px(10f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ScrollbarRounding, Ui.Px(5f));
+        ImGui.PushStyleVar(ImGuiStyleVar.GrabMinSize, Ui.Px(28f));
+        this.pushedVars = 6;
     }
 
     public override void PostDraw()
