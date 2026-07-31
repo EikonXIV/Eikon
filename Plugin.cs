@@ -130,6 +130,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, WhatsNewScreen>();
         services.AddSingleton<IScreen, BlockedUsersScreen>();
         services.AddSingleton<IScreen, AppearanceScreen>();
+        services.AddSingleton<IScreen, TypefaceScreen>();
         services.AddSingleton<IScreen, AlbumsScreen>();
         services.AddSingleton<IScreen, AlbumDetailScreen>();
         services.AddSingleton<IScreen, AlbumRequestsScreen>();

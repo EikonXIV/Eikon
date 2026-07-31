@@ -12,6 +12,18 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 2, 0),
+            "July 2026",
+            New:
+            [
+                "Choose your font. A new Font setting lets you pick from six typefaces, from a refined serif to a high-legibility face made for easy reading, and the whole app updates the moment you pick.",
+            ],
+            Improved:
+            [
+                "A more readable default. Names and text across the app are clearer and less squeezed than before, so it's easier on the eyes at a glance.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(2, 1, 1),
             "July 2026",
             New: [],
