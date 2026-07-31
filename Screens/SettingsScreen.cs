@@ -95,6 +95,8 @@ internal sealed class SettingsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         if (this.DrawThemeRow("##s_appearance", contentWidth))
             this.router.Navigate(Screen.Appearance);
+        if (this.NavRow("##s_font", "Font", this.fonts.CurrentSet.Name, Palette.TextPrimary, true, contentWidth))
+            this.router.Navigate(Screen.Typeface);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Browse layout");
