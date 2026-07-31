@@ -3,7 +3,7 @@
   <!-- Eikon Dalamud plugin. The Dalamud.NET.Sdk wires the TFM, all Dalamud/ImGui references,
        and the plugin manifest automatically (it finds the dev Dalamud under %AppData%\XIVLauncher). -->
   <PropertyGroup>
-    <Version>2.1.1</Version>
+    <Version>2.2.0</Version>
     <Description>Eikon: in-game, end-to-end-encrypted dating &amp; social for FFXIV.</Description>
     <Authors>Rian M☆</Authors>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -62,13 +62,28 @@
     <EmbeddedResource Include="Assets\message-chime.wav" LogicalName="Eikon.message-chime.wav" />
   </ItemGroup>
 
-  <!-- Warm-editorial UI fonts (OFL), bundled into the assembly and loaded via the managed font atlas.
-       Instrument Serif (display, + italic), Inter Tight (UI/body), JetBrains Mono (eyebrows/counters). -->
+  <!-- Bundled UI fonts (all OFL; licenses in Assets\Fonts\LICENSES), loaded via the managed font atlas.
+       The Font picker (Settings > Font) chooses which family each role uses; see FontSets. All faces are
+       subset to Latin + Greek + Cyrillic + punctuation to keep the bundle small (CJK rides the game font). -->
   <ItemGroup>
     <EmbeddedResource Include="Assets\Fonts\InstrumentSerif-Regular.ttf" LogicalName="Eikon.Fonts.InstrumentSerif-Regular.ttf" />
     <EmbeddedResource Include="Assets\Fonts\InstrumentSerif-Italic.ttf" LogicalName="Eikon.Fonts.InstrumentSerif-Italic.ttf" />
     <EmbeddedResource Include="Assets\Fonts\InterTight.ttf" LogicalName="Eikon.Fonts.InterTight.ttf" />
     <EmbeddedResource Include="Assets\Fonts\JetBrainsMono.ttf" LogicalName="Eikon.Fonts.JetBrainsMono.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\SourceSerif4-Regular.ttf" LogicalName="Eikon.Fonts.SourceSerif4-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\SourceSerif4-Italic.ttf" LogicalName="Eikon.Fonts.SourceSerif4-Italic.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\IBMPlexSans-Regular.ttf" LogicalName="Eikon.Fonts.IBMPlexSans-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\AtkinsonHyperlegible-Regular.ttf" LogicalName="Eikon.Fonts.AtkinsonHyperlegible-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\AtkinsonHyperlegible-Bold.ttf" LogicalName="Eikon.Fonts.AtkinsonHyperlegible-Bold.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\AtkinsonHyperlegible-Italic.ttf" LogicalName="Eikon.Fonts.AtkinsonHyperlegible-Italic.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\Lexend-Regular.ttf" LogicalName="Eikon.Fonts.Lexend-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\Lexend-SemiBold.ttf" LogicalName="Eikon.Fonts.Lexend-SemiBold.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\Lato-Regular.ttf" LogicalName="Eikon.Fonts.Lato-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\Lato-SemiBold.ttf" LogicalName="Eikon.Fonts.Lato-SemiBold.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\Lato-Italic.ttf" LogicalName="Eikon.Fonts.Lato-Italic.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\OpenSans-Regular.ttf" LogicalName="Eikon.Fonts.OpenSans-Regular.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\OpenSans-SemiBold.ttf" LogicalName="Eikon.Fonts.OpenSans-SemiBold.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\OpenSans-Italic.ttf" LogicalName="Eikon.Fonts.OpenSans-Italic.ttf" />
   </ItemGroup>
 
 </Project>
