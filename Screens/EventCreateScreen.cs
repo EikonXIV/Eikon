@@ -97,6 +97,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     // Timing
     private DateTime date = DateTime.Today;
+    private DateTime calView = DateTime.Today;
     private int hour = 20;
     private int minute = 0;
     private int tz = 3;   // ET
@@ -475,6 +476,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         {
             var wp = ImGui.GetWindowPos();
             this.popupAnchor = new Vector2(wp.X + pad, wp.Y + Ui.Px(120f));
+            this.calView = new DateTime(this.date.Year, this.date.Month, 1);
             ImGui.OpenPopup(pp);
             this.pendingPopup = null;
         }
@@ -484,7 +486,10 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         // Date + Start fields, side by side.
         var rp = ImGui.GetCursorScreenPos();
         if (this.FieldBox(dl, "date", "Date", rp.X + x, rp.Y, half, this.date.ToString("dd MMM yyyy"), FontAwesomeIcon.CalendarAlt))
+        {
+            this.calView = new DateTime(this.date.Year, this.date.Month, 1);
             ImGui.OpenPopup("##ec_datepop");
+        }
         if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
             ImGui.OpenPopup("##ec_timepop");
         Block(rp, w, FieldBlock);
@@ -709,9 +714,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         ImGui.Dummy(new Vector2(0f, Ui.Px(22f) + Ui.Px(44f) + Ui.Px(22f)));
     }
 
-    // A labelled numeric stepper box (minus / serif value / plus). `display` renders the value as text
-    // (e.g. a month name) while the plus/minus still step the underlying int.
-    private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true, Func<int, string>? display = null)
+    // A labelled numeric stepper box (minus / serif value / plus).
+    private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true)
     {
         var h = labelInside && label.Length > 0 ? Ui.Px(64f) : Ui.Px(46f);
         var boxMin = new Vector2(x, y);
@@ -739,7 +743,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             value = Math.Min(max, value + step);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (value < max ? Palette.TextSecondary : Palette.TextMuted).U32(), plus);
 
-        var num = display != null ? display(value) : value.ToString();
+        var num = value.ToString();
         var nsz = Ui.Measure(this.fonts.SerifName, num);
         Ui.TextAt(dl, this.fonts.SerifName, new Vector2(x + ((w - nsz.X) * 0.5f), mid - (nsz.Y * 0.5f)), Palette.TextPrimary.U32(), num);
         return value;
@@ -792,6 +796,39 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         return clicked;
     }
 
+    // A tappable cell (calendar day / time value): cream fill when selected, hairline when idle.
+    private bool Cell(ImDrawListPtr dl, string id, string text, float x, float y, float w, float h, bool selected, IFontHandle? font, bool enabled = true, bool border = true)
+    {
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        var clicked = enabled && ImGui.InvisibleButton(id, new Vector2(w, h));
+        var hovered = enabled && ImGui.IsItemHovered();
+        var min = new Vector2(x, y);
+        var max = min + new Vector2(w, h);
+        if (selected)
+            dl.AddRectFilled(min, max, Palette.TextPrimary.U32());
+        else if (hovered)
+            dl.AddRectFilled(min, max, Palette.WithAlpha(Palette.Overlay, 0.05f).U32());
+        if (border && !selected)
+            dl.AddRect(min, max, (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+        var col = selected ? Palette.Paper : (enabled ? Palette.TextPrimary : Palette.TextMuted);
+        var ts = Ui.Measure(font, text);
+        Ui.TextAt(dl, font, new Vector2(x + ((w - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), col.U32(), text);
+        return clicked;
+    }
+
+    // A bordered square icon button (calendar month prev / next).
+    private bool NavButton(ImDrawListPtr dl, string id, FontAwesomeIcon icon, float x, float y, float w, float h)
+    {
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        var clicked = ImGui.InvisibleButton(id, new Vector2(w, h));
+        var hovered = ImGui.IsItemHovered();
+        dl.AddRect(new Vector2(x, y), new Vector2(x + w, y + h), (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+        var g = icon.ToIconString();
+        var gs = Ui.Measure(this.fonts.Icon, g);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(x + ((w - gs.X) * 0.5f), y + ((h - gs.Y) * 0.5f)), (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32(), g);
+        return clicked;
+    }
+
     // ---- popups (date / time / timezone / district / zone / aetheryte) ------------------------
 
     private void DrawPopups(float pad)
@@ -836,6 +873,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         }
     }
 
+    // Month calendar: prev/next roll the year at the boundaries, past days are disabled, the selected day
+    // is a cream fill and today gets a gold ring. A Today chip jumps back and selects the current day.
     private void DatePopup()
     {
         var popupW = Ui.Px(300f);
@@ -845,42 +884,129 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             if (!ImGui.BeginPopup("##ec_datepop"))
                 return;
             var dl = ImGui.GetWindowDrawList();
-            var gap = Ui.Px(8f);
             var inner = popupW - (Ui.Px(8f) * 2f);
-            var third = (inner - (gap * 2f)) / 3f;
             var p = ImGui.GetCursorScreenPos();
-            var maxDay = DateTime.DaysInMonth(this.date.Year, this.date.Month);
-            var d = this.StepperBox(dl, "DAY", p.X, p.Y, third, Math.Min(this.date.Day, maxDay), 1, maxDay);
-            var mo = this.StepperBox(dl, "MONTH", p.X + third + gap, p.Y, third, this.date.Month, 1, 12, display: MonthAbbr);
-            var y = this.StepperBox(dl, "YEAR", p.X + (2f * (third + gap)), p.Y, third, this.date.Year, DateTime.Today.Year, DateTime.Today.Year + 2);
-            this.date = new DateTime(y, mo, Math.Min(d, DateTime.DaysInMonth(y, mo)));
-            Block(p, inner, Ui.Px(64f));
+
+            var headerH = Ui.Px(34f);
+            var navW = Ui.Px(30f);
+            if (this.NavButton(dl, "##cal_prev", FontAwesomeIcon.ChevronLeft, p.X, p.Y, navW, headerH))
+                this.calView = this.calView.AddMonths(-1);
+            if (this.NavButton(dl, "##cal_next", FontAwesomeIcon.ChevronRight, p.X + inner - navW, p.Y, navW, headerH))
+                this.calView = this.calView.AddMonths(1);
+            var monthStr = this.calView.ToString("MMMM", System.Globalization.CultureInfo.InvariantCulture);
+            var yearStr = " " + this.calView.Year;
+            var mSz = Ui.Measure(this.fonts.SerifName, monthStr);
+            var ySz = Ui.Measure(this.fonts.SerifName, yearStr);
+            var hx = p.X + ((inner - (mSz.X + ySz.X)) * 0.5f);
+            var hy = p.Y + ((headerH - mSz.Y) * 0.5f);
+            Ui.TextAt(dl, this.fonts.SerifName, new Vector2(hx, hy), Palette.TextPrimary.U32(), monthStr);
+            Ui.TextAt(dl, this.fonts.SerifName, new Vector2(hx + mSz.X, hy), Palette.TextSecondary.U32(), yearStr);
+
+            var cellW = inner / 7f;
+            var wdY = p.Y + headerH;
+            var wdH = Ui.Px(22f);
+            var wd = new[] { "M", "T", "W", "T", "F", "S", "S" };
+            for (var i = 0; i < 7; i++)
+            {
+                var ts = Ui.Measure(this.fonts.Eyebrow, wd[i]);
+                Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X + (i * cellW) + ((cellW - ts.X) * 0.5f), wdY + ((wdH - ts.Y) * 0.5f)), Palette.TextMuted.U32(), wd[i]);
+            }
+
+            var gridTop = wdY + wdH;
+            var cellH = Ui.Px(34f);
+            var first = new DateTime(this.calView.Year, this.calView.Month, 1);
+            var lead = ((int)first.DayOfWeek + 6) % 7;   // Monday-start offset
+            var days = DateTime.DaysInMonth(this.calView.Year, this.calView.Month);
+            var rows = (int)Math.Ceiling((lead + days) / 7f);
+            var today = DateTime.Today;
+            for (var d = 1; d <= days; d++)
+            {
+                var idx = lead + (d - 1);
+                var cx = p.X + ((idx % 7) * cellW);
+                var cy = gridTop + ((idx / 7) * cellH);
+                var cellDate = new DateTime(this.calView.Year, this.calView.Month, d);
+                var selected = cellDate == this.date.Date;
+                var past = cellDate < today;
+                if (this.Cell(dl, $"##cal_{d}", d.ToString(), cx, cy, cellW, cellH, selected, this.fonts.SerifName, enabled: !past, border: false))
+                {
+                    this.date = cellDate;
+                    ImGui.CloseCurrentPopup();
+                }
+
+                if (cellDate == today && !selected)
+                    dl.AddRect(new Vector2(cx + Ui.Px(3f), cy + Ui.Px(3f)), new Vector2(cx + cellW - Ui.Px(3f), cy + cellH - Ui.Px(3f)), Palette.Signal.U32(), 0f, ImDrawFlags.None, 1f);
+            }
+
+            var footY = gridTop + (rows * cellH) + Ui.Px(10f);
+            var chipH = Ui.Px(26f);
+            if (this.OutlineButton(dl, "##cal_today", "TODAY", p.X, footY, Ui.Px(76f), chipH))
+            {
+                this.date = today;
+                this.calView = new DateTime(today.Year, today.Month, 1);
+                ImGui.CloseCurrentPopup();
+            }
+
+            Block(p, inner, (footY - p.Y) + chipH);
             ImGui.EndPopup();
         }
     }
 
+    // Time as a tap grid: one tap each for hour, minute (15s), and AM/PM. The value is kept in 24h.
     private void TimePopup()
     {
-        var popupW = Ui.Px(232f);
+        var popupW = Ui.Px(300f);
         ImGui.SetNextWindowPos(this.PopupPos(popupW), ImGuiCond.Appearing);
         using (this.MenuStyle())
         {
             if (!ImGui.BeginPopup("##ec_timepop"))
                 return;
             var dl = ImGui.GetWindowDrawList();
-            var gap = Ui.Px(10f);
             var inner = popupW - (Ui.Px(8f) * 2f);
-            var half = (inner - gap) * 0.5f;
+            var gap = Ui.Px(4f);
             var p = ImGui.GetCursorScreenPos();
-            this.hour = this.StepperBox(dl, "HOUR", p.X, p.Y, half, this.hour, 0, 23);
-            this.minute = this.StepperBox(dl, "MINUTE", p.X + half + gap, p.Y, half, this.minute, 0, 55, step: 5);
-            Block(p, inner, Ui.Px(64f));
+            var h12 = this.hour % 12 == 0 ? 12 : this.hour % 12;
+            var isPm = this.hour >= 12;
+            var snapMin = (this.minute / 15) * 15;
+            var cellH = Ui.Px(38f);
+            var quarter = (inner - (gap * 3f)) / 4f;
+
+            var y = p.Y;
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), "HOUR");
+            y += Ui.Px(20f);
+            for (var i = 0; i < 12; i++)
+            {
+                var hh = i + 1;
+                var cx = p.X + ((i % 4) * (quarter + gap));
+                var cy = y + ((i / 4) * (cellH + gap));
+                if (this.Cell(dl, $"##th_{hh}", hh.ToString(), cx, cy, quarter, cellH, hh == h12, this.fonts.SerifName))
+                    this.hour = (hh % 12) + (isPm ? 12 : 0);
+            }
+
+            y += (3 * (cellH + gap)) + Ui.Px(12f);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), "MINUTE");
+            y += Ui.Px(20f);
+            var mins = new[] { 0, 15, 30, 45 };
+            for (var i = 0; i < 4; i++)
+            {
+                var cx = p.X + (i * (quarter + gap));
+                if (this.Cell(dl, $"##tm_{mins[i]}", mins[i].ToString("00"), cx, y, quarter, cellH, mins[i] == snapMin, this.fonts.SerifName))
+                    this.minute = mins[i];
+            }
+
+            y += cellH + Ui.Px(12f);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), "AM / PM");
+            y += Ui.Px(20f);
+            var apW = (inner - gap) * 0.5f;
+            if (this.Cell(dl, "##t_am", "AM", p.X, y, apW, cellH, !isPm, this.fonts.SerifName))
+                this.hour = h12 % 12;
+            if (this.Cell(dl, "##t_pm", "PM", p.X + apW + gap, y, apW, cellH, isPm, this.fonts.SerifName))
+                this.hour = (h12 % 12) + 12;
+            y += cellH;
+
+            Block(p, inner, y - p.Y);
             ImGui.EndPopup();
         }
     }
-
-    private static string MonthAbbr(int m) =>
-        System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(m);
 
     private bool MenuItem(float width, string label, bool selected)
     {
