@@ -83,7 +83,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private static readonly string[] WardNums = Enumerable.Range(1, 30).Select(n => n.ToString()).ToArray();
     private static readonly string[] PlotNums = Enumerable.Range(1, 60).Select(n => n.ToString()).ToArray();
     private static readonly string[] RoomNums = Enumerable.Range(0, 91).Select(n => n.ToString()).ToArray();
-    private static readonly string[] CapNums = new[] { "No cap" }.Concat(Enumerable.Range(1, 200).Select(n => n.ToString())).ToArray();
 
     private readonly ScreenRouter router;
     private readonly Kit kit;
@@ -729,18 +728,77 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             Block(cp, w, boxH + Ui.Px(24f));
         }
 
-        this.Label(dl, "CAPACITY", x);
-        var kp = ImGui.GetCursorScreenPos();
-        if (this.FieldBox(dl, "cap", string.Empty, kp.X + x, kp.Y, w, this.capacity > 0 ? this.capacity.ToString() : "No cap", FontAwesomeIcon.ChevronDown, labelAbove: false))
-            ImGui.OpenPopup("##ec_cappop");
-        Block(kp, w, Ui.Px(44f) + Ui.Px(8f));
-        if (this.pendingPopup == "##ec_cappop")
+        this.DrawCapacity(dl, x, w);
+    }
+
+    // CAPACITY: FFXIV-native sizes as one-tap chips, plus a slider for any exact value in between.
+    private void DrawCapacity(ImDrawListPtr dl, float x, float w)
+    {
+        var lp = ImGui.GetCursorScreenPos();
+        var readout = this.capacity > 0 ? this.capacity.ToString() : "No cap";
+        var rSz = Ui.Measure(this.fonts.SerifName, readout);
+        var eSz = Ui.Measure(this.fonts.Eyebrow, "CAPACITY");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lp.X + x, lp.Y + ((rSz.Y - eSz.Y) * 0.5f)), Palette.TextSecondary.U32(), "CAPACITY");
+        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(lp.X + x + w - rSz.X, lp.Y), Palette.TextPrimary.U32(), readout);
+        ImGui.Dummy(new Vector2(0f, rSz.Y + Ui.Px(12f)));
+
+        var presets = new[] { 0, 8, 16, 24, 32, 48, 64, 100, 200 };
+        var cp = ImGui.GetCursorScreenPos();
+        var chipH = Ui.Px(30f);
+        var cx = cp.X + x;
+        var cy = cp.Y;
+        var rows = 1;
+        foreach (var val in presets)
         {
-            this.popupAnchor = new Vector2(kp.X + x, kp.Y + Ui.Px(48f));
-            this.popupWidth = w;
-            ImGui.OpenPopup("##ec_cappop");
-            this.pendingPopup = null;
+            var label = val == 0 ? "No cap" : val.ToString();
+            var ts = Ui.Measure(this.fonts.Label, label);
+            var cw = ts.X + (Ui.Px(14f) * 2f);
+            if (cx + cw > cp.X + x + w)
+            {
+                cx = cp.X + x;
+                cy += chipH + Ui.Px(8f);
+                rows++;
+            }
+
+            ImGui.SetCursorScreenPos(new Vector2(cx, cy));
+            if (ImGui.InvisibleButton($"##ec_cap_{val}", new Vector2(cw, chipH)))
+                this.capacity = val;
+            var active = this.capacity == val;
+            var min = new Vector2(cx, cy);
+            if (active)
+                dl.AddRectFilled(min, min + new Vector2(cw, chipH), Palette.TextPrimary.U32(), chipH * 0.5f);
+            else
+                dl.AddRect(min, min + new Vector2(cw, chipH), Palette.Border.U32(), chipH * 0.5f, ImDrawFlags.None, 1f);
+            Ui.TextAt(dl, this.fonts.Label, new Vector2(cx + Ui.Px(14f), cy + ((chipH - ts.Y) * 0.5f)), (active ? Palette.Paper : Palette.TextSecondary).U32(), label);
+            cx += cw + Ui.Px(8f);
         }
+
+        Block(cp, w, (rows * chipH) + ((rows - 1) * Ui.Px(8f)) + Ui.Px(18f));
+
+        var sp = ImGui.GetCursorScreenPos();
+        this.capacity = this.Slider(dl, "##ec_capslider", sp.X + x, sp.Y, w, this.capacity, 0, 200);
+        Block(sp, w, Ui.Px(22f));
+    }
+
+    // A draw-list slider: track, filled portion, and a round handle you drag or click to set a value.
+    private int Slider(ImDrawListPtr dl, string id, float x, float y, float w, int value, int min, int max)
+    {
+        var h = Ui.Px(22f);
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        ImGui.InvisibleButton(id, new Vector2(w, h));
+        if (ImGui.IsItemActive() && w > 0f)
+        {
+            var t = Math.Clamp((ImGui.GetMousePos().X - x) / w, 0f, 1f);
+            value = min + (int)MathF.Round(t * (max - min));
+        }
+
+        var trackY = y + (h * 0.5f);
+        var frac = max > min ? (float)(value - min) / (max - min) : 0f;
+        var hx = x + (frac * w);
+        dl.AddLine(new Vector2(x, trackY), new Vector2(x + w, trackY), Palette.BorderStrong.U32(), Ui.Px(2f));
+        dl.AddLine(new Vector2(x, trackY), new Vector2(hx, trackY), Palette.Signal.U32(), Ui.Px(2f));
+        dl.AddCircleFilled(new Vector2(hx, trackY), Ui.Px(7f), Palette.TextPrimary.U32());
+        return value;
     }
 
     // ---- shared field/stepper/segmented primitives -------------------------------------------
@@ -925,7 +983,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.ListPopup("##ec_wardpop", WardNums, this.ward - 1, i => this.ward = i + 1);
         this.ListPopup("##ec_plotpop", PlotNums, this.plot - 1, i => this.plot = i + 1);
         this.ListPopup("##ec_roompop", RoomNums, this.room, i => this.room = i);
-        this.ListPopup("##ec_cappop", CapNums, this.capacity, i => this.capacity = i);
         this.ListPopup("##ec_zonepop", this.catalog.Zones.Select(z => z.Name).ToArray(), this.zoneIdx, i => { this.zoneIdx = i; this.aetheryteIdx = 0; });
         var aeth = this.AetherytesForZone();
         this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend("None").ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
