@@ -99,6 +99,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private float popupWidth;
     private float windowLeft;
     private float windowRight;
+    private float popupBottomLimit;
 
     // Basics
     private string title = string.Empty;
@@ -184,6 +185,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var headerH = Ui.Px(46f);
         var progressH = Ui.Px(48f);
         var footerH = Ui.Px(64f);
+        this.popupBottomLimit = wpos.Y + ImGui.GetWindowSize().Y - footerH - Ui.Px(8f);
         this.DrawHeader(avail.X, pad, headerH);
         this.DrawProgress(avail.X, pad, headerH, progressH);
 
@@ -885,7 +887,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     {
         var winW = Math.Max(Ui.Px(200f), this.popupWidth);   // match the field's own width
         ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
-        ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, Ui.Px(360f)));
+        ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, this.PopupMaxHeight()));
         using (this.MenuStyle())
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
         {
@@ -915,6 +917,10 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     // Position a popup just below the field that opened it. Left-align under the field when the popup
     // fits; otherwise hang it from the field's right edge (a right-aligned dropdown). Clamp to screen.
+    // Cap a scrolling popup so it fits between its anchor and the footer, never spilling over the buttons.
+    private float PopupMaxHeight() =>
+        Math.Clamp(this.popupBottomLimit - this.popupAnchor.Y, Ui.Px(140f), Ui.Px(360f));
+
     private Vector2 PopupPos(float popupW)
     {
         var minX = this.windowLeft + Ui.Px(8f);
@@ -928,9 +934,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     {
         var winW = Math.Max(Ui.Px(200f), this.popupWidth);   // match the field's own width
         ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
-        // Fix the width and cap the height so a long list scrolls, instead of nesting a child that
-        // collapses inside an auto-resizing popup.
-        ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, Ui.Px(340f)));
+        // Fix the width and cap the height to the room above the footer so a long list scrolls without
+        // spilling over the buttons, instead of nesting a child that collapses in an auto-resize popup.
+        ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, this.PopupMaxHeight()));
         using (this.MenuStyle())
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
         {
