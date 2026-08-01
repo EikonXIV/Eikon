@@ -667,12 +667,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var w = width - (pad * 2f);
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
-        this.Label(dl, "LISTED IN", x);
-        var lp = ImGui.GetCursorScreenPos();
-        var ssel = this.Segmented(dl, "##ec_scope", new[] { "WORLD", "DC", "REGION" }, this.scope == EventScopeEnum.World ? 0 : this.scope == EventScopeEnum.Dc ? 1 : 2, lp.X + x, lp.Y, w, Ui.Px(42f), null);
-        this.scope = ssel == 0 ? EventScopeEnum.World : ssel == 1 ? EventScopeEnum.Dc : EventScopeEnum.Region;
-        Block(lp, w, Ui.Px(42f) + Ui.Px(24f));
-
+        // Scope is no longer host-chosen: an event is anchored on its venue world and the board's own
+        // World/DC/Region tabs filter by proximity (like people discovery), so there is no picker here.
         this.Label(dl, "RATING", x);
         var rp = ImGui.GetCursorScreenPos();
         var rsel = this.Segmented(dl, "##ec_rating", new[] { "SFW", "AFTER DARK 18+" }, this.rating == EventRatingEnum.Sfw ? 0 : 1, rp.X + x, rp.Y, w, Ui.Px(42f), null);

@@ -168,7 +168,6 @@ internal sealed class EventDetailScreen : IScreen
         this.MetaRow(dl, width, left, right, "RUNS", Duration(e.DurationMins));
         this.YourTimeRow(dl, width, left, right, e);
         this.MetaRow(dl, width, left, right, VenueLabel(e.Venue.Type), this.LocationLine(e));
-        this.MetaRow(dl, width, left, right, "SCOPE", ScopeLabel(e.Scope));
         if (e.Hosting && e.Visibility == Visibility.Private && !string.IsNullOrEmpty(e.EntryCode))
             this.MetaRow(dl, width, left, right, "ENTRY CODE", e.EntryCode, mono: true);
 
@@ -544,13 +543,6 @@ internal sealed class EventDetailScreen : IScreen
         EventVenueEnum.Housing => "HOUSING",
         EventVenueEnum.OpenWorld => "OPEN WORLD",
         _ => "DISCORD",
-    };
-
-    private static string ScopeLabel(EventScopeEnum scope) => scope switch
-    {
-        EventScopeEnum.Dc => "Data centre",
-        EventScopeEnum.Region => "Region",
-        _ => "World",
     };
 
     private static string KindLabel(EventKindElement kind) => kind switch
