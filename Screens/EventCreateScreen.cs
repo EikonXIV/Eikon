@@ -83,6 +83,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private static readonly string[] WardNums = Enumerable.Range(1, 30).Select(n => n.ToString()).ToArray();
     private static readonly string[] PlotNums = Enumerable.Range(1, 60).Select(n => n.ToString()).ToArray();
     private static readonly string[] RoomNums = Enumerable.Range(0, 91).Select(n => n.ToString()).ToArray();
+    private static readonly string[] CapNums = new[] { "No cap" }.Concat(Enumerable.Range(1, 200).Select(n => n.ToString())).ToArray();
 
     private readonly ScreenRouter router;
     private readonly Kit kit;
@@ -142,6 +143,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private Visibility visibility = Visibility.Public;
     private string code = string.Empty;
     private int capacity;
+    private DateTime codeCopiedAt;
 
     public EventCreateScreen(ScreenRouter router, Kit kit, UiFonts fonts, EventService events, EventCatalog catalog, WorldCatalog worlds, ProfileService profile, Media media, Selection selection)
     {
@@ -171,6 +173,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     // Harness seam (Vitrine): open a picker popup on the next frame so a screenshot can capture it.
     internal void OpenPopupForTest(string popupId) => this.pendingPopup = popupId;
+
+    // Harness seam (Vitrine): flip to a private event so a screenshot can show the entry-code row.
+    internal void SetPrivateForTest() => this.visibility = Visibility.Private;
 
     private string? pendingPopup;
 
@@ -697,21 +702,45 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             this.Label(dl, "ENTRY CODE", x);
             var cp = ImGui.GetCursorScreenPos();
             var boxH = Ui.Px(46f);
-            dl.AddRect(new Vector2(cp.X + x, cp.Y), new Vector2(cp.X + x + w, cp.Y + boxH), Palette.BorderStrong.U32(), 0f, ImDrawFlags.None, 1f);
-            Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(cp.X + x + Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.EventTitle, this.code).Y) * 0.5f)), Palette.TextPrimary.U32(), this.code);
-            var newLabel = "NEW";
-            var nlSize = Ui.Measure(this.fonts.Eyebrow, newLabel);
-            ImGui.SetCursorScreenPos(new Vector2(cp.X + x + w - nlSize.X - Ui.Px(14f), cp.Y + ((boxH - nlSize.Y) * 0.5f)));
-            if (ImGui.InvisibleButton("##ec_newcode", nlSize))
+            var bx = cp.X + x;
+            dl.AddRect(new Vector2(bx, cp.Y), new Vector2(bx + w, cp.Y + boxH), Palette.BorderStrong.U32(), 0f, ImDrawFlags.None, 1f);
+            Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(bx + Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.EventTitle, this.code).Y) * 0.5f)), Palette.TextPrimary.U32(), this.code);
+
+            // NEW regenerates; COPY puts the code on the clipboard and confirms briefly.
+            var newSz = Ui.Measure(this.fonts.Eyebrow, "NEW");
+            var newX = bx + w - newSz.X - Ui.Px(14f);
+            var actY = cp.Y + ((boxH - newSz.Y) * 0.5f);
+            ImGui.SetCursorScreenPos(new Vector2(newX, actY));
+            if (ImGui.InvisibleButton("##ec_newcode", newSz))
                 this.code = GenerateCode();
-            Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), newLabel);
+            Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), "NEW");
+
+            var copied = (DateTime.UtcNow - this.codeCopiedAt).TotalSeconds < 1.5;
+            var copyLabel = copied ? "COPIED" : "COPY";
+            var copySz = Ui.Measure(this.fonts.Eyebrow, copyLabel);
+            ImGui.SetCursorScreenPos(new Vector2(newX - Ui.Px(16f) - copySz.X, actY));
+            if (ImGui.InvisibleButton("##ec_copycode", copySz))
+            {
+                ImGui.SetClipboardText(this.code);
+                this.codeCopiedAt = DateTime.UtcNow;
+            }
+
+            Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (copied ? Palette.Signal : ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), copyLabel);
             Block(cp, w, boxH + Ui.Px(24f));
         }
 
-        this.Label(dl, "CAPACITY (0 = NO CAP)", x);
+        this.Label(dl, "CAPACITY", x);
         var kp = ImGui.GetCursorScreenPos();
-        this.capacity = this.StepperBox(dl, string.Empty, kp.X + x, kp.Y, w, this.capacity, 0, 200, step: 1, labelInside: false);
-        Block(kp, w, Ui.Px(46f) + Ui.Px(24f));
+        if (this.FieldBox(dl, "cap", string.Empty, kp.X + x, kp.Y, w, this.capacity > 0 ? this.capacity.ToString() : "No cap", FontAwesomeIcon.ChevronDown, labelAbove: false))
+            ImGui.OpenPopup("##ec_cappop");
+        Block(kp, w, Ui.Px(44f) + Ui.Px(8f));
+        if (this.pendingPopup == "##ec_cappop")
+        {
+            this.popupAnchor = new Vector2(kp.X + x, kp.Y + Ui.Px(48f));
+            this.popupWidth = w;
+            ImGui.OpenPopup("##ec_cappop");
+            this.pendingPopup = null;
+        }
     }
 
     // ---- shared field/stepper/segmented primitives -------------------------------------------
@@ -896,6 +925,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.ListPopup("##ec_wardpop", WardNums, this.ward - 1, i => this.ward = i + 1);
         this.ListPopup("##ec_plotpop", PlotNums, this.plot - 1, i => this.plot = i + 1);
         this.ListPopup("##ec_roompop", RoomNums, this.room, i => this.room = i);
+        this.ListPopup("##ec_cappop", CapNums, this.capacity, i => this.capacity = i);
         this.ListPopup("##ec_zonepop", this.catalog.Zones.Select(z => z.Name).ToArray(), this.zoneIdx, i => { this.zoneIdx = i; this.aetheryteIdx = 0; });
         var aeth = this.AetherytesForZone();
         this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend("None").ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
