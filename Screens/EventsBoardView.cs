@@ -221,7 +221,7 @@ internal sealed class EventsBoardView
 
         var chipH = Ui.Px(30f);
         var overflow = this.kindScrollMaxX > 1f;             // there are chips off the right edge
-        var chevW = overflow ? Ui.Px(30f) : 0f;
+        var chevW = overflow ? Ui.Px(38f) : 0f;
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + pad);
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + Ui.Px(12f));
         var childOrigin = ImGui.GetCursorScreenPos();
@@ -262,12 +262,15 @@ internal sealed class EventsBoardView
             ImGui.SetCursorScreenPos(chevPos);
             if (ImGui.InvisibleButton("##kindchev", new Vector2(chevW, chipH)))
                 this.kindNudge = atEnd ? 2 : 1;
+            var hov = ImGui.IsItemHovered();
             var glyph = (atEnd ? FontAwesomeIcon.ChevronLeft : FontAwesomeIcon.ChevronRight).ToIconString();
             var gs = Ui.Measure(this.fonts.Icon, glyph);
-            var center = chevPos + new Vector2(chevW * 0.5f, chipH * 0.5f);
-            dl.AddCircleFilled(center, chipH * 0.46f, Palette.Surface2.U32(), 20);
-            dl.AddCircle(center, chipH * 0.46f, Palette.Border.U32(), 20, 1f);
-            Ui.TextAt(dl, this.fonts.Icon, center - (gs * 0.5f), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), glyph);
+            // A square outlined box (hairline border, radius 0), matching the chips' height.
+            var boxMin = chevPos + new Vector2(Ui.Px(8f), 0f);
+            var boxMax = chevPos + new Vector2(chevW, chipH);
+            var center = (boxMin + boxMax) * 0.5f;
+            dl.AddRect(boxMin, boxMax, (hov ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+            Ui.TextAt(dl, this.fonts.Icon, center - (gs * 0.5f), (hov ? Palette.TextPrimary : Palette.TextSecondary).U32(), glyph);
         }
 
         // Restore the layout cursor to just below the strip, full width, for the scroll region.
