@@ -128,6 +128,8 @@ internal sealed class EventDetailScreen : IScreen
             dl.AddImage(banner.Handle, bannerPos, bannerPos + new Vector2(width, bannerH), uvMin, uvMax);
         }
 
+        // Hairline under the banner, separating it from the content.
+        dl.AddLine(new Vector2(bannerPos.X, bannerPos.Y + bannerH), new Vector2(bannerPos.X + width, bannerPos.Y + bannerH), Palette.Border.U32(), 1f);
         ImGui.Dummy(new Vector2(width, bannerH));
 
         // Masthead: kind eyebrow + badges, serif title, host line.
