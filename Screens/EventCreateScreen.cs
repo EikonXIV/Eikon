@@ -176,7 +176,12 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     // Harness seam (Vitrine): flip to a private event so a screenshot can show the entry-code row.
     internal void SetPrivateForTest() => this.visibility = Visibility.Private;
 
+    // Harness seam (Vitrine): show the publish-error footer for a screenshot.
+    internal void SetErrorForTest() => this.submitError = "Couldn't publish. Check your connection and try again.";
+
     private string? pendingPopup;
+    private bool publishing;
+    private string? submitError;
 
     public void Draw()
     {
@@ -192,7 +197,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var pad = Ui.Px(20f);
         var headerH = Ui.Px(46f);
         var progressH = Ui.Px(48f);
-        var footerH = Ui.Px(64f);
+        var footerH = Ui.Px(64f) + (this.submitError != null ? Ui.Px(26f) : 0f);
         this.popupBottomLimit = wpos.Y + ImGui.GetWindowSize().Y - footerH - Ui.Px(8f);
         this.DrawHeader(avail.X, pad, headerH);
         this.DrawProgress(avail.X, pad, headerH, progressH);
@@ -319,12 +324,20 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var y = wp.Y + wsz.Y - height;
         dl.AddLine(new Vector2(wp.X, y), new Vector2(wp.X + width, y), Palette.Border.U32(), 1f);
 
+        var errH = 0f;
+        if (this.submitError is { } err)
+        {
+            errH = Ui.Px(26f);
+            Ui.TextAt(dl, this.fonts.Caption, new Vector2(wp.X + pad, y + Ui.Px(7f)), Palette.Danger.U32(), err);
+        }
+
         var btnH = Ui.Px(44f);
-        var by = y + ((height - btnH) * 0.5f);
+        var by = y + errH + ((Ui.Px(64f) - btnH) * 0.5f);
         var backW = Ui.Px(96f);
         var backLabel = this.step == 0 ? "CANCEL" : "BACK";
         if (this.OutlineButton(dl, "##ec_back", backLabel, wp.X + pad, by, backW, btnH))
         {
+            this.submitError = null;
             if (this.step == 0)
                 this.router.Navigate(this.selection.EventReturn);
             else
@@ -334,9 +347,11 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var nextX = wp.X + pad + backW + Ui.Px(10f);
         var nextW = (wp.X + width - pad) - nextX;
         var last = this.step == Steps.Length - 1;
-        var nextLabel = last ? (this.editId != null ? "SAVE CHANGES" : "PUBLISH EVENT") : "CONTINUE";
-        var valid = this.StepValid();
-        if (this.FilledButton(dl, "##ec_next", nextLabel, nextX, by, nextW, btnH, valid) && valid)
+        var nextLabel = last
+            ? (this.publishing ? (this.editId != null ? "SAVING" : "PUBLISHING") : this.editId != null ? "SAVE CHANGES" : "PUBLISH EVENT")
+            : "CONTINUE";
+        var enabled = this.StepValid() && !this.publishing;
+        if (this.FilledButton(dl, "##ec_next", nextLabel, nextX, by, nextW, btnH, enabled) && enabled)
         {
             if (last)
                 this.Submit();
@@ -1230,6 +1245,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     private void Submit()
     {
+        if (this.publishing)
+            return;
         var venue = new EventVenueDto { Type = this.venue };
         if (this.venue != EventVenueEnum.Discord && this.venueWorldId > 0)
             venue.WorldId = this.venueWorldId;
@@ -1278,17 +1295,30 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (this.visibility == Visibility.Private)
             req.EntryCode = this.code;
 
+        this.publishing = true;
+        this.submitError = null;
         _ = this.Publish(req);
     }
 
     private async System.Threading.Tasks.Task Publish(CreateEventRequest req)
     {
-        var created = await this.events.CreateAsync(req);
-        if (created != null)
+        try
         {
-            this.selection.EventId = created.Id;
-            this.selection.EventReturn = Screen.Grid;
-            this.router.Navigate(Screen.EventDetail);
+            var created = await this.events.CreateAsync(req);
+            if (created != null)
+            {
+                this.selection.EventId = created.Id;
+                this.selection.EventReturn = Screen.Grid;
+                this.router.Navigate(Screen.EventDetail);
+            }
+            else
+            {
+                this.submitError = "Couldn't publish. Check your connection and try again.";
+            }
+        }
+        finally
+        {
+            this.publishing = false;
         }
     }
 
