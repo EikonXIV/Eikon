@@ -23,6 +23,19 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private static readonly string[] Steps = { "BASICS", "TIMING", "PLACE", "ACCESS" };
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+    // Section heights: control content plus the gap to the next section. A labelled field is a 22px label
+    // over a 44px box; a stepper box is 64px. Both sit above a 24px gap.
+    private static float FieldBlock => Ui.Px(22f) + Ui.Px(44f) + Ui.Px(24f);
+    private static float StepperBlock => Ui.Px(64f) + Ui.Px(24f);
+
+    // Reset the layout cursor to a section's start and reserve exactly its height, so the absolutely
+    // positioned controls (which advance the cursor via InvisibleButton) never double-count spacing.
+    private static void Block(Vector2 start, float w, float h)
+    {
+        ImGui.SetCursorScreenPos(start);
+        ImGui.Dummy(new Vector2(w, h));
+    }
+
     // Host-selectable timezones (short, label, IANA), mirroring the web's EVENT_TIMEZONES.
     private static readonly (string Short, string Label, string Iana)[] Timezones =
     {
@@ -66,6 +79,12 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private int step;
     private bool prefilled;
     private Guid? editId;
+
+    // Where the last-tapped field sits, so its popup opens anchored just below it (not at a default spot).
+    private Vector2 popupAnchor;
+    private float popupWidth;
+    private float windowLeft;
+    private float windowRight;
 
     // Basics
     private string title = string.Empty;
@@ -137,6 +156,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.EnsurePrefill();
 
         var avail = ImGui.GetContentRegionAvail();
+        var wpos = ImGui.GetWindowPos();
+        this.windowLeft = wpos.X;
+        this.windowRight = wpos.X + avail.X;
         var pad = Ui.Px(20f);
         var headerH = Ui.Px(46f);
         var progressH = Ui.Px(48f);
@@ -151,18 +173,26 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             if (body.Success)
             {
                 var width = ImGui.GetContentRegionAvail().X;
-                switch (this.step)
+                // Zero item spacing so every section's height is exactly the Block() reservation below;
+                // the absolutely-positioned controls draw themselves, layout only advances the cursor.
+                using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
                 {
-                    case 0: this.DrawBasics(width, pad); break;
-                    case 1: this.DrawTiming(width, pad); break;
-                    case 2: this.DrawPlace(width, pad); break;
-                    default: this.DrawAccess(width, pad); break;
+                    switch (this.step)
+                    {
+                        case 0: this.DrawBasics(width, pad); break;
+                        case 1: this.DrawTiming(width, pad); break;
+                        case 2: this.DrawPlace(width, pad); break;
+                        default: this.DrawAccess(width, pad); break;
+                    }
                 }
+
+                // Popups must open and begin in the same window/ID scope as the fields that open them
+                // (the fields live inside this child), so draw them here rather than after the child.
+                this.DrawPopups(pad);
             }
         }
 
         this.DrawFooter(avail.X, pad, footerH);
-        this.DrawPopups(pad);
     }
 
     private void EnsurePrefill()
@@ -424,8 +454,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             cx += cw + Ui.Px(8f);
         }
 
-        ImGui.SetCursorScreenPos(new Vector2(pos.X, cy + chipH));
-        ImGui.Dummy(new Vector2(0f, (rows * (chipH + Ui.Px(8f))) + Ui.Px(6f)));
+        var chipsH = (rows * chipH) + ((rows - 1) * Ui.Px(8f));
+        Block(pos, w, chipsH + Ui.Px(20f));
     }
 
     // ---- step 1: timing ----------------------------------------------------------------------
@@ -440,23 +470,23 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         // Date + Start fields, side by side.
         var rp = ImGui.GetCursorScreenPos();
-        if (this.FieldBox(dl, "Date", rp.X + x, rp.Y, half, this.date.ToString("MM/dd/yyyy"), FontAwesomeIcon.CalendarAlt))
+        if (this.FieldBox(dl, "date", "Date", rp.X + x, rp.Y, half, this.date.ToString("MM/dd/yyyy"), FontAwesomeIcon.CalendarAlt))
             ImGui.OpenPopup("##ec_datepop");
-        if (this.FieldBox(dl, "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
+        if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
             ImGui.OpenPopup("##ec_timepop");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(68f)));
+        Block(rp, w, FieldBlock);
 
         // Timezone.
         var tp = ImGui.GetCursorScreenPos();
-        if (this.FieldBox(dl, "Timezone", tp.X + x, tp.Y, w, $"{Timezones[this.tz].Short} — {Timezones[this.tz].Label.Split('—').Last().Trim()}", FontAwesomeIcon.ChevronDown))
+        if (this.FieldBox(dl, "tz", "Timezone", tp.X + x, tp.Y, w, $"{Timezones[this.tz].Short} — {Timezones[this.tz].Label.Split('—').Last().Trim()}", FontAwesomeIcon.ChevronDown))
             ImGui.OpenPopup("##ec_tzpop");
-        ImGui.Dummy(new Vector2(0f, Ui.Px(68f)));
+        Block(tp, w, FieldBlock);
 
         // Hours / Minutes steppers.
         var sp = ImGui.GetCursorScreenPos();
         this.durHours = this.StepperBox(dl, "HOURS", sp.X + x, sp.Y, half, this.durHours, 0, 12);
         this.durMins = this.StepperBox(dl, "MINUTES", sp.X + x + half + Ui.Px(12f), sp.Y, half, this.durMins, 0, 45, step: 15);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(78f)));
+        Block(sp, w, StepperBlock);
 
         // Repeats (only Once enabled for v1).
         this.Label(dl, "REPEATS", x);
@@ -466,7 +496,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var sel = this.Segmented(dl, "##ec_repeats", opts, 0, qp.X + x, qp.Y, w, Ui.Px(42f), enabled);
         if (sel == 0)
             this.recurrence = EventRecurrenceEnum.None;
-        ImGui.Dummy(new Vector2(0f, Ui.Px(58f)));
+        Block(qp, w, Ui.Px(42f) + Ui.Px(18f));
     }
 
     // ---- step 2: place -----------------------------------------------------------------------
@@ -476,7 +506,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var dl = ImGui.GetWindowDrawList();
         var x = pad;
         var w = width - (pad * 2f);
-        var half = (w - Ui.Px(12f)) * 0.5f;
         var third = (w - (Ui.Px(10f) * 2f)) / 3f;
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
@@ -485,7 +514,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var venueIdx = this.venue == EventVenueEnum.Housing ? 0 : this.venue == EventVenueEnum.OpenWorld ? 1 : 2;
         var vsel = this.Segmented(dl, "##ec_venue", new[] { "HOUSE", "OPEN", "DISCORD" }, venueIdx, vp.X + x, vp.Y, w, Ui.Px(42f), null);
         this.venue = vsel == 0 ? EventVenueEnum.Housing : vsel == 1 ? EventVenueEnum.OpenWorld : EventVenueEnum.Discord;
-        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+        Block(vp, w, Ui.Px(42f) + Ui.Px(24f));
 
         if (this.venue != EventVenueEnum.Discord)
         {
@@ -498,19 +527,19 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             this.Field(dl, "District", x, w, () =>
             {
                 var dp = ImGui.GetCursorScreenPos();
-                if (this.FieldBox(dl, string.Empty, dp.X, dp.Y, w, DistrictOptions[this.district].Label, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                if (this.FieldBox(dl, "district", string.Empty, dp.X, dp.Y, w, DistrictOptions[this.district].Label, FontAwesomeIcon.ChevronDown, labelAbove: false))
                     ImGui.OpenPopup("##ec_districtpop");
-                ImGui.Dummy(new Vector2(w, Ui.Px(44f)));
+                Block(dp, w, Ui.Px(44f));
             });
 
             var gp = ImGui.GetCursorScreenPos();
             this.ward = this.StepperBox(dl, "WARD", gp.X + x, gp.Y, third, this.ward, 1, 30);
             this.plot = this.StepperBox(dl, "PLOT", gp.X + x + third + Ui.Px(10f), gp.Y, third, this.plot, 1, 60);
             this.room = this.StepperBox(dl, "ROOM", gp.X + x + (2f * (third + Ui.Px(10f))), gp.Y, third, this.room, 0, 90);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(74f)));
+            Block(gp, w, Ui.Px(64f) + Ui.Px(16f));
             var hp = ImGui.GetCursorScreenPos();
             Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y), Palette.TextMuted.U32(), "Room 0 means the yard or main hall, no apartment number shown.", w);
-            ImGui.Dummy(new Vector2(0f, Ui.Px(30f)));
+            ImGui.Dummy(new Vector2(0f, Ui.Px(28f)));
         }
         else if (this.venue == EventVenueEnum.OpenWorld)
         {
@@ -518,9 +547,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             {
                 var zp = ImGui.GetCursorScreenPos();
                 var zoneName = this.catalog.Zones.Count > this.zoneIdx && this.zoneIdx >= 0 ? this.catalog.Zones[this.zoneIdx].Name : "Pick a zone";
-                if (this.FieldBox(dl, string.Empty, zp.X, zp.Y, w, zoneName, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                if (this.FieldBox(dl, "zone", string.Empty, zp.X, zp.Y, w, zoneName, FontAwesomeIcon.ChevronDown, labelAbove: false))
                     ImGui.OpenPopup("##ec_zonepop");
-                ImGui.Dummy(new Vector2(w, Ui.Px(44f)));
+                Block(zp, w, Ui.Px(44f));
             });
 
             this.Field(dl, "Landmark (optional)", x, w, () =>
@@ -528,9 +557,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
                 var ap = ImGui.GetCursorScreenPos();
                 var aList = this.AetherytesForZone();
                 var aName = aList.Count > this.aetheryteIdx && this.aetheryteIdx >= 0 ? aList[this.aetheryteIdx].Name : "None";
-                if (this.FieldBox(dl, string.Empty, ap.X, ap.Y, w, aName, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                if (this.FieldBox(dl, "aeth", string.Empty, ap.X, ap.Y, w, aName, FontAwesomeIcon.ChevronDown, labelAbove: false))
                     ImGui.OpenPopup("##ec_aethpop");
-                ImGui.Dummy(new Vector2(w, Ui.Px(44f)));
+                Block(ap, w, Ui.Px(44f));
             });
         }
         else
@@ -555,26 +584,30 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var lp = ImGui.GetCursorScreenPos();
         var ssel = this.Segmented(dl, "##ec_scope", new[] { "WORLD", "DC", "REGION" }, this.scope == EventScopeEnum.World ? 0 : this.scope == EventScopeEnum.Dc ? 1 : 2, lp.X + x, lp.Y, w, Ui.Px(42f), null);
         this.scope = ssel == 0 ? EventScopeEnum.World : ssel == 1 ? EventScopeEnum.Dc : EventScopeEnum.Region;
-        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+        Block(lp, w, Ui.Px(42f) + Ui.Px(24f));
 
         this.Label(dl, "RATING", x);
         var rp = ImGui.GetCursorScreenPos();
         var rsel = this.Segmented(dl, "##ec_rating", new[] { "SFW", "AFTER DARK 18+" }, this.rating == EventRatingEnum.Sfw ? 0 : 1, rp.X + x, rp.Y, w, Ui.Px(42f), null);
         this.rating = rsel == 0 ? EventRatingEnum.Sfw : EventRatingEnum.Ad;
+        Block(rp, w, Ui.Px(42f));
         if (this.rating == EventRatingEnum.Ad)
         {
+            var note = "After dark events are hidden from anyone with 18+ content switched off.";
             var hp = ImGui.GetCursorScreenPos();
-            Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y + Ui.Px(8f)), Palette.TextMuted.U32(), "After dark events are hidden from anyone with 18+ content switched off.", w);
+            Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y + Ui.Px(8f)), Palette.TextMuted.U32(), note, w);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f) + Ui.MeasureWrapped(this.fonts.Caption, note, w).Y + Ui.Px(20f)));
+        }
+        else
+        {
             ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
         }
-
-        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
 
         this.Label(dl, "VISIBILITY", x);
         var pp = ImGui.GetCursorScreenPos();
         var vsel = this.Segmented(dl, "##ec_vis", new[] { "PUBLIC", "PRIVATE" }, this.visibility == Visibility.Public ? 0 : 1, pp.X + x, pp.Y, w, Ui.Px(42f), null);
         this.visibility = vsel == 0 ? Visibility.Public : Visibility.Private;
-        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+        Block(pp, w, Ui.Px(42f) + Ui.Px(24f));
 
         if (this.visibility == Visibility.Private)
         {
@@ -584,18 +617,18 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             dl.AddRect(new Vector2(cp.X + x, cp.Y), new Vector2(cp.X + x + w, cp.Y + boxH), Palette.BorderStrong.U32(), 0f, ImDrawFlags.None, 1f);
             Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(cp.X + x + Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.EventTitle, this.code).Y) * 0.5f)), Palette.TextPrimary.U32(), this.code);
             var newLabel = "NEW";
-            var nlW = Ui.Measure(this.fonts.Eyebrow, newLabel).X;
-            ImGui.SetCursorScreenPos(new Vector2(cp.X + x + w - nlW - Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.Eyebrow, newLabel).Y) * 0.5f)));
-            if (ImGui.InvisibleButton("##ec_newcode", Ui.Measure(this.fonts.Eyebrow, newLabel)))
+            var nlSize = Ui.Measure(this.fonts.Eyebrow, newLabel);
+            ImGui.SetCursorScreenPos(new Vector2(cp.X + x + w - nlSize.X - Ui.Px(14f), cp.Y + ((boxH - nlSize.Y) * 0.5f)));
+            if (ImGui.InvisibleButton("##ec_newcode", nlSize))
                 this.code = GenerateCode();
             Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), newLabel);
-            ImGui.Dummy(new Vector2(0f, boxH + Ui.Px(18f)));
+            Block(cp, w, boxH + Ui.Px(24f));
         }
 
         this.Label(dl, "CAPACITY (0 = NO CAP)", x);
         var kp = ImGui.GetCursorScreenPos();
         this.capacity = this.StepperBox(dl, string.Empty, kp.X + x, kp.Y, w, this.capacity, 0, 200, step: 1, labelInside: false);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(70f)));
+        Block(kp, w, Ui.Px(46f) + Ui.Px(24f));
     }
 
     // ---- shared field/stepper/segmented primitives -------------------------------------------
@@ -618,7 +651,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     }
 
     // A tappable bordered value box (date/time/timezone/dropdown), with an optional label above.
-    private bool FieldBox(ImDrawListPtr dl, string label, float x, float y, float w, string value, FontAwesomeIcon icon, bool labelAbove = true)
+    private bool FieldBox(ImDrawListPtr dl, string id, string label, float x, float y, float w, string value, FontAwesomeIcon icon, bool labelAbove = true)
     {
         var top = y;
         if (labelAbove && label.Length > 0)
@@ -629,7 +662,13 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         var h = Ui.Px(44f);
         ImGui.SetCursorScreenPos(new Vector2(x, top));
-        var clicked = ImGui.InvisibleButton("##fb_" + label + value.GetHashCode(), new Vector2(w, h));
+        var clicked = ImGui.InvisibleButton("##fb_" + id, new Vector2(w, h));
+        if (clicked)
+        {
+            this.popupAnchor = new Vector2(x, top + h + Ui.Px(4f));
+            this.popupWidth = w;
+        }
+
         var hovered = ImGui.IsItemHovered();
         var min = new Vector2(x, top);
         var max = min + new Vector2(w, h);
@@ -654,7 +693,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         Ui.TextAt(dl, this.fonts.Label, new Vector2(pos.X + x + Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Label, value).Y) * 0.5f)), Palette.TextPrimary.U32(), value);
         var tagW = Ui.Measure(this.fonts.Eyebrow, rightTag).X;
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + x + w - tagW - Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Eyebrow, rightTag).Y) * 0.5f)), Palette.TextMuted.U32(), rightTag);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(66f)));
+        ImGui.Dummy(new Vector2(0f, Ui.Px(22f) + Ui.Px(44f) + Ui.Px(22f)));
     }
 
     // A labelled numeric stepper box (minus / serif value / plus).
@@ -752,17 +791,27 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.TimePopup();
     }
 
+    // Position a popup just below the field that opened it, clamped to stay on screen.
+    private Vector2 PopupPos(float popupW)
+    {
+        var minX = this.windowLeft + Ui.Px(8f);
+        var maxX = Math.Max(minX, this.windowRight - popupW - Ui.Px(8f));
+        return new Vector2(Math.Clamp(this.popupAnchor.X, minX, maxX), this.popupAnchor.Y);
+    }
+
     private void ListPopup(string id, string[] items, int selected, Action<int> onPick)
     {
+        var w = Math.Max(Ui.Px(200f), this.popupWidth);
+        ImGui.SetNextWindowPos(this.PopupPos(w), ImGuiCond.Appearing);
         using (this.MenuStyle())
         {
             if (!ImGui.BeginPopup(id))
                 return;
-            using var child = ImRaii.Child(id + "_c", new Vector2(Ui.Px(260f), Ui.Px(Math.Min(items.Length, 9) * 34f)), false);
+            using var child = ImRaii.Child(id + "_c", new Vector2(w, Ui.Px(Math.Min(items.Length, 8) * 34f)), false);
             if (child.Success)
                 for (var i = 0; i < items.Length; i++)
                 {
-                    if (this.MenuItem(items[i], i == selected))
+                    if (this.MenuItem(w, items[i], i == selected))
                     {
                         onPick(i);
                         ImGui.CloseCurrentPopup();
@@ -775,44 +824,49 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     private void DatePopup()
     {
+        var popupW = Ui.Px(322f);
+        ImGui.SetNextWindowPos(this.PopupPos(popupW), ImGuiCond.Appearing);
         using (this.MenuStyle())
         {
             if (!ImGui.BeginPopup("##ec_datepop"))
                 return;
             var dl = ImGui.GetWindowDrawList();
-            var w = Ui.Px(240f);
-            var third = (w - (Ui.Px(10f) * 2f)) / 3f;
+            var gap = Ui.Px(10f);
+            var inner = popupW - (Ui.Px(8f) * 2f);
+            var third = (inner - (gap * 2f)) / 3f;
             var p = ImGui.GetCursorScreenPos();
             var y = this.StepperBox(dl, "YEAR", p.X, p.Y, third, this.date.Year, DateTime.Today.Year, DateTime.Today.Year + 2);
-            var mo = this.StepperBox(dl, "MONTH", p.X + third + Ui.Px(10f), p.Y, third, this.date.Month, 1, 12);
+            var mo = this.StepperBox(dl, "MONTH", p.X + third + gap, p.Y, third, this.date.Month, 1, 12);
             var maxDay = DateTime.DaysInMonth(y, mo);
-            var d = this.StepperBox(dl, "DAY", p.X + (2f * (third + Ui.Px(10f))), p.Y, third, Math.Min(this.date.Day, maxDay), 1, maxDay);
+            var d = this.StepperBox(dl, "DAY", p.X + (2f * (third + gap)), p.Y, third, Math.Min(this.date.Day, maxDay), 1, maxDay);
             this.date = new DateTime(y, mo, Math.Min(d, DateTime.DaysInMonth(y, mo)));
-            ImGui.Dummy(new Vector2(w, Ui.Px(64f)));
+            ImGui.Dummy(new Vector2(inner, Ui.Px(64f)));
             ImGui.EndPopup();
         }
     }
 
     private void TimePopup()
     {
+        var popupW = Ui.Px(232f);
+        ImGui.SetNextWindowPos(this.PopupPos(popupW), ImGuiCond.Appearing);
         using (this.MenuStyle())
         {
             if (!ImGui.BeginPopup("##ec_timepop"))
                 return;
             var dl = ImGui.GetWindowDrawList();
-            var w = Ui.Px(200f);
-            var half = (w - Ui.Px(10f)) * 0.5f;
+            var gap = Ui.Px(10f);
+            var inner = popupW - (Ui.Px(8f) * 2f);
+            var half = (inner - gap) * 0.5f;
             var p = ImGui.GetCursorScreenPos();
             this.hour = this.StepperBox(dl, "HOUR", p.X, p.Y, half, this.hour, 0, 23);
-            this.minute = this.StepperBox(dl, "MINUTE", p.X + half + Ui.Px(10f), p.Y, half, this.minute, 0, 55, step: 5);
-            ImGui.Dummy(new Vector2(w, Ui.Px(64f)));
+            this.minute = this.StepperBox(dl, "MINUTE", p.X + half + gap, p.Y, half, this.minute, 0, 55, step: 5);
+            ImGui.Dummy(new Vector2(inner, Ui.Px(64f)));
             ImGui.EndPopup();
         }
     }
 
-    private bool MenuItem(string label, bool selected)
+    private bool MenuItem(float width, string label, bool selected)
     {
-        var width = Ui.Px(244f);
         var height = Ui.Px(32f);
         var pos = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton("##mi_" + label, new Vector2(width, height));
