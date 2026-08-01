@@ -148,6 +148,11 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.step = Math.Clamp(s, 0, Steps.Length - 1);
     }
 
+    // Harness seam (Vitrine): open a picker popup on the next frame so a screenshot can capture it.
+    internal void OpenPopupForTest(string popupId) => this.pendingPopup = popupId;
+
+    private string? pendingPopup;
+
     public void Draw()
     {
         this.catalog.EnsureLoaded();
@@ -466,11 +471,19 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var x = pad;
         var w = width - (pad * 2f);
         var half = (w - Ui.Px(12f)) * 0.5f;
+        if (this.pendingPopup is { } pp)
+        {
+            var wp = ImGui.GetWindowPos();
+            this.popupAnchor = new Vector2(wp.X + pad, wp.Y + Ui.Px(120f));
+            ImGui.OpenPopup(pp);
+            this.pendingPopup = null;
+        }
+
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
         // Date + Start fields, side by side.
         var rp = ImGui.GetCursorScreenPos();
-        if (this.FieldBox(dl, "date", "Date", rp.X + x, rp.Y, half, this.date.ToString("MM/dd/yyyy"), FontAwesomeIcon.CalendarAlt))
+        if (this.FieldBox(dl, "date", "Date", rp.X + x, rp.Y, half, this.date.ToString("dd MMM yyyy"), FontAwesomeIcon.CalendarAlt))
             ImGui.OpenPopup("##ec_datepop");
         if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
             ImGui.OpenPopup("##ec_timepop");
@@ -696,8 +709,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         ImGui.Dummy(new Vector2(0f, Ui.Px(22f) + Ui.Px(44f) + Ui.Px(22f)));
     }
 
-    // A labelled numeric stepper box (minus / serif value / plus).
-    private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true)
+    // A labelled numeric stepper box (minus / serif value / plus). `display` renders the value as text
+    // (e.g. a month name) while the plus/minus still step the underlying int.
+    private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true, Func<int, string>? display = null)
     {
         var h = labelInside && label.Length > 0 ? Ui.Px(64f) : Ui.Px(46f);
         var boxMin = new Vector2(x, y);
@@ -725,7 +739,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             value = Math.Min(max, value + step);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (value < max ? Palette.TextSecondary : Palette.TextMuted).U32(), plus);
 
-        var num = value.ToString();
+        var num = display != null ? display(value) : value.ToString();
         var nsz = Ui.Measure(this.fonts.SerifName, num);
         Ui.TextAt(dl, this.fonts.SerifName, new Vector2(x + ((w - nsz.X) * 0.5f), mid - (nsz.Y * 0.5f)), Palette.TextPrimary.U32(), num);
         return value;
@@ -824,23 +838,23 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     private void DatePopup()
     {
-        var popupW = Ui.Px(322f);
+        var popupW = Ui.Px(300f);
         ImGui.SetNextWindowPos(this.PopupPos(popupW), ImGuiCond.Appearing);
         using (this.MenuStyle())
         {
             if (!ImGui.BeginPopup("##ec_datepop"))
                 return;
             var dl = ImGui.GetWindowDrawList();
-            var gap = Ui.Px(10f);
+            var gap = Ui.Px(8f);
             var inner = popupW - (Ui.Px(8f) * 2f);
             var third = (inner - (gap * 2f)) / 3f;
             var p = ImGui.GetCursorScreenPos();
-            var y = this.StepperBox(dl, "YEAR", p.X, p.Y, third, this.date.Year, DateTime.Today.Year, DateTime.Today.Year + 2);
-            var mo = this.StepperBox(dl, "MONTH", p.X + third + gap, p.Y, third, this.date.Month, 1, 12);
-            var maxDay = DateTime.DaysInMonth(y, mo);
-            var d = this.StepperBox(dl, "DAY", p.X + (2f * (third + gap)), p.Y, third, Math.Min(this.date.Day, maxDay), 1, maxDay);
+            var maxDay = DateTime.DaysInMonth(this.date.Year, this.date.Month);
+            var d = this.StepperBox(dl, "DAY", p.X, p.Y, third, Math.Min(this.date.Day, maxDay), 1, maxDay);
+            var mo = this.StepperBox(dl, "MONTH", p.X + third + gap, p.Y, third, this.date.Month, 1, 12, display: MonthAbbr);
+            var y = this.StepperBox(dl, "YEAR", p.X + (2f * (third + gap)), p.Y, third, this.date.Year, DateTime.Today.Year, DateTime.Today.Year + 2);
             this.date = new DateTime(y, mo, Math.Min(d, DateTime.DaysInMonth(y, mo)));
-            ImGui.Dummy(new Vector2(inner, Ui.Px(64f)));
+            Block(p, inner, Ui.Px(64f));
             ImGui.EndPopup();
         }
     }
@@ -860,10 +874,13 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             var p = ImGui.GetCursorScreenPos();
             this.hour = this.StepperBox(dl, "HOUR", p.X, p.Y, half, this.hour, 0, 23);
             this.minute = this.StepperBox(dl, "MINUTE", p.X + half + gap, p.Y, half, this.minute, 0, 55, step: 5);
-            ImGui.Dummy(new Vector2(inner, Ui.Px(64f)));
+            Block(p, inner, Ui.Px(64f));
             ImGui.EndPopup();
         }
     }
+
+    private static string MonthAbbr(int m) =>
+        System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(m);
 
     private bool MenuItem(float width, string label, bool selected)
     {
