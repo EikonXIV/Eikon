@@ -140,6 +140,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, AlbumAccessScreen>();
         services.AddSingleton<IScreen, AlbumViewerScreen>();
         services.AddSingleton<IScreen, EventDetailScreen>();
+        services.AddSingleton<IScreen, EventCreateScreen>();
 
         services.AddSingleton<SoundService>();
         services.AddSingleton<NotificationService>();

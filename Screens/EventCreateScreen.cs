@@ -1,0 +1,996 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using Dalamud.Interface;
+using Dalamud.Interface.ManagedFontAtlas;
+using Dalamud.Interface.Textures.TextureWraps;
+using Eikon.Contracts;
+using Eikon.Navigation;
+using Eikon.Net;
+using Eikon.Services;
+using Eikon.UI;
+using Eikon.UI.Theme;
+
+namespace Eikon.Screens;
+
+// Create / edit an event: a four-step wizard (Basics, Timing, Place, Access) with a segment progress
+// bar (mockups 13-19). Matches the create.tsx flow: banner preset + upload, kind chips, date/time/tz,
+// duration steppers, venue variants, scope/rating/visibility, entry code, and capacity. On publish it
+// builds a CreateEventRequest (or UpdateEventRequest in edit mode) and opens the new event's detail.
+internal sealed class EventCreateScreen : IScreen, IDisposable
+{
+    private static readonly string[] Steps = { "BASICS", "TIMING", "PLACE", "ACCESS" };
+    private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    // Host-selectable timezones (short, label, IANA), mirroring the web's EVENT_TIMEZONES.
+    private static readonly (string Short, string Label, string Iana)[] Timezones =
+    {
+        ("PT", "Pacific — Los Angeles", "America/Los_Angeles"),
+        ("MT", "Mountain — Denver", "America/Denver"),
+        ("CT", "Central — Chicago", "America/Chicago"),
+        ("ET", "Eastern — New York", "America/New_York"),
+        ("BRT", "Brasília — São Paulo", "America/Sao_Paulo"),
+        ("GMT", "Greenwich — London", "Europe/London"),
+        ("CET", "Central Europe — Paris", "Europe/Paris"),
+        ("EET", "Eastern Europe — Helsinki", "Europe/Helsinki"),
+        ("MSK", "Moscow", "Europe/Moscow"),
+        ("GST", "Gulf — Dubai", "Asia/Dubai"),
+        ("IST", "India — Kolkata", "Asia/Kolkata"),
+        ("SGT", "Singapore", "Asia/Singapore"),
+        ("JST", "Japan — Tokyo", "Asia/Tokyo"),
+        ("AEST", "Eastern Australia — Sydney", "Australia/Sydney"),
+        ("NZST", "New Zealand — Auckland", "Pacific/Auckland"),
+    };
+
+    private static readonly (EventKindElement Kind, string Label)[] Kinds =
+    {
+        (EventKindElement.Gathering, "Gathering"), (EventKindElement.Club, "Club"),
+        (EventKindElement.Performance, "Performance"), (EventKindElement.Raid, "Raid"),
+        (EventKindElement.Roleplay, "Roleplay"), (EventKindElement.Market, "Market"),
+    };
+
+    private static readonly (HousingDistrictEnum Value, string Label)[] DistrictOptions = EventCatalog.Districts
+        .Select(d => (d.Value, d.Label)).ToArray();
+
+    private readonly ScreenRouter router;
+    private readonly Kit kit;
+    private readonly UiFonts fonts;
+    private readonly EventService events;
+    private readonly EventCatalog catalog;
+    private readonly WorldCatalog worlds;
+    private readonly ProfileService profile;
+    private readonly Media media;
+    private readonly Selection selection;
+
+    private int step;
+    private bool prefilled;
+    private Guid? editId;
+
+    // Basics
+    private string title = string.Empty;
+    private EventKindElement kind = EventKindElement.Gathering;
+    private string description = string.Empty;
+    private string tagsText = string.Empty;
+    private string bannerPreset = "lounge";
+    private byte[]? uploadBytes;
+    private IDalamudTextureWrap? uploadPreview;
+
+    // Timing
+    private DateTime date = DateTime.Today;
+    private int hour = 20;
+    private int minute = 0;
+    private int tz = 3;   // ET
+    private int durHours = 2;
+    private int durMins;
+    private EventRecurrenceEnum recurrence = EventRecurrenceEnum.None;
+
+    // Place
+    private EventVenueEnum venue = EventVenueEnum.Housing;
+    private int district;
+    private int ward = 1;
+    private int plot = 1;
+    private int room;
+    private int zoneIdx;
+    private int aetheryteIdx;
+    private string discordUrl = string.Empty;
+    private string discordNote = string.Empty;
+
+    // Access
+    private EventScopeEnum scope = EventScopeEnum.World;
+    private EventRatingEnum rating = EventRatingEnum.Sfw;
+    private Visibility visibility = Visibility.Public;
+    private string code = string.Empty;
+    private int capacity;
+
+    public EventCreateScreen(ScreenRouter router, Kit kit, UiFonts fonts, EventService events, EventCatalog catalog, WorldCatalog worlds, ProfileService profile, Media media, Selection selection)
+    {
+        this.router = router;
+        this.kit = kit;
+        this.fonts = fonts;
+        this.events = events;
+        this.catalog = catalog;
+        this.worlds = worlds;
+        this.profile = profile;
+        this.media = media;
+        this.selection = selection;
+        this.code = GenerateCode();
+    }
+
+    public Screen Id => Screen.EventCreate;
+
+    public bool Chrome => false;
+
+    // Harness seam (Vitrine): jump to a step for a screenshot; a placeholder title keeps step 0 valid.
+    internal void SetStep(int s)
+    {
+        if (this.title.Trim().Length <= 2)
+            this.title = "Moonlit Terrace Social";
+        this.step = Math.Clamp(s, 0, Steps.Length - 1);
+    }
+
+    public void Draw()
+    {
+        this.catalog.EnsureLoaded();
+        this.worlds.EnsureLoaded();
+        this.profile.EnsureLoaded();
+        this.EnsurePrefill();
+
+        var avail = ImGui.GetContentRegionAvail();
+        var pad = Ui.Px(20f);
+        var headerH = Ui.Px(46f);
+        var progressH = Ui.Px(48f);
+        var footerH = Ui.Px(64f);
+        this.DrawHeader(avail.X, pad, headerH);
+        this.DrawProgress(avail.X, pad, headerH, progressH);
+
+        var bodyTop = headerH + progressH;
+        ImGui.SetCursorPos(new Vector2(0f, bodyTop));
+        using (var body = ImRaii.Child("event_create_body", new Vector2(avail.X, avail.Y - bodyTop - footerH), false, ImGuiWindowFlags.AlwaysVerticalScrollbar))
+        {
+            if (body.Success)
+            {
+                var width = ImGui.GetContentRegionAvail().X;
+                switch (this.step)
+                {
+                    case 0: this.DrawBasics(width, pad); break;
+                    case 1: this.DrawTiming(width, pad); break;
+                    case 2: this.DrawPlace(width, pad); break;
+                    default: this.DrawAccess(width, pad); break;
+                }
+            }
+        }
+
+        this.DrawFooter(avail.X, pad, footerH);
+        this.DrawPopups(pad);
+    }
+
+    private void EnsurePrefill()
+    {
+        if (this.prefilled)
+            return;
+        this.prefilled = true;
+        if (this.selection.EventId is not { } id)
+            return;
+        var e = this.events.Detail(id);
+        if (e == null)
+        {
+            this.prefilled = false;   // wait for the detail to load
+            return;
+        }
+
+        this.editId = id;
+        this.title = e.Title;
+        this.kind = e.Kind;
+        this.description = e.Description;
+        this.tagsText = string.Join(", ", e.Tags ?? new List<string>());
+        this.bannerPreset = e.BannerPreset ?? "lounge";
+        var local = e.StartsAt.ToLocalTime();
+        this.date = local.Date;
+        this.hour = int.TryParse(e.HostClock.Split(':').FirstOrDefault(), out var h) ? h : local.Hour;
+        this.minute = int.TryParse(e.HostClock.Split(':').LastOrDefault(), out var m) ? m : local.Minute;
+        this.tz = Math.Max(0, Array.FindIndex(Timezones, t => t.Short == e.HostTzLabel));
+        this.durHours = (int)(e.DurationMins / 60);
+        this.durMins = (int)(e.DurationMins % 60);
+        this.venue = e.Venue.Type;
+        this.district = Math.Max(0, Array.FindIndex(DistrictOptions, d => d.Value == e.Venue.District));
+        this.ward = (int)(e.Venue.Ward ?? 1);
+        this.plot = (int)(e.Venue.Plot ?? 1);
+        this.room = (int)(e.Venue.Room ?? 0);
+        this.zoneIdx = e.Venue.ZoneId is { } z ? Math.Max(0, this.catalog.Zones.ToList().FindIndex(zn => zn.Id == (int)z)) : 0;
+        this.discordUrl = e.Venue.DiscordUrl ?? string.Empty;
+        this.discordNote = e.Venue.DiscordNote ?? string.Empty;
+        this.scope = e.Scope;
+        this.rating = e.Rating;
+        this.visibility = e.Visibility;
+        this.code = e.EntryCode ?? this.code;
+        this.capacity = (int)(e.Capacity ?? 0);
+    }
+
+    // ---- chrome ------------------------------------------------------------------------------
+
+    private void DrawHeader(float width, float pad, float height)
+    {
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var midY = origin.Y + (height * 0.5f);
+
+        var title = this.editId != null ? "EDIT EVENT" : "NEW EVENT";
+        var ts = Ui.Measure(this.fonts.Eyebrow, title);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((width - ts.X) * 0.5f), midY - (ts.Y * 0.5f)), Palette.TextSecondary.U32(), title);
+
+        var x = FontAwesomeIcon.Times.ToIconString();
+        var xs = Ui.Measure(this.fonts.Icon, x);
+        ImGui.SetCursorScreenPos(new Vector2((origin.X + width - pad) - xs.X, midY - (xs.Y * 0.5f)));
+        if (ImGui.InvisibleButton("##ec_close", xs))
+            this.router.Navigate(this.selection.EventReturn);
+        Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), x);
+
+        dl.AddLine(new Vector2(origin.X, origin.Y + height), new Vector2(origin.X + width, origin.Y + height), Palette.Border.U32(), 1f);
+    }
+
+    private void DrawProgress(float width, float pad, float top, float height)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var origin = new Vector2(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y + top);
+        var left = origin.X + pad;
+        var segW = (width - (pad * 2f)) / Steps.Length;
+        var y = origin.Y + Ui.Px(12f);
+
+        for (var i = 0; i < Steps.Length; i++)
+        {
+            var sx = left + (segW * i);
+            var filled = i <= this.step;
+            dl.AddLine(new Vector2(sx, y), new Vector2(sx + segW - Ui.Px(4f), y), (filled ? Palette.TextPrimary : Palette.Border).U32(), 1f);
+            var col = (i == this.step ? Palette.TextPrimary : Palette.TextSecondary).U32();
+            Ui.TextAt(dl, this.fonts.Mono, new Vector2(sx, y + Ui.Px(8f)), col, Steps[i]);
+        }
+
+        dl.AddLine(new Vector2(origin.X, origin.Y + height), new Vector2(origin.X + width, origin.Y + height), Palette.Border.U32(), 1f);
+    }
+
+    private void DrawFooter(float width, float pad, float height)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var wp = ImGui.GetWindowPos();
+        var wsz = ImGui.GetWindowSize();
+        var y = wp.Y + wsz.Y - height;
+        dl.AddLine(new Vector2(wp.X, y), new Vector2(wp.X + width, y), Palette.Border.U32(), 1f);
+
+        var btnH = Ui.Px(44f);
+        var by = y + ((height - btnH) * 0.5f);
+        var backW = Ui.Px(96f);
+        var backLabel = this.step == 0 ? "CANCEL" : "BACK";
+        if (this.OutlineButton(dl, "##ec_back", backLabel, wp.X + pad, by, backW, btnH))
+        {
+            if (this.step == 0)
+                this.router.Navigate(this.selection.EventReturn);
+            else
+                this.step--;
+        }
+
+        var nextX = wp.X + pad + backW + Ui.Px(10f);
+        var nextW = (wp.X + width - pad) - nextX;
+        var last = this.step == Steps.Length - 1;
+        var nextLabel = last ? (this.editId != null ? "SAVE CHANGES" : "PUBLISH EVENT") : "CONTINUE";
+        var valid = this.StepValid();
+        if (this.FilledButton(dl, "##ec_next", nextLabel, nextX, by, nextW, btnH, valid) && valid)
+        {
+            if (last)
+                this.Submit();
+            else
+                this.step++;
+        }
+    }
+
+    // ---- step 0: basics ----------------------------------------------------------------------
+
+    private void DrawBasics(float width, float pad)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var x = pad;
+        var w = width - (pad * 2f);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+
+        // Banner label row.
+        var lp = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lp.X + x, lp.Y), Palette.TextSecondary.U32(), "BANNER");
+        var hint = "3:1 · 1536×512";
+        Ui.TextAt(dl, this.fonts.Mono, new Vector2(lp.X + x + w - Ui.Measure(this.fonts.Mono, hint).X, lp.Y + Ui.Px(1f)), Palette.TextMuted.U32(), hint);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+
+        // Banner preview + filmstrip.
+        this.DrawBannerPicker(dl, x, w);
+
+        this.Field(dl, "Title", x, w, () => { var t = this.title; this.kit.TextField("##ec_title", ref t, "The Velvet Hour", w); this.title = t; });
+
+        // Kind chips.
+        this.Label(dl, "KIND", x);
+        this.DrawKindChips(dl, x, w);
+
+        this.Field(dl, "Description", x, w, () =>
+        {
+            var d = this.description;
+            this.kit.TextField("##ec_desc", ref d, "What happens, who it's for, house rules.", w);
+            this.description = d;
+        });
+
+        this.Field(dl, "Tags (comma separated)", x, w, () =>
+        {
+            var t = this.tagsText;
+            this.kit.TextField("##ec_tags", ref t, "DJ, Lounge, 18+", w);
+            this.tagsText = t;
+        });
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
+    }
+
+    private void DrawBannerPicker(ImDrawListPtr dl, float x, float w)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        var previewH = w / 3f;
+        var tex = this.uploadPreview ?? (this.uploadBytes == null ? this.events.PresetBanner(this.bannerPreset) : null);
+        dl.AddRectFilled(new Vector2(pos.X + x, pos.Y), new Vector2(pos.X + x + w, pos.Y + previewH), Palette.Surface2.U32());
+        if (tex != null)
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(tex.Width, tex.Height, w / previewH);
+            dl.AddImage(tex.Handle, new Vector2(pos.X + x, pos.Y), new Vector2(pos.X + x + w, pos.Y + previewH), uvMin, uvMax);
+        }
+
+        dl.AddRect(new Vector2(pos.X + x, pos.Y), new Vector2(pos.X + x + w, pos.Y + previewH), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
+        // Filmstrip: 3 presets + upload tile.
+        var gap = Ui.Px(8f);
+        var cellW = (w - (gap * 3f)) / 4f;
+        var cellH = cellW / 3f * 2f;   // slightly taller thumbs read better
+        var stripY = pos.Y + previewH + Ui.Px(10f);
+        string[] presetIds = { "lounge", "rooftops", "lakeside" };
+        for (var i = 0; i < 3; i++)
+        {
+            var cx = pos.X + x + (i * (cellW + gap));
+            ImGui.SetCursorScreenPos(new Vector2(cx, stripY));
+            if (ImGui.InvisibleButton($"##ec_preset_{i}", new Vector2(cellW, cellH)))
+            {
+                this.bannerPreset = presetIds[i];
+                this.uploadBytes = null;
+                this.uploadPreview?.Dispose();
+                this.uploadPreview = null;
+            }
+
+            var pt = this.events.PresetBanner(presetIds[i]);
+            var min = new Vector2(cx, stripY);
+            var max = min + new Vector2(cellW, cellH);
+            dl.AddRectFilled(min, max, Palette.Surface2.U32());
+            if (pt != null)
+            {
+                var (uvMin, uvMax) = Ui.CoverUv(pt.Width, pt.Height, cellW / cellH);
+                dl.AddImage(pt.Handle, min, max, uvMin, uvMax);
+            }
+
+            var selected = this.uploadBytes == null && this.bannerPreset == presetIds[i];
+            dl.AddRect(min, max, (selected ? Palette.TextPrimary : Palette.Border).U32(), 0f, ImDrawFlags.None, selected ? Ui.Px(2f) : 1f);
+        }
+
+        var ux = pos.X + x + (3 * (cellW + gap));
+        ImGui.SetCursorScreenPos(new Vector2(ux, stripY));
+        if (ImGui.InvisibleButton("##ec_upload", new Vector2(cellW, cellH)))
+            this.PickBanner();
+        var umin = new Vector2(ux, stripY);
+        var umax = umin + new Vector2(cellW, cellH);
+        var uploadSel = this.uploadBytes != null;
+        dl.AddRect(umin, umax, (uploadSel ? Palette.TextPrimary : Palette.Border).U32(), 0f, ImDrawFlags.None, uploadSel ? Ui.Px(2f) : 1f);
+        var up = FontAwesomeIcon.Image.ToIconString();
+        var us = Ui.Measure(this.fonts.Icon, up);
+        Ui.TextAt(dl, this.fonts.Icon, (umin + umax) * 0.5f - (us * 0.5f), Palette.TextMuted.U32(), up);
+
+        var note = "Wide crops read best. The banner is trimmed to 3:1 on the board and in chat shares.";
+        var noteY = stripY + cellH + Ui.Px(12f);
+        Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(pos.X + x, noteY), Palette.TextMuted.U32(), note, w);
+        var total = (noteY + Ui.MeasureWrapped(this.fonts.Caption, note, w).Y + Ui.Px(12f)) - pos.Y;
+        ImGui.SetCursorScreenPos(pos);
+        ImGui.Dummy(new Vector2(w, total));
+    }
+
+    private void DrawKindChips(ImDrawListPtr dl, float x, float w)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        var chipH = Ui.Px(30f);
+        var cx = pos.X + x;
+        var cy = pos.Y;
+        var rows = 1;
+        foreach (var (k, label) in Kinds)
+        {
+            var ts = Ui.Measure(this.fonts.Label, label);
+            var cw = ts.X + (Ui.Px(14f) * 2f);
+            if (cx + cw > pos.X + x + w)
+            {
+                cx = pos.X + x;
+                cy += chipH + Ui.Px(8f);
+                rows++;
+            }
+
+            ImGui.SetCursorScreenPos(new Vector2(cx, cy));
+            if (ImGui.InvisibleButton("##ec_kind_" + label, new Vector2(cw, chipH)))
+                this.kind = k;
+            var active = this.kind == k;
+            var min = new Vector2(cx, cy);
+            var max = min + new Vector2(cw, chipH);
+            var r = chipH * 0.5f;
+            if (active)
+                dl.AddRectFilled(min, max, Palette.TextPrimary.U32(), r);
+            else
+                dl.AddRect(min, max, Palette.Border.U32(), r, ImDrawFlags.None, 1f);
+            Ui.TextAt(dl, this.fonts.Label, new Vector2(cx + Ui.Px(14f), cy + ((chipH - ts.Y) * 0.5f)), (active ? Palette.Paper : Palette.TextSecondary).U32(), label);
+            cx += cw + Ui.Px(8f);
+        }
+
+        ImGui.SetCursorScreenPos(new Vector2(pos.X, cy + chipH));
+        ImGui.Dummy(new Vector2(0f, (rows * (chipH + Ui.Px(8f))) + Ui.Px(6f)));
+    }
+
+    // ---- step 1: timing ----------------------------------------------------------------------
+
+    private void DrawTiming(float width, float pad)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var x = pad;
+        var w = width - (pad * 2f);
+        var half = (w - Ui.Px(12f)) * 0.5f;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+
+        // Date + Start fields, side by side.
+        var rp = ImGui.GetCursorScreenPos();
+        if (this.FieldBox(dl, "Date", rp.X + x, rp.Y, half, this.date.ToString("MM/dd/yyyy"), FontAwesomeIcon.CalendarAlt))
+            ImGui.OpenPopup("##ec_datepop");
+        if (this.FieldBox(dl, "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
+            ImGui.OpenPopup("##ec_timepop");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(68f)));
+
+        // Timezone.
+        var tp = ImGui.GetCursorScreenPos();
+        if (this.FieldBox(dl, "Timezone", tp.X + x, tp.Y, w, $"{Timezones[this.tz].Short} — {Timezones[this.tz].Label.Split('—').Last().Trim()}", FontAwesomeIcon.ChevronDown))
+            ImGui.OpenPopup("##ec_tzpop");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(68f)));
+
+        // Hours / Minutes steppers.
+        var sp = ImGui.GetCursorScreenPos();
+        this.durHours = this.StepperBox(dl, "HOURS", sp.X + x, sp.Y, half, this.durHours, 0, 12);
+        this.durMins = this.StepperBox(dl, "MINUTES", sp.X + x + half + Ui.Px(12f), sp.Y, half, this.durMins, 0, 45, step: 15);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(78f)));
+
+        // Repeats (only Once enabled for v1).
+        this.Label(dl, "REPEATS", x);
+        var qp = ImGui.GetCursorScreenPos();
+        var opts = new[] { "ONCE", "WEEKLY", "2WK", "MONTHLY" };
+        var enabled = new[] { true, false, false, false };
+        var sel = this.Segmented(dl, "##ec_repeats", opts, 0, qp.X + x, qp.Y, w, Ui.Px(42f), enabled);
+        if (sel == 0)
+            this.recurrence = EventRecurrenceEnum.None;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(58f)));
+    }
+
+    // ---- step 2: place -----------------------------------------------------------------------
+
+    private void DrawPlace(float width, float pad)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var x = pad;
+        var w = width - (pad * 2f);
+        var half = (w - Ui.Px(12f)) * 0.5f;
+        var third = (w - (Ui.Px(10f) * 2f)) / 3f;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+
+        this.Label(dl, "VENUE", x);
+        var vp = ImGui.GetCursorScreenPos();
+        var venueIdx = this.venue == EventVenueEnum.Housing ? 0 : this.venue == EventVenueEnum.OpenWorld ? 1 : 2;
+        var vsel = this.Segmented(dl, "##ec_venue", new[] { "HOUSE", "OPEN", "DISCORD" }, venueIdx, vp.X + x, vp.Y, w, Ui.Px(42f), null);
+        this.venue = vsel == 0 ? EventVenueEnum.Housing : vsel == 1 ? EventVenueEnum.OpenWorld : EventVenueEnum.Discord;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+
+        if (this.venue != EventVenueEnum.Discord)
+        {
+            var world = this.HostWorldName();
+            this.FieldBoxDisabled(dl, "World", x, w, world.Length > 0 ? world : "Your world", "YOUR WORLD");
+        }
+
+        if (this.venue == EventVenueEnum.Housing)
+        {
+            this.Field(dl, "District", x, w, () =>
+            {
+                var dp = ImGui.GetCursorScreenPos();
+                if (this.FieldBox(dl, string.Empty, dp.X, dp.Y, w, DistrictOptions[this.district].Label, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                    ImGui.OpenPopup("##ec_districtpop");
+                ImGui.Dummy(new Vector2(w, Ui.Px(44f)));
+            });
+
+            var gp = ImGui.GetCursorScreenPos();
+            this.ward = this.StepperBox(dl, "WARD", gp.X + x, gp.Y, third, this.ward, 1, 30);
+            this.plot = this.StepperBox(dl, "PLOT", gp.X + x + third + Ui.Px(10f), gp.Y, third, this.plot, 1, 60);
+            this.room = this.StepperBox(dl, "ROOM", gp.X + x + (2f * (third + Ui.Px(10f))), gp.Y, third, this.room, 0, 90);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(74f)));
+            var hp = ImGui.GetCursorScreenPos();
+            Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y), Palette.TextMuted.U32(), "Room 0 means the yard or main hall, no apartment number shown.", w);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(30f)));
+        }
+        else if (this.venue == EventVenueEnum.OpenWorld)
+        {
+            this.Field(dl, "Zone", x, w, () =>
+            {
+                var zp = ImGui.GetCursorScreenPos();
+                var zoneName = this.catalog.Zones.Count > this.zoneIdx && this.zoneIdx >= 0 ? this.catalog.Zones[this.zoneIdx].Name : "Pick a zone";
+                if (this.FieldBox(dl, string.Empty, zp.X, zp.Y, w, zoneName, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                    ImGui.OpenPopup("##ec_zonepop");
+                ImGui.Dummy(new Vector2(w, Ui.Px(44f)));
+            });
+
+            this.Field(dl, "Landmark (optional)", x, w, () =>
+            {
+                var ap = ImGui.GetCursorScreenPos();
+                var aList = this.AetherytesForZone();
+                var aName = aList.Count > this.aetheryteIdx && this.aetheryteIdx >= 0 ? aList[this.aetheryteIdx].Name : "None";
+                if (this.FieldBox(dl, string.Empty, ap.X, ap.Y, w, aName, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                    ImGui.OpenPopup("##ec_aethpop");
+                ImGui.Dummy(new Vector2(w, Ui.Px(44f)));
+            });
+        }
+        else
+        {
+            this.Field(dl, "Invite link", x, w, () => { var u = this.discordUrl; this.kit.TextField("##ec_durl", ref u, "https://discord.gg/…", w); this.discordUrl = u; });
+            this.Field(dl, "Channel note (optional)", x, w, () => { var n = this.discordNote; this.kit.TextField("##ec_dnote", ref n, "Prog voice", w); this.discordNote = n; });
+        }
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
+    }
+
+    // ---- step 3: access ----------------------------------------------------------------------
+
+    private void DrawAccess(float width, float pad)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var x = pad;
+        var w = width - (pad * 2f);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+
+        this.Label(dl, "LISTED IN", x);
+        var lp = ImGui.GetCursorScreenPos();
+        var ssel = this.Segmented(dl, "##ec_scope", new[] { "WORLD", "DC", "REGION" }, this.scope == EventScopeEnum.World ? 0 : this.scope == EventScopeEnum.Dc ? 1 : 2, lp.X + x, lp.Y, w, Ui.Px(42f), null);
+        this.scope = ssel == 0 ? EventScopeEnum.World : ssel == 1 ? EventScopeEnum.Dc : EventScopeEnum.Region;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+
+        this.Label(dl, "RATING", x);
+        var rp = ImGui.GetCursorScreenPos();
+        var rsel = this.Segmented(dl, "##ec_rating", new[] { "SFW", "AFTER DARK 18+" }, this.rating == EventRatingEnum.Sfw ? 0 : 1, rp.X + x, rp.Y, w, Ui.Px(42f), null);
+        this.rating = rsel == 0 ? EventRatingEnum.Sfw : EventRatingEnum.Ad;
+        if (this.rating == EventRatingEnum.Ad)
+        {
+            var hp = ImGui.GetCursorScreenPos();
+            Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y + Ui.Px(8f)), Palette.TextMuted.U32(), "After dark events are hidden from anyone with 18+ content switched off.", w);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+        }
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+
+        this.Label(dl, "VISIBILITY", x);
+        var pp = ImGui.GetCursorScreenPos();
+        var vsel = this.Segmented(dl, "##ec_vis", new[] { "PUBLIC", "PRIVATE" }, this.visibility == Visibility.Public ? 0 : 1, pp.X + x, pp.Y, w, Ui.Px(42f), null);
+        this.visibility = vsel == 0 ? Visibility.Public : Visibility.Private;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
+
+        if (this.visibility == Visibility.Private)
+        {
+            this.Label(dl, "ENTRY CODE", x);
+            var cp = ImGui.GetCursorScreenPos();
+            var boxH = Ui.Px(46f);
+            dl.AddRect(new Vector2(cp.X + x, cp.Y), new Vector2(cp.X + x + w, cp.Y + boxH), Palette.BorderStrong.U32(), 0f, ImDrawFlags.None, 1f);
+            Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(cp.X + x + Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.EventTitle, this.code).Y) * 0.5f)), Palette.TextPrimary.U32(), this.code);
+            var newLabel = "NEW";
+            var nlW = Ui.Measure(this.fonts.Eyebrow, newLabel).X;
+            ImGui.SetCursorScreenPos(new Vector2(cp.X + x + w - nlW - Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.Eyebrow, newLabel).Y) * 0.5f)));
+            if (ImGui.InvisibleButton("##ec_newcode", Ui.Measure(this.fonts.Eyebrow, newLabel)))
+                this.code = GenerateCode();
+            Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), newLabel);
+            ImGui.Dummy(new Vector2(0f, boxH + Ui.Px(18f)));
+        }
+
+        this.Label(dl, "CAPACITY (0 = NO CAP)", x);
+        var kp = ImGui.GetCursorScreenPos();
+        this.capacity = this.StepperBox(dl, string.Empty, kp.X + x, kp.Y, w, this.capacity, 0, 200, step: 1, labelInside: false);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(70f)));
+    }
+
+    // ---- shared field/stepper/segmented primitives -------------------------------------------
+
+    private void Label(ImDrawListPtr dl, string label, float x)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + x, pos.Y + Ui.Px(4f)), Palette.TextSecondary.U32(), label);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
+    }
+
+    // A labelled control: draws the sentence-case label, then runs `content` (an ImGui input) at the pad.
+    private void Field(ImDrawListPtr dl, string label, float x, float w, Action content)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Caption, new Vector2(pos.X + x, pos.Y), Palette.TextSecondary.U32(), label);
+        ImGui.SetCursorScreenPos(new Vector2(pos.X + x, pos.Y + Ui.Px(22f)));
+        content();
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+    }
+
+    // A tappable bordered value box (date/time/timezone/dropdown), with an optional label above.
+    private bool FieldBox(ImDrawListPtr dl, string label, float x, float y, float w, string value, FontAwesomeIcon icon, bool labelAbove = true)
+    {
+        var top = y;
+        if (labelAbove && label.Length > 0)
+        {
+            Ui.TextAt(dl, this.fonts.Caption, new Vector2(x, y), Palette.TextSecondary.U32(), label);
+            top = y + Ui.Px(22f);
+        }
+
+        var h = Ui.Px(44f);
+        ImGui.SetCursorScreenPos(new Vector2(x, top));
+        var clicked = ImGui.InvisibleButton("##fb_" + label + value.GetHashCode(), new Vector2(w, h));
+        var hovered = ImGui.IsItemHovered();
+        var min = new Vector2(x, top);
+        var max = min + new Vector2(w, h);
+        dl.AddRectFilled(min, max, Palette.Surface2.U32());
+        dl.AddRect(min, max, (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(x + Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Label, value).Y) * 0.5f)), Palette.TextPrimary.U32(), value);
+        var g = icon.ToIconString();
+        var gs = Ui.Measure(this.fonts.Icon, g);
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(x + w - gs.X - Ui.Px(12f), top + ((h - gs.Y) * 0.5f)), Palette.TextMuted.U32(), g);
+        return clicked;
+    }
+
+    private void FieldBoxDisabled(ImDrawListPtr dl, string label, float x, float w, string value, string rightTag)
+    {
+        var pos = ImGui.GetCursorScreenPos();
+        Ui.TextAt(dl, this.fonts.Caption, new Vector2(pos.X + x, pos.Y), Palette.TextSecondary.U32(), label);
+        var top = pos.Y + Ui.Px(22f);
+        var h = Ui.Px(44f);
+        var min = new Vector2(pos.X + x, top);
+        var max = min + new Vector2(w, h);
+        dl.AddRectFilled(min, max, Palette.Surface2.U32());
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(pos.X + x + Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Label, value).Y) * 0.5f)), Palette.TextPrimary.U32(), value);
+        var tagW = Ui.Measure(this.fonts.Eyebrow, rightTag).X;
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + x + w - tagW - Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Eyebrow, rightTag).Y) * 0.5f)), Palette.TextMuted.U32(), rightTag);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(66f)));
+    }
+
+    // A labelled numeric stepper box (minus / serif value / plus).
+    private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true)
+    {
+        var h = labelInside && label.Length > 0 ? Ui.Px(64f) : Ui.Px(46f);
+        var boxMin = new Vector2(x, y);
+        var boxMax = boxMin + new Vector2(w, h);
+        dl.AddRect(boxMin, boxMax, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+        var rowY = y;
+        if (labelInside && label.Length > 0)
+        {
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(x + Ui.Px(12f), y + Ui.Px(10f)), Palette.TextSecondary.U32(), label);
+            rowY = y + Ui.Px(24f);
+        }
+
+        var mid = rowY + ((h - (rowY - y)) * 0.5f);
+        var minus = FontAwesomeIcon.Minus.ToIconString();
+        var plus = FontAwesomeIcon.Plus.ToIconString();
+        var ms = Ui.Measure(this.fonts.Icon, minus);
+        ImGui.SetCursorScreenPos(new Vector2(x + Ui.Px(12f), mid - (ms.Y * 0.5f)));
+        if (ImGui.InvisibleButton($"##sb_minus_{label}{x}", ms) && value > min)
+            value = Math.Max(min, value - step);
+        Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (value > min ? Palette.TextSecondary : Palette.TextMuted).U32(), minus);
+
+        var ps = Ui.Measure(this.fonts.Icon, plus);
+        ImGui.SetCursorScreenPos(new Vector2(x + w - Ui.Px(12f) - ps.X, mid - (ps.Y * 0.5f)));
+        if (ImGui.InvisibleButton($"##sb_plus_{label}{x}", ps) && value < max)
+            value = Math.Min(max, value + step);
+        Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (value < max ? Palette.TextSecondary : Palette.TextMuted).U32(), plus);
+
+        var num = value.ToString();
+        var nsz = Ui.Measure(this.fonts.SerifName, num);
+        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(x + ((w - nsz.X) * 0.5f), mid - (nsz.Y * 0.5f)), Palette.TextPrimary.U32(), num);
+        return value;
+    }
+
+    // Cream-active square segmented control, with an optional per-cell enabled mask (disabled = muted).
+    private int Segmented(ImDrawListPtr dl, string id, string[] options, int selected, float x, float y, float w, float h, bool[]? enabled)
+    {
+        var cellW = w / options.Length;
+        dl.AddRect(new Vector2(x, y), new Vector2(x + w, y + h), Palette.BorderStrong.U32(), 0f, ImDrawFlags.None, 1f);
+        var result = selected;
+        for (var i = 0; i < options.Length; i++)
+        {
+            var cx = x + (cellW * i);
+            var on = enabled == null || enabled[i];
+            ImGui.SetCursorScreenPos(new Vector2(cx, y));
+            if (ImGui.InvisibleButton($"{id}_{i}", new Vector2(cellW, h)) && on)
+                result = i;
+            var active = i == selected;
+            if (active)
+                dl.AddRectFilled(new Vector2(cx + Ui.Px(2f), y + Ui.Px(2f)), new Vector2(cx + cellW - Ui.Px(2f), y + h - Ui.Px(2f)), Palette.TextPrimary.U32(), 0f);
+            else if (i > 0)
+                dl.AddLine(new Vector2(cx, y + Ui.Px(9f)), new Vector2(cx, y + h - Ui.Px(9f)), Palette.Border.U32(), 1f);
+            var col = active ? Palette.Paper : (on ? Palette.TextSecondary : Palette.TextMuted);
+            var ts = Ui.Measure(this.fonts.Eyebrow, options[i]);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + ((cellW - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), col.U32(), options[i]);
+        }
+
+        return result;
+    }
+
+    private bool OutlineButton(ImDrawListPtr dl, string id, string label, float x, float y, float w, float h)
+    {
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        var clicked = ImGui.InvisibleButton(id, new Vector2(w, h));
+        var hovered = ImGui.IsItemHovered();
+        dl.AddRect(new Vector2(x, y), new Vector2(x + w, y + h), (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
+        var ts = Ui.Measure(this.fonts.Eyebrow, label);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(x + ((w - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32(), label);
+        return clicked;
+    }
+
+    private bool FilledButton(ImDrawListPtr dl, string id, string label, float x, float y, float w, float h, bool enabled)
+    {
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        var clicked = ImGui.InvisibleButton(id, new Vector2(w, h));
+        dl.AddRectFilled(new Vector2(x, y), new Vector2(x + w, y + h), (enabled ? Palette.TextPrimary : Palette.WithAlpha(Palette.TextPrimary, 0.3f)).U32());
+        var ts = Ui.Measure(this.fonts.Eyebrow, label);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(x + ((w - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), Palette.Paper.U32(), label);
+        return clicked;
+    }
+
+    // ---- popups (date / time / timezone / district / zone / aetheryte) ------------------------
+
+    private void DrawPopups(float pad)
+    {
+        this.ListPopup("##ec_tzpop", Timezones.Select(t => $"{t.Short}  {t.Label}").ToArray(), this.tz, i => this.tz = i);
+        this.ListPopup("##ec_districtpop", DistrictOptions.Select(d => d.Label).ToArray(), this.district, i => this.district = i);
+        this.ListPopup("##ec_zonepop", this.catalog.Zones.Select(z => z.Name).ToArray(), this.zoneIdx, i => { this.zoneIdx = i; this.aetheryteIdx = 0; });
+        var aeth = this.AetherytesForZone();
+        this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend("None").ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
+        this.DatePopup();
+        this.TimePopup();
+    }
+
+    private void ListPopup(string id, string[] items, int selected, Action<int> onPick)
+    {
+        using (this.MenuStyle())
+        {
+            if (!ImGui.BeginPopup(id))
+                return;
+            using var child = ImRaii.Child(id + "_c", new Vector2(Ui.Px(260f), Ui.Px(Math.Min(items.Length, 9) * 34f)), false);
+            if (child.Success)
+                for (var i = 0; i < items.Length; i++)
+                {
+                    if (this.MenuItem(items[i], i == selected))
+                    {
+                        onPick(i);
+                        ImGui.CloseCurrentPopup();
+                    }
+                }
+
+            ImGui.EndPopup();
+        }
+    }
+
+    private void DatePopup()
+    {
+        using (this.MenuStyle())
+        {
+            if (!ImGui.BeginPopup("##ec_datepop"))
+                return;
+            var dl = ImGui.GetWindowDrawList();
+            var w = Ui.Px(240f);
+            var third = (w - (Ui.Px(10f) * 2f)) / 3f;
+            var p = ImGui.GetCursorScreenPos();
+            var y = this.StepperBox(dl, "YEAR", p.X, p.Y, third, this.date.Year, DateTime.Today.Year, DateTime.Today.Year + 2);
+            var mo = this.StepperBox(dl, "MONTH", p.X + third + Ui.Px(10f), p.Y, third, this.date.Month, 1, 12);
+            var maxDay = DateTime.DaysInMonth(y, mo);
+            var d = this.StepperBox(dl, "DAY", p.X + (2f * (third + Ui.Px(10f))), p.Y, third, Math.Min(this.date.Day, maxDay), 1, maxDay);
+            this.date = new DateTime(y, mo, Math.Min(d, DateTime.DaysInMonth(y, mo)));
+            ImGui.Dummy(new Vector2(w, Ui.Px(64f)));
+            ImGui.EndPopup();
+        }
+    }
+
+    private void TimePopup()
+    {
+        using (this.MenuStyle())
+        {
+            if (!ImGui.BeginPopup("##ec_timepop"))
+                return;
+            var dl = ImGui.GetWindowDrawList();
+            var w = Ui.Px(200f);
+            var half = (w - Ui.Px(10f)) * 0.5f;
+            var p = ImGui.GetCursorScreenPos();
+            this.hour = this.StepperBox(dl, "HOUR", p.X, p.Y, half, this.hour, 0, 23);
+            this.minute = this.StepperBox(dl, "MINUTE", p.X + half + Ui.Px(10f), p.Y, half, this.minute, 0, 55, step: 5);
+            ImGui.Dummy(new Vector2(w, Ui.Px(64f)));
+            ImGui.EndPopup();
+        }
+    }
+
+    private bool MenuItem(string label, bool selected)
+    {
+        var width = Ui.Px(244f);
+        var height = Ui.Px(32f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##mi_" + label, new Vector2(width, height));
+        var hovered = ImGui.IsItemHovered();
+        var dl = ImGui.GetWindowDrawList();
+        if (hovered || selected)
+            dl.AddRectFilled(pos, pos + new Vector2(width, height), Palette.WithAlpha(Palette.Overlay, 0.05f).U32());
+        Ui.TextAt(dl, this.fonts.Label, new Vector2(pos.X + Ui.Px(10f), pos.Y + ((height - Ui.Measure(this.fonts.Label, label).Y) * 0.5f)), (selected ? Palette.TextPrimary : Palette.TextSecondary).U32(), label);
+        return clicked;
+    }
+
+    // ---- submit + helpers ---------------------------------------------------------------------
+
+    private bool StepValid() => this.step switch
+    {
+        0 => this.title.Trim().Length > 2,
+        1 => (this.durHours * 60) + this.durMins >= 15,
+        2 => this.venue switch
+        {
+            EventVenueEnum.Housing => DistrictOptions.Length > 0,
+            EventVenueEnum.OpenWorld => this.catalog.Zones.Count > 0,
+            _ => this.discordUrl.Trim().Length > 4,
+        },
+        _ => true,
+    };
+
+    private void Submit()
+    {
+        var venue = new EventVenueDto { Type = this.venue };
+        switch (this.venue)
+        {
+            case EventVenueEnum.Housing:
+                venue.District = DistrictOptions[this.district].Value;
+                venue.Ward = this.ward; venue.Plot = this.plot; venue.Room = this.room;
+                break;
+            case EventVenueEnum.OpenWorld:
+                if (this.catalog.Zones.Count > this.zoneIdx)
+                    venue.ZoneId = this.catalog.Zones[this.zoneIdx].Id;
+                var aeth = this.AetherytesForZone();
+                if (this.aetheryteIdx >= 0 && aeth.Count > this.aetheryteIdx)
+                    venue.AetheryteId = aeth[this.aetheryteIdx].Id;
+                break;
+            default:
+                venue.DiscordUrl = this.discordUrl.Trim();
+                if (this.discordNote.Trim().Length > 0)
+                    venue.DiscordNote = this.discordNote.Trim();
+                break;
+        }
+
+        var (startsAt, iana, label) = this.ResolveStart();
+        var tags = this.tagsText.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+
+        var req = new CreateEventRequest
+        {
+            Title = this.title.Trim(), Kind = this.kind, Scope = this.scope, Rating = this.rating, Visibility = this.visibility,
+            StartsAt = startsAt, HostClock = $"{this.hour:00}:{this.minute:00}", HostTz = iana, HostTzLabel = label,
+            // startsAt above is a DateTimeOffset from ResolveStart.
+            DurationMins = (this.durHours * 60) + this.durMins, Recurrence = EventRecurrenceEnum.None, Venue = venue,
+            Description = this.description.Trim(), Tags = tags,
+            Capacity = this.capacity > 0 ? this.capacity : null,
+        };
+        if (this.uploadBytes != null)
+        {
+            req.BannerBase64 = Convert.ToBase64String(this.uploadBytes);
+            req.BannerContentType = ContentType.ImageJpeg;
+        }
+        else
+        {
+            req.BannerPreset = this.bannerPreset;
+        }
+
+        if (this.visibility == Visibility.Private)
+            req.EntryCode = this.code;
+
+        _ = this.Publish(req);
+    }
+
+    private async System.Threading.Tasks.Task Publish(CreateEventRequest req)
+    {
+        var created = await this.events.CreateAsync(req);
+        if (created != null)
+        {
+            this.selection.EventId = created.Id;
+            this.selection.EventReturn = Screen.Grid;
+            this.router.Navigate(Screen.EventDetail);
+        }
+    }
+
+    private (DateTimeOffset StartsAt, string Iana, string Label) ResolveStart()
+    {
+        var (label, _, iana) = Timezones[this.tz];
+        try
+        {
+            var tzInfo = TimeZoneInfo.FindSystemTimeZoneById(iana);
+            var wall = new DateTime(this.date.Year, this.date.Month, this.date.Day, this.hour, this.minute, 0, DateTimeKind.Unspecified);
+            var utc = TimeZoneInfo.ConvertTimeToUtc(wall, tzInfo);
+            return (new DateTimeOffset(utc, TimeSpan.Zero), iana, label);
+        }
+        catch (Exception)
+        {
+            var wall = new DateTime(this.date.Year, this.date.Month, this.date.Day, this.hour, this.minute, 0, DateTimeKind.Utc);
+            return (new DateTimeOffset(wall, TimeSpan.Zero), iana, label);
+        }
+    }
+
+    private void PickBanner() =>
+        this.media.PickImage(path =>
+        {
+            try
+            {
+                var bytes = ImageCrop.ToJpeg(path, 3f, 1f, 0.5f, 0.5f);
+                this.uploadBytes = bytes;
+                this.uploadPreview?.Dispose();
+                this.uploadPreview = Plugin.TextureProvider.CreateFromImageAsync(bytes).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // ignore a bad image; the preset stays selected
+            }
+        });
+
+    private string HostWorldName()
+    {
+        if (this.profile.Mine?.WorldId is not { } id)
+            return string.Empty;
+        foreach (var dc in this.worlds.DataCenters)
+            foreach (var w in dc.Worlds)
+                if (w.Id == id)
+                    return w.Name;
+        return string.Empty;
+    }
+
+    private List<EventCatalog.Aetheryte> AetherytesForZone()
+    {
+        if (this.catalog.Zones.Count <= this.zoneIdx || this.zoneIdx < 0)
+            return new List<EventCatalog.Aetheryte>();
+        return this.catalog.AetherytesInZone(this.catalog.Zones[this.zoneIdx].Id).ToList();
+    }
+
+    private static string To12H(int hour, int minute)
+    {
+        var ampm = hour >= 12 ? "PM" : "AM";
+        var h12 = hour % 12;
+        if (h12 == 0)
+            h12 = 12;
+        return $"{h12:00}:{minute:00} {ampm}";
+    }
+
+    private static string GenerateCode()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(6);
+        var s = new char[6];
+        for (var i = 0; i < 6; i++)
+            s[i] = CodeAlphabet[bytes[i] % CodeAlphabet.Length];
+        return new string(s);
+    }
+
+    private IDisposable MenuStyle() => new Composite(new List<IDisposable>
+    {
+        ImRaii.PushColor(ImGuiCol.PopupBg, Palette.Surface1),
+        ImRaii.PushColor(ImGuiCol.Border, Palette.Border),
+        ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Ui.Px(8f), Ui.Px(8f))),
+        ImRaii.PushStyle(ImGuiStyleVar.WindowRounding, 0f),
+        ImRaii.PushStyle(ImGuiStyleVar.PopupBorderSize, 1f),
+    });
+
+    public void Dispose() => this.uploadPreview?.Dispose();
+
+    private sealed class Composite : IDisposable
+    {
+        private readonly List<IDisposable> items;
+
+        public Composite(List<IDisposable> items) => this.items = items;
+
+        public void Dispose()
+        {
+            for (var i = this.items.Count - 1; i >= 0; i--)
+                this.items[i].Dispose();
+        }
+    }
+}
