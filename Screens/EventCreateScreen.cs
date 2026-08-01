@@ -1272,13 +1272,31 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         var (startsAt, iana, label) = this.ResolveStart();
         var tags = this.tagsText.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+        var hostClock = $"{this.hour:00}:{this.minute:00}";
+        var durationMins = (this.durHours * 60) + this.durMins;
+
+        this.publishing = true;
+        this.submitError = null;
+
+        // Edit mode patches the existing event; the banner is left as-is (changing it is a follow-up).
+        if (this.editId is { } id)
+        {
+            _ = this.PublishUpdate(id, new UpdateEventRequest
+            {
+                Title = this.title.Trim(), Kind = this.kind, Scope = this.scope, Rating = this.rating, Visibility = this.visibility,
+                StartsAt = startsAt, HostClock = hostClock, HostTz = iana, HostTzLabel = label,
+                DurationMins = durationMins, Recurrence = EventRecurrenceEnum.None, Venue = venue,
+                Description = this.description.Trim(), Tags = tags, Capacity = this.capacity,
+                EntryCode = this.visibility == Visibility.Private ? this.code : null,
+            });
+            return;
+        }
 
         var req = new CreateEventRequest
         {
             Title = this.title.Trim(), Kind = this.kind, Scope = this.scope, Rating = this.rating, Visibility = this.visibility,
-            StartsAt = startsAt, HostClock = $"{this.hour:00}:{this.minute:00}", HostTz = iana, HostTzLabel = label,
-            // startsAt above is a DateTimeOffset from ResolveStart.
-            DurationMins = (this.durHours * 60) + this.durMins, Recurrence = EventRecurrenceEnum.None, Venue = venue,
+            StartsAt = startsAt, HostClock = hostClock, HostTz = iana, HostTzLabel = label,
+            DurationMins = durationMins, Recurrence = EventRecurrenceEnum.None, Venue = venue,
             Description = this.description.Trim(), Tags = tags,
             Capacity = this.capacity > 0 ? this.capacity : null,
         };
@@ -1295,8 +1313,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (this.visibility == Visibility.Private)
             req.EntryCode = this.code;
 
-        this.publishing = true;
-        this.submitError = null;
         _ = this.Publish(req);
     }
 
@@ -1315,6 +1331,21 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             {
                 this.submitError = "Couldn't publish. Check your connection and try again.";
             }
+        }
+        finally
+        {
+            this.publishing = false;
+        }
+    }
+
+    private async System.Threading.Tasks.Task PublishUpdate(Guid id, UpdateEventRequest req)
+    {
+        try
+        {
+            if (await this.events.UpdateAsync(id, req))
+                this.router.Navigate(this.selection.EventReturn);
+            else
+                this.submitError = "Couldn't save changes. Try again.";
         }
         finally
         {
