@@ -222,19 +222,27 @@ internal sealed class EventService : IDisposable
     {
         if (this.details.TryGetValue(eventId, out var e))
             return e;
+        if (this.gated.ContainsKey(eventId))   // private, no access: needs a code, don't refire
+            return null;
         if (this.loadingDetails.TryAdd(eventId, 0))
             this.Fire(async token =>
             {
                 var dto = await this.api.GetEventAsync(token, eventId.ToString(), CancellationToken.None);
                 if (dto != null)
                     this.details[eventId] = dto;
+                else
+                    this.gated[eventId] = 0;   // 404: hidden until the code is entered
             }, "Loading event detail failed.", () => this.loadingDetails.TryRemove(eventId, out _));
         return null;
     }
 
+    // A private event the viewer hasn't unlocked (Detail returned 404): show the code gate, not a spinner.
+    public bool IsGated(Guid eventId) => this.gated.ContainsKey(eventId);
+
     public void InvalidateDetail(Guid eventId)
     {
         this.details.TryRemove(eventId, out _);
+        this.gated.TryRemove(eventId, out _);
         this.banners.TryRemove(eventId, out var wrap);
         wrap?.Dispose();
     }
@@ -269,9 +277,10 @@ internal sealed class EventService : IDisposable
         return PresetIds[(int)(n % PresetIds.Length)];
     }
 
-    // The banner to draw for a card/detail: the uploaded texture, else the named/derived preset.
-    public IDalamudTextureWrap? BannerFor(EventCardDto e) =>
-        e.BannerUploaded ? this.BannerTexture(e.Id) : this.PresetBanner(e.BannerPreset ?? FallbackPreset(e.Id));
+    // The banner to draw for a card/detail: the uploaded texture, else the named/derived preset. Takes
+    // the fields (not a DTO) so it serves both EventCardDto and EventDto (codegen doesn't share a base).
+    public IDalamudTextureWrap? BannerFor(Guid id, bool uploaded, string? preset) =>
+        uploaded ? this.BannerTexture(id) : this.PresetBanner(preset ?? FallbackPreset(id));
 
     private async Task LoadPreset(string presetId)
     {
@@ -419,7 +428,11 @@ internal sealed class EventService : IDisposable
                 return null;
             var e = await this.api.LookupEventAsync(token, code, CancellationToken.None);
             if (e != null)
+            {
                 this.details[e.Id] = e;
+                this.gated.TryRemove(e.Id, out _);   // unlocked: clear the gate
+            }
+
             return e;
         }
         catch (Exception ex)

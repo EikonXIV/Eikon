@@ -346,7 +346,7 @@ internal sealed class EventsBoardView
 
         // Full-bleed banner (preset art or an uploaded texture).
         dl.AddRectFilled(pos, pos + new Vector2(width, bannerH), Palette.Surface2.U32());
-        var texture = this.events.BannerFor(e);
+        var texture = this.events.BannerFor(e.Id, e.BannerUploaded, e.BannerPreset);
         if (texture != null)
         {
             var (uvMin, uvMax) = Ui.CoverUv(texture.Width, texture.Height, width / bannerH);
