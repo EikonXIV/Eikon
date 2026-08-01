@@ -63,6 +63,9 @@ internal sealed class UiFonts : IDisposable
         this.Eyebrow = this.Make(s => s.Mono, 15f);
         this.Mono = this.Make(s => s.Mono, 12f);
         this.Count = this.Make(s => s.Mono, 18f);
+        this.EventTitle = this.Make(s => s.Display, 24f, cjk: true);
+        this.EventTitleItalic = this.Make(s => s.DisplayItalic, 24f, cjk: true);
+        this.EventMeta = this.Make(s => s.Body, 16f, cjk: true);
         this.Icon = this.MakeIcon(17f);
 
         foreach (var set in FontSets.All)
@@ -80,6 +83,9 @@ internal sealed class UiFonts : IDisposable
     public IFontHandle Eyebrow { get; }           // Mono 15 — eyebrows, tabs, meta
     public IFontHandle Mono { get; }              // Mono 12 — version tag (locked)
     public IFontHandle Count { get; }             // Mono 18 — counters
+    public IFontHandle EventTitle { get; }        // Display 24 — event card title (roman lead)
+    public IFontHandle EventTitleItalic { get; }  // Display italic 24 — event card title (italic tail)
+    public IFontHandle EventMeta { get; }         // Body 16 — event card location, count, host
 
     // Our own scaled FontAwesome handle rather than Dalamud's fixed-size shared one, so icons grow with
     // the text when the member enlarges it.

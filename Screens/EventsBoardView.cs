@@ -332,7 +332,7 @@ internal sealed class EventsBoardView
     private void DrawCard(ImDrawListPtr dl, EventCardDto e, float width, float pad)
     {
         var bannerH = width / 3f;                       // full-bleed 3:1
-        var infoH = Ui.Px(92f);
+        var infoH = Ui.Px(108f);
         var cardH = bannerH + infoH;
         var pos = ImGui.GetCursorScreenPos();
 
@@ -392,26 +392,26 @@ internal sealed class EventsBoardView
         }
 
         var (first, tail) = SplitTitle(e.Title);
-        var titleY = iy + Ui.Px(16f);
-        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(textX, titleY), Palette.TextPrimary.U32(), first);
+        var titleY = iy + Ui.Px(19f);
+        Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(textX, titleY), Palette.TextPrimary.U32(), first);
         if (tail.Length > 0)
         {
-            var fw = Ui.Measure(this.fonts.SerifName, first).X;
-            Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(textX + fw, titleY), Palette.TextSecondary.U32(), tail);
+            var fw = Ui.Measure(this.fonts.EventTitle, first).X;
+            Ui.TextAt(dl, this.fonts.EventTitleItalic, new Vector2(textX + fw, titleY), Palette.TextSecondary.U32(), tail);
         }
 
         var loc = this.LocationLine(e);
-        var locY = titleY + Ui.Measure(this.fonts.SerifName, first).Y + Ui.Px(4f);
-        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, locY), Palette.TextSecondary.U32(), this.Fit(loc, textW, this.fonts.LabelSmall));
+        var locY = titleY + Ui.Measure(this.fonts.EventTitle, first).Y + Ui.Px(5f);
+        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(textX, locY), Palette.TextSecondary.U32(), this.Fit(loc, textW, this.fonts.EventMeta));
 
-        var footY = locY + Ui.Measure(this.fonts.LabelSmall, "X").Y + Ui.Px(6f);
+        var footY = locY + Ui.Measure(this.fonts.EventMeta, "X").Y + Ui.Px(8f);
         var people = FontAwesomeIcon.User.ToIconString();
         Ui.TextAt(dl, this.fonts.Icon, new Vector2(textX, footY), Palette.TextMuted.U32(), people);
         var attend = e.Capacity is { } cap ? $"{e.Attending}/{cap}" : e.Attending.ToString();
-        var attendX = textX + Ui.Measure(this.fonts.Icon, people).X + Ui.Px(7f);
-        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(attendX, footY), Palette.TextSecondary.U32(), attend);
-        var hostX = attendX + Ui.Measure(this.fonts.LabelSmall, attend).X + Ui.Px(14f);
-        Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(hostX, footY), Palette.TextMuted.U32(), e.HostName);
+        var attendX = textX + Ui.Measure(this.fonts.Icon, people).X + Ui.Px(8f);
+        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(attendX, footY), Palette.TextSecondary.U32(), attend);
+        var hostX = attendX + Ui.Measure(this.fonts.EventMeta, attend).X + Ui.Px(16f);
+        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(hostX, footY), Palette.TextMuted.U32(), e.HostName);
 
         ImGui.SetCursorScreenPos(new Vector2(pos.X, pos.Y + cardH));
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
