@@ -883,8 +883,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     // World picker: all worlds grouped by region then data center, host's world pre-selected.
     private void WorldPopup()
     {
-        var w = Math.Max(Ui.Px(200f), this.popupWidth);
-        var winW = w + (Ui.Px(8f) * 2f);
+        var winW = Math.Max(Ui.Px(200f), this.popupWidth);   // match the field's own width
         ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
         ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, Ui.Px(360f)));
         using (this.MenuStyle())
@@ -927,8 +926,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     private void ListPopup(string id, string[] items, int selected, Action<int> onPick)
     {
-        var w = Math.Max(Ui.Px(200f), this.popupWidth);
-        var winW = w + (Ui.Px(8f) * 2f);
+        var winW = Math.Max(Ui.Px(200f), this.popupWidth);   // match the field's own width
         ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
         // Fix the width and cap the height so a long list scrolls, instead of nesting a child that
         // collapses inside an auto-resizing popup.
