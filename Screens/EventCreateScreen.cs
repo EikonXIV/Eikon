@@ -36,25 +36,39 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         ImGui.Dummy(new Vector2(w, h));
     }
 
-    // Host-selectable timezones (short, label, IANA), mirroring the web's EVENT_TIMEZONES.
+    // Host-selectable timezones (short, label, IANA), west to east, covering every populated offset.
     private static readonly (string Short, string Label, string Iana)[] Timezones =
     {
+        ("SST", "Samoa — Pago Pago", "Pacific/Pago_Pago"),
+        ("HST", "Hawaii — Honolulu", "Pacific/Honolulu"),
+        ("AKT", "Alaska — Anchorage", "America/Anchorage"),
         ("PT", "Pacific — Los Angeles", "America/Los_Angeles"),
         ("MT", "Mountain — Denver", "America/Denver"),
         ("CT", "Central — Chicago", "America/Chicago"),
         ("ET", "Eastern — New York", "America/New_York"),
-        ("BRT", "Brasília — São Paulo", "America/Sao_Paulo"),
-        ("GMT", "Greenwich — London", "Europe/London"),
+        ("AT", "Atlantic — Halifax", "America/Halifax"),
+        ("BRT", "Brazil — São Paulo", "America/Sao_Paulo"),
+        ("AZOT", "Azores", "Atlantic/Azores"),
+        ("GMT", "UK & Ireland — London", "Europe/London"),
         ("CET", "Central Europe — Paris", "Europe/Paris"),
-        ("EET", "Eastern Europe — Helsinki", "Europe/Helsinki"),
-        ("MSK", "Moscow", "Europe/Moscow"),
+        ("EET", "Eastern Europe — Athens", "Europe/Athens"),
+        ("MSK", "Moscow & Istanbul", "Europe/Moscow"),
+        ("IRST", "Iran — Tehran", "Asia/Tehran"),
         ("GST", "Gulf — Dubai", "Asia/Dubai"),
+        ("PKT", "Pakistan — Karachi", "Asia/Karachi"),
         ("IST", "India — Kolkata", "Asia/Kolkata"),
-        ("SGT", "Singapore", "Asia/Singapore"),
-        ("JST", "Japan — Tokyo", "Asia/Tokyo"),
+        ("BDT", "Bangladesh — Dhaka", "Asia/Dhaka"),
+        ("ICT", "SE Asia — Bangkok", "Asia/Bangkok"),
+        ("SGT", "Singapore & China", "Asia/Singapore"),
+        ("JST", "Japan & Korea — Tokyo", "Asia/Tokyo"),
+        ("ACST", "Central Australia — Adelaide", "Australia/Adelaide"),
         ("AEST", "Eastern Australia — Sydney", "Australia/Sydney"),
+        ("SBT", "Solomon Islands — Honiara", "Pacific/Guadalcanal"),
         ("NZST", "New Zealand — Auckland", "Pacific/Auckland"),
+        ("TOT", "Tonga — Nuku'alofa", "Pacific/Tongatapu"),
     };
+
+    private static readonly int DefaultTz = Math.Max(0, Array.FindIndex(Timezones, t => t.Iana == "America/New_York"));
 
     private static readonly (EventKindElement Kind, string Label)[] Kinds =
     {
@@ -100,7 +114,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private DateTime calView = DateTime.Today;
     private int hour = 20;
     private int minute = 0;
-    private int tz = 3;   // ET
+    private int tz = DefaultTz;
     private int durHours = 2;
     private int durMins;
     private EventRecurrenceEnum recurrence = EventRecurrenceEnum.None;
@@ -488,9 +502,18 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         // Harness (Vitrine): open a picker anchored to its real field, so a screenshot matches a click.
         if (this.pendingPopup is { } pp)
         {
-            var isTime = pp == "##ec_timepop";
-            this.popupAnchor = new Vector2(rp.X + x + (isTime ? half + Ui.Px(12f) : 0f), rp.Y + Ui.Px(70f));
-            this.popupWidth = half;
+            if (pp == "##ec_tzpop")
+            {
+                this.popupAnchor = new Vector2(rp.X + x, rp.Y + FieldBlock + Ui.Px(70f));
+                this.popupWidth = w;
+            }
+            else
+            {
+                var isTime = pp == "##ec_timepop";
+                this.popupAnchor = new Vector2(rp.X + x + (isTime ? half + Ui.Px(12f) : 0f), rp.Y + Ui.Px(70f));
+                this.popupWidth = half;
+            }
+
             this.calView = new DateTime(this.date.Year, this.date.Month, 1);
             ImGui.OpenPopup(pp);
             this.pendingPopup = null;
@@ -858,21 +881,25 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private void ListPopup(string id, string[] items, int selected, Action<int> onPick)
     {
         var w = Math.Max(Ui.Px(200f), this.popupWidth);
-        ImGui.SetNextWindowPos(this.PopupPos(w), ImGuiCond.Appearing);
+        var winW = w + (Ui.Px(8f) * 2f);
+        ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
+        // Fix the width and cap the height so a long list scrolls, instead of nesting a child that
+        // collapses inside an auto-resizing popup.
+        ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, Ui.Px(340f)));
         using (this.MenuStyle())
+        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
         {
             if (!ImGui.BeginPopup(id))
                 return;
-            using var child = ImRaii.Child(id + "_c", new Vector2(w, Ui.Px(Math.Min(items.Length, 8) * 34f)), false);
-            if (child.Success)
-                for (var i = 0; i < items.Length; i++)
+            var rowW = ImGui.GetContentRegionAvail().X;
+            for (var i = 0; i < items.Length; i++)
+            {
+                if (this.MenuItem(rowW, items[i], i == selected))
                 {
-                    if (this.MenuItem(w, items[i], i == selected))
-                    {
-                        onPick(i);
-                        ImGui.CloseCurrentPopup();
-                    }
+                    onPick(i);
+                    ImGui.CloseCurrentPopup();
                 }
+            }
 
             ImGui.EndPopup();
         }
