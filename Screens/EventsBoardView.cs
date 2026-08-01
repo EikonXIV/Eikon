@@ -24,6 +24,12 @@ internal sealed class EventsBoardView
     private readonly WorldCatalog worlds;
     private readonly Selection selection;
 
+    // Kind-chip strip horizontal scroll: the ">" chevron nudges (0 = none, 1 = step right, 2 = loop to
+    // start); ScrollX/MaxX are captured inside the child so the chevron (drawn outside it) knows the state.
+    private int kindNudge;
+    private float kindScrollX;
+    private float kindScrollMaxX;
+
     // Kind filter chips in display order, with the short chip label and the board/detail label.
     private static readonly (EventKindElement Kind, string Chip, string Label)[] KindRow =
     {
@@ -214,14 +220,27 @@ internal sealed class EventsBoardView
         }
 
         var chipH = Ui.Px(30f);
+        var overflow = this.kindScrollMaxX > 1f;             // there are chips off the right edge
+        var chevW = overflow ? Ui.Px(30f) : 0f;
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + pad);
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + Ui.Px(12f));
+        var childOrigin = ImGui.GetCursorScreenPos();
+        var childW = width - (pad * 2f) - chevW;
+
+        // Mouse wheel scrolls the strip (no vertical scrollbar => wheel scrolls X); the ">" chevron below
+        // nudges it too, so every kind is reachable on the narrow window.
         using (ImRaii.PushStyle(ImGuiStyleVar.ScrollbarSize, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero))
-        using (var child = ImRaii.Child("evkinds", new Vector2(width - (pad * 2f), chipH), false, ImGuiWindowFlags.HorizontalScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+        using (var child = ImRaii.Child("evkinds", new Vector2(childW, chipH), false, ImGuiWindowFlags.HorizontalScrollbar))
         {
             if (child.Success)
             {
+                if (this.kindNudge == 1)
+                    ImGui.SetScrollX(Math.Clamp(ImGui.GetScrollX() + Ui.Px(150f), 0f, ImGui.GetScrollMaxX()));
+                else if (this.kindNudge == 2)
+                    ImGui.SetScrollX(0f);
+                this.kindNudge = 0;
+
                 this.Chip("All", this.events.Kinds.Count == 0, chipH, () => this.events.ClearKinds());
                 foreach (var k in KindRow)
                 {
@@ -229,10 +248,30 @@ internal sealed class EventsBoardView
                     var kind = k.Kind;
                     this.Chip(k.Chip, this.events.Kinds.Contains(kind), chipH, () => this.events.ToggleKind(kind));
                 }
+
+                this.kindScrollX = ImGui.GetScrollX();
+                this.kindScrollMaxX = ImGui.GetScrollMaxX();
             }
         }
 
-        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + Ui.Px(10f));
+        if (overflow)
+        {
+            var dl = ImGui.GetWindowDrawList();
+            var atEnd = this.kindScrollX >= this.kindScrollMaxX - 1f;
+            var chevPos = new Vector2(childOrigin.X + childW, childOrigin.Y);
+            ImGui.SetCursorScreenPos(chevPos);
+            if (ImGui.InvisibleButton("##kindchev", new Vector2(chevW, chipH)))
+                this.kindNudge = atEnd ? 2 : 1;
+            var glyph = (atEnd ? FontAwesomeIcon.ChevronLeft : FontAwesomeIcon.ChevronRight).ToIconString();
+            var gs = Ui.Measure(this.fonts.Icon, glyph);
+            var center = chevPos + new Vector2(chevW * 0.5f, chipH * 0.5f);
+            dl.AddCircleFilled(center, chipH * 0.46f, Palette.Surface2.U32(), 20);
+            dl.AddCircle(center, chipH * 0.46f, Palette.Border.U32(), 20, 1f);
+            Ui.TextAt(dl, this.fonts.Icon, center - (gs * 0.5f), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), glyph);
+        }
+
+        // Restore the layout cursor to just below the strip, full width, for the scroll region.
+        ImGui.SetCursorScreenPos(new Vector2(childOrigin.X - pad, childOrigin.Y + chipH + Ui.Px(10f)));
     }
 
     // A pill chip (rounded-full): active = cream fill + paper text; inactive = hairline outline.
