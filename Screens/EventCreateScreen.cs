@@ -80,6 +80,10 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private static readonly (HousingDistrictEnum Value, string Label)[] DistrictOptions = EventCatalog.Districts
         .Select(d => (d.Value, d.Label)).ToArray();
 
+    private static readonly string[] WardNums = Enumerable.Range(1, 30).Select(n => n.ToString()).ToArray();
+    private static readonly string[] PlotNums = Enumerable.Range(1, 60).Select(n => n.ToString()).ToArray();
+    private static readonly string[] RoomNums = Enumerable.Range(0, 91).Select(n => n.ToString()).ToArray();
+
     private readonly ScreenRouter router;
     private readonly Kit kit;
     private readonly UiFonts fonts;
@@ -556,8 +560,10 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var third = (w - (Ui.Px(10f) * 2f)) / 3f;
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
-        // Harness (Vitrine): open a district/zone/landmark picker for a screenshot (world anchors itself).
-        if (this.pendingPopup is { } pp && pp != "##ec_worldpop")
+        // Harness (Vitrine): open a district/zone/landmark picker for a screenshot (world and the
+        // ward/plot/room number fields anchor themselves below).
+        if (this.pendingPopup is { } pp && pp != "##ec_worldpop"
+            && pp != "##ec_wardpop" && pp != "##ec_plotpop" && pp != "##ec_roompop")
         {
             var wp = ImGui.GetWindowPos();
             this.popupAnchor = new Vector2(wp.X + pad, wp.Y + Ui.Px(200f));
@@ -605,10 +611,19 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             });
 
             var gp = ImGui.GetCursorScreenPos();
-            this.ward = this.StepperBox(dl, "WARD", gp.X + x, gp.Y, third, this.ward, 1, 30);
-            this.plot = this.StepperBox(dl, "PLOT", gp.X + x + third + Ui.Px(10f), gp.Y, third, this.plot, 1, 60);
-            this.room = this.StepperBox(dl, "ROOM", gp.X + x + (2f * (third + Ui.Px(10f))), gp.Y, third, this.room, 0, 90);
-            Block(gp, w, Ui.Px(64f) + Ui.Px(16f));
+            this.NumberField(dl, "ward", "WARD", gp.X + x, gp.Y, third, this.ward, "##ec_wardpop");
+            this.NumberField(dl, "plot", "PLOT", gp.X + x + third + Ui.Px(10f), gp.Y, third, this.plot, "##ec_plotpop");
+            this.NumberField(dl, "room", "ROOM", gp.X + x + (2f * (third + Ui.Px(10f))), gp.Y, third, this.room, "##ec_roompop");
+            Block(gp, w, Ui.Px(22f) + Ui.Px(44f) + Ui.Px(16f));
+            if (this.pendingPopup is "##ec_wardpop" or "##ec_plotpop" or "##ec_roompop")
+            {
+                var col = this.pendingPopup == "##ec_wardpop" ? 0 : this.pendingPopup == "##ec_plotpop" ? 1 : 2;
+                this.popupAnchor = new Vector2(gp.X + x + (col * (third + Ui.Px(10f))), gp.Y + Ui.Px(70f));
+                this.popupWidth = third;
+                ImGui.OpenPopup(this.pendingPopup);
+                this.pendingPopup = null;
+            }
+
             var hp = ImGui.GetCursorScreenPos();
             Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y), Palette.TextMuted.U32(), "Room 0 means the yard or main hall, no apartment number shown.", w);
             ImGui.Dummy(new Vector2(0f, Ui.Px(28f)));
@@ -753,6 +768,14 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         return clicked;
     }
 
+    // A small labelled numeric dropdown: an eyebrow label over a tappable box that opens a number list.
+    private void NumberField(ImDrawListPtr dl, string id, string label, float x, float y, float w, int value, string popupId)
+    {
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(x, y), Palette.TextSecondary.U32(), label);
+        if (this.FieldBox(dl, id, string.Empty, x, y + Ui.Px(22f), w, value.ToString(), FontAwesomeIcon.ChevronDown, labelAbove: false))
+            ImGui.OpenPopup(popupId);
+    }
+
     // A labelled numeric stepper box (minus / serif value / plus).
     private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true)
     {
@@ -874,6 +897,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     {
         this.ListPopup("##ec_tzpop", Timezones.Select(t => $"{t.Short}  {t.Label}").ToArray(), this.tz, i => this.tz = i);
         this.ListPopup("##ec_districtpop", DistrictOptions.Select(d => d.Label).ToArray(), this.district, i => this.district = i);
+        this.ListPopup("##ec_wardpop", WardNums, this.ward - 1, i => this.ward = i + 1);
+        this.ListPopup("##ec_plotpop", PlotNums, this.plot - 1, i => this.plot = i + 1);
+        this.ListPopup("##ec_roompop", RoomNums, this.room, i => this.room = i);
         this.ListPopup("##ec_zonepop", this.catalog.Zones.Select(z => z.Name).ToArray(), this.zoneIdx, i => { this.zoneIdx = i; this.aetheryteIdx = 0; });
         var aeth = this.AetherytesForZone();
         this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend("None").ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
@@ -932,7 +958,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     private void ListPopup(string id, string[] items, int selected, Action<int> onPick)
     {
-        var winW = Math.Max(Ui.Px(200f), this.popupWidth);   // match the field's own width
+        var winW = Math.Max(Ui.Px(80f), this.popupWidth);   // match the field's own width (narrow for numbers)
         ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
         // Fix the width and cap the height to the room above the footer so a long list scrolls without
         // spilling over the buttons, instead of nesting a child that collapses in an auto-resize popup.
