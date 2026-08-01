@@ -121,6 +121,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     // Place
     private EventVenueEnum venue = EventVenueEnum.Housing;
+    private int venueWorldId;
     private int district;
     private int ward = 1;
     private int plot = 1;
@@ -243,6 +244,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.durHours = (int)(e.DurationMins / 60);
         this.durMins = (int)(e.DurationMins % 60);
         this.venue = e.Venue.Type;
+        this.venueWorldId = (int)(e.Venue.WorldId ?? 0);
         this.district = Math.Max(0, Array.FindIndex(DistrictOptions, d => d.Value == e.Venue.District));
         this.ward = (int)(e.Venue.Ward ?? 1);
         this.plot = (int)(e.Venue.Plot ?? 1);
@@ -552,6 +554,16 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var third = (w - (Ui.Px(10f) * 2f)) / 3f;
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
+        // Harness (Vitrine): open a district/zone/landmark picker for a screenshot (world anchors itself).
+        if (this.pendingPopup is { } pp && pp != "##ec_worldpop")
+        {
+            var wp = ImGui.GetWindowPos();
+            this.popupAnchor = new Vector2(wp.X + pad, wp.Y + Ui.Px(200f));
+            this.popupWidth = w;
+            ImGui.OpenPopup(pp);
+            this.pendingPopup = null;
+        }
+
         this.Label(dl, "VENUE", x);
         var vp = ImGui.GetCursorScreenPos();
         var venueIdx = this.venue == EventVenueEnum.Housing ? 0 : this.venue == EventVenueEnum.OpenWorld ? 1 : 2;
@@ -561,8 +573,23 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         if (this.venue != EventVenueEnum.Discord)
         {
-            var world = this.HostWorldName();
-            this.FieldBoxDisabled(dl, "World", x, w, world.Length > 0 ? world : "Your world", "YOUR WORLD");
+            if (this.venueWorldId == 0 && this.profile.Mine?.WorldId is { } wid)
+                this.venueWorldId = (int)wid;
+            var wfp = ImGui.GetCursorScreenPos();
+            this.Field(dl, "World", x, w, () =>
+            {
+                var wp = ImGui.GetCursorScreenPos();
+                if (this.FieldBox(dl, "world", string.Empty, wp.X, wp.Y, w, this.WorldLabel(), FontAwesomeIcon.ChevronDown, labelAbove: false))
+                    ImGui.OpenPopup("##ec_worldpop");
+                Block(wp, w, Ui.Px(44f));
+            });
+            if (this.pendingPopup == "##ec_worldpop")
+            {
+                this.popupAnchor = new Vector2(wfp.X + x, wfp.Y + Ui.Px(70f));
+                this.popupWidth = w;
+                ImGui.OpenPopup("##ec_worldpop");
+                this.pendingPopup = null;
+            }
         }
 
         if (this.venue == EventVenueEnum.Housing)
@@ -724,21 +751,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         return clicked;
     }
 
-    private void FieldBoxDisabled(ImDrawListPtr dl, string label, float x, float w, string value, string rightTag)
-    {
-        var pos = ImGui.GetCursorScreenPos();
-        Ui.TextAt(dl, this.fonts.Caption, new Vector2(pos.X + x, pos.Y), Palette.TextSecondary.U32(), label);
-        var top = pos.Y + Ui.Px(22f);
-        var h = Ui.Px(44f);
-        var min = new Vector2(pos.X + x, top);
-        var max = min + new Vector2(w, h);
-        dl.AddRectFilled(min, max, Palette.Surface2.U32());
-        Ui.TextAt(dl, this.fonts.Label, new Vector2(pos.X + x + Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Label, value).Y) * 0.5f)), Palette.TextPrimary.U32(), value);
-        var tagW = Ui.Measure(this.fonts.Eyebrow, rightTag).X;
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + x + w - tagW - Ui.Px(12f), top + ((h - Ui.Measure(this.fonts.Eyebrow, rightTag).Y) * 0.5f)), Palette.TextMuted.U32(), rightTag);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(22f) + Ui.Px(44f) + Ui.Px(22f)));
-    }
-
     // A labelled numeric stepper box (minus / serif value / plus).
     private int StepperBox(ImDrawListPtr dl, string label, float x, float y, float w, int value, int min, int max, int step = 1, bool labelInside = true)
     {
@@ -863,8 +875,43 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.ListPopup("##ec_zonepop", this.catalog.Zones.Select(z => z.Name).ToArray(), this.zoneIdx, i => { this.zoneIdx = i; this.aetheryteIdx = 0; });
         var aeth = this.AetherytesForZone();
         this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend("None").ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
+        this.WorldPopup();
         this.DatePopup();
         this.TimePopup();
+    }
+
+    // World picker: all worlds grouped by region then data center, host's world pre-selected.
+    private void WorldPopup()
+    {
+        var w = Math.Max(Ui.Px(200f), this.popupWidth);
+        var winW = w + (Ui.Px(8f) * 2f);
+        ImGui.SetNextWindowPos(this.PopupPos(winW), ImGuiCond.Appearing);
+        ImGui.SetNextWindowSizeConstraints(new Vector2(winW, 0f), new Vector2(winW, Ui.Px(360f)));
+        using (this.MenuStyle())
+        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+        {
+            if (!ImGui.BeginPopup("##ec_worldpop"))
+                return;
+            var rowW = ImGui.GetContentRegionAvail().X;
+            var dl = ImGui.GetWindowDrawList();
+            foreach (var region in new[] { RegionEnum.Na, RegionEnum.Eu, RegionEnum.Jp, RegionEnum.Oce })
+                foreach (var dc in this.worlds.DataCenters.Where(d => d.Region == region.ToString()))
+                {
+                    var hp = ImGui.GetCursorScreenPos();
+                    var headerH = Ui.Px(24f);
+                    var header = $"{RegionLabel(region)} · {dc.Name.ToUpperInvariant()}";
+                    Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(hp.X + Ui.Px(10f), hp.Y + ((headerH - Ui.Measure(this.fonts.Eyebrow, header).Y) * 0.5f)), Palette.TextMuted.U32(), header);
+                    ImGui.Dummy(new Vector2(rowW, headerH));
+                    foreach (var wld in dc.Worlds)
+                        if (this.MenuItem(rowW, wld.Name, (int)wld.Id == this.venueWorldId))
+                        {
+                            this.venueWorldId = (int)wld.Id;
+                            ImGui.CloseCurrentPopup();
+                        }
+                }
+
+            ImGui.EndPopup();
+        }
     }
 
     // Position a popup just below the field that opened it. Left-align under the field when the popup
@@ -1071,6 +1118,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private void Submit()
     {
         var venue = new EventVenueDto { Type = this.venue };
+        if (this.venue != EventVenueEnum.Discord && this.venueWorldId > 0)
+            venue.WorldId = this.venueWorldId;
         switch (this.venue)
         {
             case EventVenueEnum.Housing:
@@ -1163,16 +1212,22 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             }
         });
 
-    private string HostWorldName()
+    private string WorldLabel()
     {
-        if (this.profile.Mine?.WorldId is not { } id)
-            return string.Empty;
         foreach (var dc in this.worlds.DataCenters)
             foreach (var w in dc.Worlds)
-                if (w.Id == id)
-                    return w.Name;
-        return string.Empty;
+                if ((int)w.Id == this.venueWorldId)
+                    return $"{w.Name} · {dc.Name}";
+        return "Pick a world";
     }
+
+    private static string RegionLabel(RegionEnum region) => region switch
+    {
+        RegionEnum.Na => "NA",
+        RegionEnum.Eu => "EU",
+        RegionEnum.Jp => "JP",
+        _ => "OCE",
+    };
 
     private List<EventCatalog.Aetheryte> AetherytesForZone()
     {
