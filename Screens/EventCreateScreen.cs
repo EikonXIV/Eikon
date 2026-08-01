@@ -472,15 +472,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var x = pad;
         var w = width - (pad * 2f);
         var half = (w - Ui.Px(12f)) * 0.5f;
-        if (this.pendingPopup is { } pp)
-        {
-            var wp = ImGui.GetWindowPos();
-            this.popupAnchor = new Vector2(wp.X + pad, wp.Y + Ui.Px(120f));
-            this.calView = new DateTime(this.date.Year, this.date.Month, 1);
-            ImGui.OpenPopup(pp);
-            this.pendingPopup = null;
-        }
-
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
         // Date + Start fields, side by side.
@@ -493,6 +484,17 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
             ImGui.OpenPopup("##ec_timepop");
         Block(rp, w, FieldBlock);
+
+        // Harness (Vitrine): open a picker anchored to its real field, so a screenshot matches a click.
+        if (this.pendingPopup is { } pp)
+        {
+            var isTime = pp == "##ec_timepop";
+            this.popupAnchor = new Vector2(rp.X + x + (isTime ? half + Ui.Px(12f) : 0f), rp.Y + Ui.Px(70f));
+            this.popupWidth = half;
+            this.calView = new DateTime(this.date.Year, this.date.Month, 1);
+            ImGui.OpenPopup(pp);
+            this.pendingPopup = null;
+        }
 
         // Timezone.
         var tp = ImGui.GetCursorScreenPos();
@@ -842,12 +844,15 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.TimePopup();
     }
 
-    // Position a popup just below the field that opened it, clamped to stay on screen.
+    // Position a popup just below the field that opened it. Left-align under the field when the popup
+    // fits; otherwise hang it from the field's right edge (a right-aligned dropdown). Clamp to screen.
     private Vector2 PopupPos(float popupW)
     {
         var minX = this.windowLeft + Ui.Px(8f);
         var maxX = Math.Max(minX, this.windowRight - popupW - Ui.Px(8f));
-        return new Vector2(Math.Clamp(this.popupAnchor.X, minX, maxX), this.popupAnchor.Y);
+        var fieldLeft = this.popupAnchor.X;
+        var px = fieldLeft + popupW <= this.windowRight - Ui.Px(8f) ? fieldLeft : (fieldLeft + this.popupWidth) - popupW;
+        return new Vector2(Math.Clamp(px, minX, maxX), this.popupAnchor.Y);
     }
 
     private void ListPopup(string id, string[] items, int selected, Action<int> onPick)
