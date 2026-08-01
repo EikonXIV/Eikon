@@ -24,12 +24,17 @@ internal sealed class GridScreen : IScreen
     private readonly PhotoService photoSvc;
     private readonly Configuration config;
     private readonly FavoritesService favorites;
+    private readonly EventsBoardView eventsView;
 
     // Favorites is a filter over the same grid, not a separate screen: the chip swaps the source list
     // and everything else - header, tiles, density - stays exactly as it is.
     private bool favoritesOnly;
 
-    public GridScreen(ScreenRouter router, Kit kit, UiFonts fonts, DiscoveryService discovery, Selection selection, PhotoService photoSvc, Configuration config, FavoritesService favorites)
+    // People vs Events: a sub-tab within the Grid destination (the bottom-nav "Grid" item stays active
+    // for both), so the events board is not a fifth nav item. Same idea as favoritesOnly: swap the body.
+    private bool showEvents;
+
+    public GridScreen(ScreenRouter router, Kit kit, UiFonts fonts, DiscoveryService discovery, Selection selection, PhotoService photoSvc, Configuration config, FavoritesService favorites, EventsBoardView eventsView)
     {
         this.router = router;
         this.kit = kit;
@@ -39,11 +44,19 @@ internal sealed class GridScreen : IScreen
         this.photoSvc = photoSvc;
         this.config = config;
         this.favorites = favorites;
+        this.eventsView = eventsView;
     }
 
     public Screen Id => Screen.Grid;
 
     public bool Chrome => true;
+
+    // Harness seam (Vitrine has InternalsVisibleTo): open the Events sub-tab directly for a screenshot.
+    internal void ShowEventsTab()
+    {
+        this.showEvents = true;
+        this.eventsView.EnsureInitial();
+    }
 
     // Whichever list the Favorites chip has selected. Favorites arrive as one list, so the paging and
     // the "finding people" status below only apply to discovery.
@@ -52,6 +65,16 @@ internal sealed class GridScreen : IScreen
 
     public void Draw()
     {
+        var pad = Ui.Px(20f);
+        var fullWidth = ImGui.GetContentRegionAvail().X;
+        this.DrawTopToggle(fullWidth, pad);
+
+        if (this.showEvents)
+        {
+            this.eventsView.Draw(pad);
+            return;
+        }
+
         if (this.favoritesOnly)
             this.favorites.EnsureLoaded();
         else
@@ -59,7 +82,6 @@ internal sealed class GridScreen : IScreen
 
         var avail = ImGui.GetContentRegionAvail();
         var width = avail.X;
-        var pad = Ui.Px(20f);
 
         this.DrawHeader(width, pad);
         this.DrawChips(width, pad);
@@ -95,6 +117,51 @@ internal sealed class GridScreen : IScreen
             else if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - Ui.Px(240f))
                 this.discovery.LoadMore();
         }
+    }
+
+    // People / Events sub-tab row at the very top: two serif tabs with an underline under the active one.
+    // People shows the discovery grid; Events shows the board. Both keep the shell header + bottom nav.
+    private void DrawTopToggle(float width, float pad)
+    {
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var y = origin.Y + Ui.Px(12f);
+        var tabH = Ui.Measure(this.fonts.SerifName, "People").Y;
+        var x = origin.X + pad;
+        var hairY = y + tabH + Ui.Px(12f);
+        var activeX = 0f;
+        var activeW = 0f;
+
+        void Tab(string label, bool active, Action onClick)
+        {
+            var size = Ui.Measure(this.fonts.SerifName, label);
+            ImGui.SetCursorScreenPos(new Vector2(x, y));
+            if (ImGui.InvisibleButton($"##toptab_{label}", new Vector2(size.X, tabH)))
+                onClick();
+            var col = (active || ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32();
+            Ui.TextAt(dl, this.fonts.SerifName, new Vector2(x, y), col, label);
+            if (active)
+            {
+                activeX = x;
+                activeW = size.X;
+            }
+
+            x += size.X + Ui.Px(30f);
+        }
+
+        Tab("People", !this.showEvents, () => this.showEvents = false);
+        Tab("Events", this.showEvents, () =>
+        {
+            this.showEvents = true;
+            this.eventsView.EnsureInitial();
+        });
+
+        // The active tab's tick sits ON the full-width rule (coincident), like the bottom nav's active
+        // marker on its border: draw the faint rule, then overdraw the active segment in ink.
+        dl.AddLine(new Vector2(origin.X, hairY), new Vector2(origin.X + width, hairY), Palette.Border.U32(), 1f);
+        if (activeW > 0f)
+            dl.AddLine(new Vector2(activeX, hairY), new Vector2(activeX + activeW, hairY), Palette.TextPrimary.U32(), Ui.Px(1.5f));
+        ImGui.SetCursorScreenPos(new Vector2(origin.X, hairY));
     }
 
     private void DrawHeader(float width, float pad)

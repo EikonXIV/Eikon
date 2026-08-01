@@ -100,4 +100,17 @@ internal class StubApiClient : IApiClient
     public Task ApproveAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct) => throw new NotImplementedException();
     public Task DenyAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct) => throw new NotImplementedException();
     public Task<List<PeerAlbumDto>> ListPeerAlbumsAsync(string accessToken, string userId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<HousingReferenceResponse> GetHousingAsync(CancellationToken ct) => throw new NotImplementedException();
+    public Task<EventsResponse> ListEventsAsync(string accessToken, EventsQuery query, CancellationToken ct) => throw new NotImplementedException();
+    public Task<EventDto?> GetEventAsync(string accessToken, string eventId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<EventDto> CreateEventAsync(string accessToken, CreateEventRequest request, CancellationToken ct) => throw new NotImplementedException();
+    public Task UpdateEventAsync(string accessToken, string eventId, UpdateEventRequest request, CancellationToken ct) => throw new NotImplementedException();
+    public Task CancelEventAsync(string accessToken, string eventId, CancellationToken ct) => throw new NotImplementedException();
+    public Task RestoreEventAsync(string accessToken, string eventId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<string> RegenerateEventCodeAsync(string accessToken, string eventId, CancellationToken ct) => throw new NotImplementedException();
+    public Task DeleteEventAsync(string accessToken, string eventId, CancellationToken ct) => throw new NotImplementedException();
+    public Task UploadEventBannerAsync(string accessToken, string eventId, byte[] image, string contentType, CancellationToken ct) => throw new NotImplementedException();
+    public Task<string> EventBannerViewUrlAsync(string accessToken, string eventId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<(long Attending, bool SavedByMe)> SaveEventAsync(string accessToken, Guid eventId, bool on, CancellationToken ct) => throw new NotImplementedException();
+    public Task<EventDto?> LookupEventAsync(string accessToken, string code, CancellationToken ct) => throw new NotImplementedException();
 }

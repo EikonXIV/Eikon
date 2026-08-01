@@ -7,6 +7,7 @@
 //
 //    var addAlbumPhotoRequest = AddAlbumPhotoRequest.FromJson(jsonString);
 //    var addOneTimePreKeysRequest = AddOneTimePreKeysRequest.FromJson(jsonString);
+//    var aetheryteDto = AetheryteDto.FromJson(jsonString);
 //    var afterDarkDto = AfterDarkDto.FromJson(jsonString);
 //    var albumDto = AlbumDto.FromJson(jsonString);
 //    var albumGrantSource = AlbumGrantSource.FromJson(jsonString);
@@ -25,21 +26,39 @@
 //    var conversationSummaryDto = ConversationSummaryDto.FromJson(jsonString);
 //    var conversationsResponse = ConversationsResponse.FromJson(jsonString);
 //    var createAlbumRequest = CreateAlbumRequest.FromJson(jsonString);
+//    var createEventRequest = CreateEventRequest.FromJson(jsonString);
+//    var createEventResponse = CreateEventResponse.FromJson(jsonString);
 //    var dataCenterDto = DataCenterDto.FromJson(jsonString);
 //    var deleteAccountRequest = DeleteAccountRequest.FromJson(jsonString);
 //    var discoverQuery = DiscoverQuery.FromJson(jsonString);
 //    var discoverResult = DiscoverResult.FromJson(jsonString);
 //    var encryptedMessageDto = EncryptedMessageDto.FromJson(jsonString);
+//    var eventBannerUrlResponse = EventBannerUrlResponse.FromJson(jsonString);
+//    var eventCardDto = EventCardDto.FromJson(jsonString);
+//    var eventDto = EventDto.FromJson(jsonString);
+//    var eventKind = EventKind.FromJson(jsonString);
+//    var eventRating = EventRating.FromJson(jsonString);
+//    var eventRecurrence = EventRecurrence.FromJson(jsonString);
+//    var eventScope = EventScope.FromJson(jsonString);
+//    var eventVenue = EventVenue.FromJson(jsonString);
+//    var eventVenueDto = EventVenueDto.FromJson(jsonString);
+//    var eventVisibility = EventVisibility.FromJson(jsonString);
+//    var eventsQuery = EventsQuery.FromJson(jsonString);
+//    var eventsResponse = EventsResponse.FromJson(jsonString);
 //    var favoriteRequest = FavoriteRequest.FromJson(jsonString);
 //    var favoritesResponse = FavoritesResponse.FromJson(jsonString);
 //    var gender = Gender.FromJson(jsonString);
 //    var grantAlbumRequest = GrantAlbumRequest.FromJson(jsonString);
+//    var housingDistrict = HousingDistrict.FromJson(jsonString);
+//    var housingReferenceResponse = HousingReferenceResponse.FromJson(jsonString);
 //    var joinWaitlistRequest = JoinWaitlistRequest.FromJson(jsonString);
 //    var keyBundleDto = KeyBundleDto.FromJson(jsonString);
 //    var loginPollRequest = LoginPollRequest.FromJson(jsonString);
 //    var loginPollResponse = LoginPollResponse.FromJson(jsonString);
 //    var loginStartResponse = LoginStartResponse.FromJson(jsonString);
 //    var lookingFor = LookingFor.FromJson(jsonString);
+//    var lookupEventRequest = LookupEventRequest.FromJson(jsonString);
+//    var lookupEventResponse = LookupEventResponse.FromJson(jsonString);
 //    var meet = Meet.FromJson(jsonString);
 //    var moderationKeyResponse = ModerationKeyResponse.FromJson(jsonString);
 //    var peerAlbumAccess = PeerAlbumAccess.FromJson(jsonString);
@@ -58,24 +77,29 @@
 //    var redeemInviteRequest = RedeemInviteRequest.FromJson(jsonString);
 //    var redeemInviteResponse = RedeemInviteResponse.FromJson(jsonString);
 //    var refreshRequest = RefreshRequest.FromJson(jsonString);
+//    var regenerateCodeResponse = RegenerateCodeResponse.FromJson(jsonString);
 //    var region = Region.FromJson(jsonString);
 //    var reorderPhotosRequest = ReorderPhotosRequest.FromJson(jsonString);
 //    var reportReason = ReportReason.FromJson(jsonString);
 //    var reportRequest = ReportRequest.FromJson(jsonString);
 //    var requestAlbumAccessRequest = RequestAlbumAccessRequest.FromJson(jsonString);
 //    var role = Role.FromJson(jsonString);
+//    var saveEventRequest = SaveEventRequest.FromJson(jsonString);
+//    var saveEventResponse = SaveEventResponse.FromJson(jsonString);
 //    var saveProfileRequest = SaveProfileRequest.FromJson(jsonString);
 //    var sendMessageRequest = SendMessageRequest.FromJson(jsonString);
 //    var sessionTokens = SessionTokens.FromJson(jsonString);
 //    var size = Size.FromJson(jsonString);
 //    var tribe = Tribe.FromJson(jsonString);
 //    var updateAlbumRequest = UpdateAlbumRequest.FromJson(jsonString);
+//    var updateEventRequest = UpdateEventRequest.FromJson(jsonString);
 //    var verifyPollResponse = VerifyPollResponse.FromJson(jsonString);
 //    var verifyStartResponse = VerifyStartResponse.FromJson(jsonString);
 //    var worldCatalogResponse = WorldCatalogResponse.FromJson(jsonString);
 //    var worldDto = WorldDto.FromJson(jsonString);
 //    var wsClientFrame = WsClientFrame.FromJson(jsonString);
 //    var wsServerFrame = WsServerFrame.FromJson(jsonString);
+//    var zoneDto = ZoneDto.FromJson(jsonString);
 #nullable enable
 #pragma warning disable CS8618
 #pragma warning disable CS8601
@@ -224,7 +248,7 @@ namespace Eikon.Contracts
         public long SharedCount { get; set; }
 
         [JsonPropertyName("visibility")]
-        public AlbumVisibilityEnum Visibility { get; set; }
+        public Visibility Visibility { get; set; }
     }
 
     public partial class BlockRequest
@@ -294,14 +318,227 @@ namespace Eikon.Contracts
         public string Name { get; set; }
 
         [JsonPropertyName("visibility")]
-        public AlbumVisibilityEnum Visibility { get; set; }
+        public Visibility Visibility { get; set; }
+    }
+
+    public partial class CreateEventRequest
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("bannerBase64")]
+        [JsonConverter(typeof(PurpleMinMaxLengthCheckConverter))]
+        public string BannerBase64 { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("bannerContentType")]
+        public ContentType? BannerContentType { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("bannerPreset")]
+        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
+        public string BannerPreset { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("capacity")]
+        public long? Capacity { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("description")]
+        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
+        public string Description { get; set; }
+
+        [JsonPropertyName("durationMins")]
+        public long DurationMins { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("entryCode")]
+        [JsonConverter(typeof(IndigoMinMaxLengthCheckConverter))]
+        public string EntryCode { get; set; }
+
+        [JsonPropertyName("hostClock")]
+        [JsonConverter(typeof(IndecentMinMaxLengthCheckConverter))]
+        public string HostClock { get; set; }
+
+        [JsonPropertyName("hostTz")]
+        [JsonConverter(typeof(HilariousMinMaxLengthCheckConverter))]
+        public string HostTz { get; set; }
+
+        [JsonPropertyName("hostTzLabel")]
+        [JsonConverter(typeof(AmbitiousMinMaxLengthCheckConverter))]
+        public string HostTzLabel { get; set; }
+
+        [JsonPropertyName("kind")]
+        public EventKindElement Kind { get; set; }
+
+        [JsonPropertyName("rating")]
+        public EventRatingEnum Rating { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("recurrence")]
+        public EventRecurrenceEnum? Recurrence { get; set; }
+
+        [JsonPropertyName("scope")]
+        public EventScopeEnum Scope { get; set; }
+
+        [JsonPropertyName("startsAt")]
+        public DateTimeOffset StartsAt { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("tags")]
+        public List<string> Tags { get; set; }
+
+        [JsonPropertyName("title")]
+        [JsonConverter(typeof(CunningMinMaxLengthCheckConverter))]
+        public string Title { get; set; }
+
+        [JsonPropertyName("venue")]
+        public EventVenueDto Venue { get; set; }
+
+        [JsonPropertyName("visibility")]
+        public Visibility Visibility { get; set; }
+    }
+
+    public partial class EventVenueDto
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("aetheryteId")]
+        public long? AetheryteId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("discordNote")]
+        [JsonConverter(typeof(MagentaMinMaxLengthCheckConverter))]
+        public string DiscordNote { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("discordUrl")]
+        public string DiscordUrl { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("district")]
+        public HousingDistrictEnum? District { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("plot")]
+        public long? Plot { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("room")]
+        public long? Room { get; set; }
+
+        [JsonPropertyName("type")]
+        public EventVenueEnum Type { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("ward")]
+        public long? Ward { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("worldId")]
+        public long? WorldId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("zoneId")]
+        public long? ZoneId { get; set; }
+    }
+
+    public partial class CreateEventResponse
+    {
+        [JsonPropertyName("event")]
+        public EventDto Event { get; set; }
+    }
+
+    public partial class EventDto
+    {
+        [JsonPropertyName("attending")]
+        public long Attending { get; set; }
+
+        [JsonPropertyName("bannerPreset")]
+        public string BannerPreset { get; set; }
+
+        [JsonPropertyName("bannerUploaded")]
+        public bool BannerUploaded { get; set; }
+
+        [JsonPropertyName("cancelled")]
+        public bool Cancelled { get; set; }
+
+        [JsonPropertyName("capacity")]
+        public long? Capacity { get; set; }
+
+        [JsonPropertyName("createdAt")]
+        public DateTimeOffset CreatedAt { get; set; }
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; }
+
+        [JsonPropertyName("durationMins")]
+        public long DurationMins { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("entryCode")]
+        public string EntryCode { get; set; }
+
+        [JsonPropertyName("hostClock")]
+        public string HostClock { get; set; }
+
+        [JsonPropertyName("hostHandle")]
+        public string HostHandle { get; set; }
+
+        [JsonPropertyName("hostId")]
+        public Guid HostId { get; set; }
+
+        [JsonPropertyName("hosting")]
+        public bool Hosting { get; set; }
+
+        [JsonPropertyName("hostName")]
+        public string HostName { get; set; }
+
+        [JsonPropertyName("hostTz")]
+        public string HostTz { get; set; }
+
+        [JsonPropertyName("hostTzLabel")]
+        public string HostTzLabel { get; set; }
+
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+
+        [JsonPropertyName("kind")]
+        public EventKindElement Kind { get; set; }
+
+        [JsonPropertyName("rating")]
+        public EventRatingEnum Rating { get; set; }
+
+        [JsonPropertyName("recurrence")]
+        public EventRecurrenceEnum Recurrence { get; set; }
+
+        [JsonPropertyName("savedByMe")]
+        public bool SavedByMe { get; set; }
+
+        [JsonPropertyName("scope")]
+        public EventScopeEnum Scope { get; set; }
+
+        [JsonPropertyName("startsAt")]
+        public DateTimeOffset StartsAt { get; set; }
+
+        [JsonPropertyName("tags")]
+        public List<string> Tags { get; set; }
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; }
+
+        [JsonPropertyName("updatedAt")]
+        public DateTimeOffset UpdatedAt { get; set; }
+
+        [JsonPropertyName("venue")]
+        public EventVenueDto Venue { get; set; }
+
+        [JsonPropertyName("visibility")]
+        public Visibility Visibility { get; set; }
     }
 
     public partial class DeleteAccountRequest
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("note")]
-        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
         public string Note { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -349,7 +586,7 @@ namespace Eikon.Contracts
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("tier")]
-        public Tier? Tier { get; set; }
+        public EventScopeEnum? Tier { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("tribes")]
@@ -395,6 +632,115 @@ namespace Eikon.Contracts
         public string World { get; set; }
     }
 
+    public partial class EventBannerUrlResponse
+    {
+        [JsonPropertyName("expiresAt")]
+        public DateTimeOffset ExpiresAt { get; set; }
+
+        [JsonPropertyName("url")]
+        public Uri Url { get; set; }
+    }
+
+    public partial class EventsQuery
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("cursor")]
+        public string Cursor { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("kinds")]
+        public List<EventKindElement> Kinds { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("scope")]
+        public EventScopeEnum? Scope { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("tab")]
+        public Tab? Tab { get; set; }
+    }
+
+    public partial class EventsResponse
+    {
+        [JsonPropertyName("events")]
+        public List<EventCardDto> Events { get; set; }
+
+        [JsonPropertyName("nextCursor")]
+        public string NextCursor { get; set; }
+    }
+
+    public partial class EventCardDto
+    {
+        [JsonPropertyName("attending")]
+        public long Attending { get; set; }
+
+        [JsonPropertyName("bannerPreset")]
+        public string BannerPreset { get; set; }
+
+        [JsonPropertyName("bannerUploaded")]
+        public bool BannerUploaded { get; set; }
+
+        [JsonPropertyName("cancelled")]
+        public bool Cancelled { get; set; }
+
+        [JsonPropertyName("capacity")]
+        public long? Capacity { get; set; }
+
+        [JsonPropertyName("durationMins")]
+        public long DurationMins { get; set; }
+
+        [JsonPropertyName("hostClock")]
+        public string HostClock { get; set; }
+
+        [JsonPropertyName("hostHandle")]
+        public string HostHandle { get; set; }
+
+        [JsonPropertyName("hostId")]
+        public Guid HostId { get; set; }
+
+        [JsonPropertyName("hosting")]
+        public bool Hosting { get; set; }
+
+        [JsonPropertyName("hostName")]
+        public string HostName { get; set; }
+
+        [JsonPropertyName("hostTz")]
+        public string HostTz { get; set; }
+
+        [JsonPropertyName("hostTzLabel")]
+        public string HostTzLabel { get; set; }
+
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+
+        [JsonPropertyName("kind")]
+        public EventKindElement Kind { get; set; }
+
+        [JsonPropertyName("rating")]
+        public EventRatingEnum Rating { get; set; }
+
+        [JsonPropertyName("recurrence")]
+        public EventRecurrenceEnum Recurrence { get; set; }
+
+        [JsonPropertyName("savedByMe")]
+        public bool SavedByMe { get; set; }
+
+        [JsonPropertyName("scope")]
+        public EventScopeEnum Scope { get; set; }
+
+        [JsonPropertyName("startsAt")]
+        public DateTimeOffset StartsAt { get; set; }
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; }
+
+        [JsonPropertyName("venue")]
+        public EventVenueDto Venue { get; set; }
+
+        [JsonPropertyName("visibility")]
+        public Visibility Visibility { get; set; }
+    }
+
     public partial class FavoriteRequest
     {
         [JsonPropertyName("on")]
@@ -420,6 +766,48 @@ namespace Eikon.Contracts
         public AlbumGrantSourceEnum? Source { get; set; }
     }
 
+    public partial class HousingReferenceResponse
+    {
+        [JsonPropertyName("aetherytes")]
+        public List<AetheryteDto> Aetherytes { get; set; }
+
+        [JsonPropertyName("districts")]
+        public List<District> Districts { get; set; }
+
+        [JsonPropertyName("zones")]
+        public List<ZoneDto> Zones { get; set; }
+    }
+
+    public partial class AetheryteDto
+    {
+        [JsonPropertyName("id")]
+        public long Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+
+        [JsonPropertyName("zoneId")]
+        public long ZoneId { get; set; }
+    }
+
+    public partial class District
+    {
+        [JsonPropertyName("key")]
+        public HousingDistrictEnum Key { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+    }
+
+    public partial class ZoneDto
+    {
+        [JsonPropertyName("id")]
+        public long Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+    }
+
     public partial class JoinWaitlistRequest
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -427,7 +815,7 @@ namespace Eikon.Contracts
         public long? DcId { get; set; }
 
         [JsonPropertyName("discord")]
-        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(FriskyMinMaxLengthCheckConverter))]
         public string Discord { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -510,6 +898,19 @@ namespace Eikon.Contracts
 
         [JsonPropertyName("txnId")]
         public string TxnId { get; set; }
+    }
+
+    public partial class LookupEventRequest
+    {
+        [JsonPropertyName("code")]
+        [JsonConverter(typeof(IndigoMinMaxLengthCheckConverter))]
+        public string Code { get; set; }
+    }
+
+    public partial class LookupEventResponse
+    {
+        [JsonPropertyName("event")]
+        public EventDto Event { get; set; }
     }
 
     public partial class ModerationKeyResponse
@@ -717,6 +1118,12 @@ namespace Eikon.Contracts
         public string RefreshToken { get; set; }
     }
 
+    public partial class RegenerateCodeResponse
+    {
+        [JsonPropertyName("entryCode")]
+        public string EntryCode { get; set; }
+    }
+
     public partial class ReorderPhotosRequest
     {
         [JsonPropertyName("orderedIds")]
@@ -727,8 +1134,12 @@ namespace Eikon.Contracts
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("details")]
-        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
         public string Details { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("eventId")]
+        public Guid? EventId { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("photoId")]
@@ -739,7 +1150,7 @@ namespace Eikon.Contracts
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("sealedEvidence")]
-        [JsonConverter(typeof(IndigoMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(MischievousMinMaxLengthCheckConverter))]
         public string SealedEvidence { get; set; }
 
         [JsonPropertyName("targetId")]
@@ -750,6 +1161,24 @@ namespace Eikon.Contracts
     {
         [JsonPropertyName("albumId")]
         public Guid AlbumId { get; set; }
+    }
+
+    public partial class SaveEventRequest
+    {
+        [JsonPropertyName("eventId")]
+        public Guid EventId { get; set; }
+
+        [JsonPropertyName("on")]
+        public bool On { get; set; }
+    }
+
+    public partial class SaveEventResponse
+    {
+        [JsonPropertyName("attending")]
+        public long Attending { get; set; }
+
+        [JsonPropertyName("savedByMe")]
+        public bool SavedByMe { get; set; }
     }
 
     public partial class SaveProfileRequest
@@ -763,11 +1192,11 @@ namespace Eikon.Contracts
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("bio")]
-        [JsonConverter(typeof(IndecentMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(BraggadociousMinMaxLengthCheckConverter))]
         public string Bio { get; set; }
 
         [JsonPropertyName("displayName")]
-        [JsonConverter(typeof(HilariousMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(MinMaxLengthCheckConverter1))]
         public string DisplayName { get; set; }
 
         [JsonPropertyName("gender")]
@@ -775,7 +1204,7 @@ namespace Eikon.Contracts
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("genderCustom")]
-        [JsonConverter(typeof(AmbitiousMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(MinMaxLengthCheckConverter2))]
         public string GenderCustom { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -799,7 +1228,7 @@ namespace Eikon.Contracts
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("pronounCustom")]
-        [JsonConverter(typeof(AmbitiousMinMaxLengthCheckConverter))]
+        [JsonConverter(typeof(MinMaxLengthCheckConverter2))]
         public string PronounCustom { get; set; }
 
         [JsonPropertyName("races")]
@@ -827,7 +1256,84 @@ namespace Eikon.Contracts
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("visibility")]
-        public AlbumVisibilityEnum? Visibility { get; set; }
+        public Visibility? Visibility { get; set; }
+    }
+
+    public partial class UpdateEventRequest
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("bannerPreset")]
+        [JsonConverter(typeof(TentacledMinMaxLengthCheckConverter))]
+        public string BannerPreset { get; set; }
+
+        [JsonPropertyName("capacity")]
+        public long? Capacity { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("description")]
+        [JsonConverter(typeof(StickyMinMaxLengthCheckConverter))]
+        public string Description { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("durationMins")]
+        public long? DurationMins { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("entryCode")]
+        [JsonConverter(typeof(IndigoMinMaxLengthCheckConverter))]
+        public string EntryCode { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("hostClock")]
+        [JsonConverter(typeof(IndecentMinMaxLengthCheckConverter))]
+        public string HostClock { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("hostTz")]
+        [JsonConverter(typeof(HilariousMinMaxLengthCheckConverter))]
+        public string HostTz { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("hostTzLabel")]
+        [JsonConverter(typeof(AmbitiousMinMaxLengthCheckConverter))]
+        public string HostTzLabel { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("kind")]
+        public EventKindElement? Kind { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("rating")]
+        public EventRatingEnum? Rating { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("recurrence")]
+        public EventRecurrenceEnum? Recurrence { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("scope")]
+        public EventScopeEnum? Scope { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("startsAt")]
+        public DateTimeOffset? StartsAt { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("tags")]
+        public List<string> Tags { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("title")]
+        [JsonConverter(typeof(CunningMinMaxLengthCheckConverter))]
+        public string Title { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("venue")]
+        public EventVenueDto Venue { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("visibility")]
+        public Visibility? Visibility { get; set; }
     }
 
     public partial class VerifyPollResponse
@@ -1017,7 +1523,19 @@ namespace Eikon.Contracts
 
     public enum AlbumGrantSourceEnum { Chat, Profile, Request };
 
-    public enum AlbumVisibilityEnum { Private, Public };
+    public enum Visibility { Private, Public };
+
+    public enum EventKindElement { Club, Gathering, Market, Performance, Raid, Roleplay };
+
+    public enum EventRatingEnum { Ad, Sfw };
+
+    public enum EventRecurrenceEnum { Biweekly, Monthly, None, Weekly };
+
+    public enum EventScopeEnum { Dc, Region, World };
+
+    public enum HousingDistrictEnum { Empyreum, Goblet, LavenderBeds, Mist, Shirogane };
+
+    public enum EventVenueEnum { Discord, Housing, OpenWorld };
 
     public enum GenderElement { CisMan, Custom, Genderqueer, Intersex, NonBinary, TransMan, Transmasc };
 
@@ -1027,11 +1545,11 @@ namespace Eikon.Contracts
 
     public enum RaceElement { AuRa, Elezen, Hrothgar, Hyur, Lalafell, Miqote, Roegadyn, Viera };
 
-    public enum Tier { Dc, Region, World };
-
     public enum TribeElement { Bear, Cub, Daddy, Discreet, Femboy, Furry, Geek, Jock, Leather, Muscle, Otter, Pup, Rugged, Trans, Twink, Twunk, Wolf };
 
     public enum Proximity { SameDc, SameRegion, SameWorld };
+
+    public enum Tab { Browse, Hosting, Saved };
 
     public enum RegionEnum { Eu, Jp, Na, Oce };
 
@@ -1063,6 +1581,11 @@ namespace Eikon.Contracts
     public partial class AddOneTimePreKeysRequest
     {
         public static AddOneTimePreKeysRequest FromJson(string json) => JsonSerializer.Deserialize<AddOneTimePreKeysRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class AetheryteDto
+    {
+        public static AetheryteDto FromJson(string json) => JsonSerializer.Deserialize<AetheryteDto>(json, Eikon.Contracts.Converter.Settings);
     }
 
     public partial class AfterDarkDto
@@ -1112,7 +1635,7 @@ namespace Eikon.Contracts
 
     public class AlbumVisibility
     {
-        public static AlbumVisibilityEnum FromJson(string json) => JsonSerializer.Deserialize<AlbumVisibilityEnum>(json, Eikon.Contracts.Converter.Settings);
+        public static Visibility FromJson(string json) => JsonSerializer.Deserialize<Visibility>(json, Eikon.Contracts.Converter.Settings);
     }
 
     public partial class AlbumsResponse
@@ -1155,6 +1678,16 @@ namespace Eikon.Contracts
         public static CreateAlbumRequest FromJson(string json) => JsonSerializer.Deserialize<CreateAlbumRequest>(json, Eikon.Contracts.Converter.Settings);
     }
 
+    public partial class CreateEventRequest
+    {
+        public static CreateEventRequest FromJson(string json) => JsonSerializer.Deserialize<CreateEventRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class CreateEventResponse
+    {
+        public static CreateEventResponse FromJson(string json) => JsonSerializer.Deserialize<CreateEventResponse>(json, Eikon.Contracts.Converter.Settings);
+    }
+
     public partial class DataCenterDto
     {
         public static DataCenterDto FromJson(string json) => JsonSerializer.Deserialize<DataCenterDto>(json, Eikon.Contracts.Converter.Settings);
@@ -1180,6 +1713,66 @@ namespace Eikon.Contracts
         public static EncryptedMessageDto FromJson(string json) => JsonSerializer.Deserialize<EncryptedMessageDto>(json, Eikon.Contracts.Converter.Settings);
     }
 
+    public partial class EventBannerUrlResponse
+    {
+        public static EventBannerUrlResponse FromJson(string json) => JsonSerializer.Deserialize<EventBannerUrlResponse>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class EventCardDto
+    {
+        public static EventCardDto FromJson(string json) => JsonSerializer.Deserialize<EventCardDto>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class EventDto
+    {
+        public static EventDto FromJson(string json) => JsonSerializer.Deserialize<EventDto>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class EventKind
+    {
+        public static EventKindElement FromJson(string json) => JsonSerializer.Deserialize<EventKindElement>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class EventRating
+    {
+        public static EventRatingEnum FromJson(string json) => JsonSerializer.Deserialize<EventRatingEnum>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class EventRecurrence
+    {
+        public static EventRecurrenceEnum FromJson(string json) => JsonSerializer.Deserialize<EventRecurrenceEnum>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class EventScope
+    {
+        public static EventScopeEnum FromJson(string json) => JsonSerializer.Deserialize<EventScopeEnum>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class EventVenue
+    {
+        public static EventVenueEnum FromJson(string json) => JsonSerializer.Deserialize<EventVenueEnum>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class EventVenueDto
+    {
+        public static EventVenueDto FromJson(string json) => JsonSerializer.Deserialize<EventVenueDto>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class EventVisibility
+    {
+        public static Visibility FromJson(string json) => JsonSerializer.Deserialize<Visibility>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class EventsQuery
+    {
+        public static EventsQuery FromJson(string json) => JsonSerializer.Deserialize<EventsQuery>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class EventsResponse
+    {
+        public static EventsResponse FromJson(string json) => JsonSerializer.Deserialize<EventsResponse>(json, Eikon.Contracts.Converter.Settings);
+    }
+
     public partial class FavoriteRequest
     {
         public static FavoriteRequest FromJson(string json) => JsonSerializer.Deserialize<FavoriteRequest>(json, Eikon.Contracts.Converter.Settings);
@@ -1198,6 +1791,16 @@ namespace Eikon.Contracts
     public partial class GrantAlbumRequest
     {
         public static GrantAlbumRequest FromJson(string json) => JsonSerializer.Deserialize<GrantAlbumRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public class HousingDistrict
+    {
+        public static HousingDistrictEnum FromJson(string json) => JsonSerializer.Deserialize<HousingDistrictEnum>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class HousingReferenceResponse
+    {
+        public static HousingReferenceResponse FromJson(string json) => JsonSerializer.Deserialize<HousingReferenceResponse>(json, Eikon.Contracts.Converter.Settings);
     }
 
     public partial class JoinWaitlistRequest
@@ -1228,6 +1831,16 @@ namespace Eikon.Contracts
     public class LookingFor
     {
         public static LookingForElement FromJson(string json) => JsonSerializer.Deserialize<LookingForElement>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class LookupEventRequest
+    {
+        public static LookupEventRequest FromJson(string json) => JsonSerializer.Deserialize<LookupEventRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class LookupEventResponse
+    {
+        public static LookupEventResponse FromJson(string json) => JsonSerializer.Deserialize<LookupEventResponse>(json, Eikon.Contracts.Converter.Settings);
     }
 
     public class Meet
@@ -1320,6 +1933,11 @@ namespace Eikon.Contracts
         public static RefreshRequest FromJson(string json) => JsonSerializer.Deserialize<RefreshRequest>(json, Eikon.Contracts.Converter.Settings);
     }
 
+    public partial class RegenerateCodeResponse
+    {
+        public static RegenerateCodeResponse FromJson(string json) => JsonSerializer.Deserialize<RegenerateCodeResponse>(json, Eikon.Contracts.Converter.Settings);
+    }
+
     public class Region
     {
         public static RegionEnum FromJson(string json) => JsonSerializer.Deserialize<RegionEnum>(json, Eikon.Contracts.Converter.Settings);
@@ -1348,6 +1966,16 @@ namespace Eikon.Contracts
     public class Role
     {
         public static RoleEnum FromJson(string json) => JsonSerializer.Deserialize<RoleEnum>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class SaveEventRequest
+    {
+        public static SaveEventRequest FromJson(string json) => JsonSerializer.Deserialize<SaveEventRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
+    public partial class SaveEventResponse
+    {
+        public static SaveEventResponse FromJson(string json) => JsonSerializer.Deserialize<SaveEventResponse>(json, Eikon.Contracts.Converter.Settings);
     }
 
     public partial class SaveProfileRequest
@@ -1380,6 +2008,11 @@ namespace Eikon.Contracts
         public static UpdateAlbumRequest FromJson(string json) => JsonSerializer.Deserialize<UpdateAlbumRequest>(json, Eikon.Contracts.Converter.Settings);
     }
 
+    public partial class UpdateEventRequest
+    {
+        public static UpdateEventRequest FromJson(string json) => JsonSerializer.Deserialize<UpdateEventRequest>(json, Eikon.Contracts.Converter.Settings);
+    }
+
     public partial class VerifyPollResponse
     {
         public static VerifyPollResponse FromJson(string json) => JsonSerializer.Deserialize<VerifyPollResponse>(json, Eikon.Contracts.Converter.Settings);
@@ -1410,10 +2043,16 @@ namespace Eikon.Contracts
         public static WsServerFrame FromJson(string json) => JsonSerializer.Deserialize<WsServerFrame>(json, Eikon.Contracts.Converter.Settings);
     }
 
+    public partial class ZoneDto
+    {
+        public static ZoneDto FromJson(string json) => JsonSerializer.Deserialize<ZoneDto>(json, Eikon.Contracts.Converter.Settings);
+    }
+
     public static class Serialize
     {
         public static string ToJson(this AddAlbumPhotoRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AddOneTimePreKeysRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this AetheryteDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AfterDarkDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AlbumDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AlbumGrantSourceEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
@@ -1423,7 +2062,7 @@ namespace Eikon.Contracts
         public static string ToJson(this AlbumRequestDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AlbumRequesterDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AlbumRequestsResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
-        public static string ToJson(this AlbumVisibilityEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this Visibility self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AlbumsResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this AttachmentDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this BasicProfileDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
@@ -1432,21 +2071,38 @@ namespace Eikon.Contracts
         public static string ToJson(this ConversationSummaryDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this ConversationsResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this CreateAlbumRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this CreateEventRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this CreateEventResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DataCenterDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DeleteAccountRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DiscoverQuery self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this DiscoverResult self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this EncryptedMessageDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventBannerUrlResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventCardDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventKindElement self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventRatingEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventRecurrenceEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventScopeEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventVenueEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventVenueDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventsQuery self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this EventsResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this FavoriteRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this FavoritesResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this GenderElement self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this GrantAlbumRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this HousingDistrictEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this HousingReferenceResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this JoinWaitlistRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this KeyBundleDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this LoginPollRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this LoginPollResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this LoginStartResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this LookingForElement self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this LookupEventRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this LookupEventResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this MeetElement self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this ModerationKeyResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this PeerAlbumAccessEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
@@ -1465,24 +2121,29 @@ namespace Eikon.Contracts
         public static string ToJson(this RedeemInviteRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this RedeemInviteResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this RefreshRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this RegenerateCodeResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this RegionEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this ReorderPhotosRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this ReportReasonEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this ReportRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this RequestAlbumAccessRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this RoleEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this SaveEventRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this SaveEventResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this SaveProfileRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this SendMessageRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this SessionTokens self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this SizeEnum self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this TribeElement self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this UpdateAlbumRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this UpdateEventRequest self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this VerifyPollResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this VerifyStartResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this WorldCatalogResponse self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this WorldDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this WsClientFrame self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
         public static string ToJson(this WsServerFrame self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
+        public static string ToJson(this ZoneDto self) => JsonSerializer.Serialize(self, Eikon.Contracts.Converter.Settings);
     }
 
     internal static class Converter
@@ -1496,15 +2157,21 @@ namespace Eikon.Contracts
                 PositionElementConverter.Singleton,
                 RoleEnumConverter.Singleton,
                 SizeEnumConverter.Singleton,
-                AlbumVisibilityEnumConverter.Singleton,
+                VisibilityConverter.Singleton,
                 AlbumGrantSourceEnumConverter.Singleton,
                 LookingForElementConverter.Singleton,
                 ProximityConverter.Singleton,
+                EventKindElementConverter.Singleton,
+                EventRatingEnumConverter.Singleton,
+                EventRecurrenceEnumConverter.Singleton,
+                EventScopeEnumConverter.Singleton,
+                HousingDistrictEnumConverter.Singleton,
+                EventVenueEnumConverter.Singleton,
                 RegionEnumConverter.Singleton,
                 GenderElementConverter.Singleton,
                 RaceElementConverter.Singleton,
-                TierConverter.Singleton,
                 TribeElementConverter.Singleton,
+                TabConverter.Singleton,
                 StatusConverter.Singleton,
                 PeerAlbumAccessEnumConverter.Singleton,
                 PhotoStateEnumConverter.Singleton,
@@ -1788,38 +2455,38 @@ namespace Eikon.Contracts
         public static readonly FluffyMinMaxLengthCheckConverter Singleton = new FluffyMinMaxLengthCheckConverter();
     }
 
-    internal class AlbumVisibilityEnumConverter : JsonConverter<AlbumVisibilityEnum>
+    internal class VisibilityConverter : JsonConverter<Visibility>
     {
-        public override bool CanConvert(Type t) => t == typeof(AlbumVisibilityEnum);
+        public override bool CanConvert(Type t) => t == typeof(Visibility);
 
-        public override AlbumVisibilityEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override Visibility Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             var value = reader.GetString();
             switch (value)
             {
                 case "private":
-                    return AlbumVisibilityEnum.Private;
+                    return Visibility.Private;
                 case "public":
-                    return AlbumVisibilityEnum.Public;
+                    return Visibility.Public;
             }
-            throw new Exception("Cannot unmarshal type AlbumVisibilityEnum");
+            throw new Exception("Cannot unmarshal type Visibility");
         }
 
-        public override void Write(Utf8JsonWriter writer, AlbumVisibilityEnum value, JsonSerializerOptions options)
+        public override void Write(Utf8JsonWriter writer, Visibility value, JsonSerializerOptions options)
         {
             switch (value)
             {
-                case AlbumVisibilityEnum.Private:
+                case Visibility.Private:
                     JsonSerializer.Serialize(writer, "private", options);
                     return;
-                case AlbumVisibilityEnum.Public:
+                case Visibility.Public:
                     JsonSerializer.Serialize(writer, "public", options);
                     return;
             }
-            throw new Exception("Cannot marshal type AlbumVisibilityEnum");
+            throw new Exception("Cannot marshal type Visibility");
         }
 
-        public static readonly AlbumVisibilityEnumConverter Singleton = new AlbumVisibilityEnumConverter();
+        public static readonly VisibilityConverter Singleton = new VisibilityConverter();
     }
 
     internal class AlbumGrantSourceEnumConverter : JsonConverter<AlbumGrantSourceEnum>
@@ -1979,6 +2646,481 @@ namespace Eikon.Contracts
         public static readonly ProximityConverter Singleton = new ProximityConverter();
     }
 
+    internal class TentacledMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length <= 40)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length <= 40)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly TentacledMinMaxLengthCheckConverter Singleton = new TentacledMinMaxLengthCheckConverter();
+    }
+
+    internal class StickyMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length <= 1000)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length <= 1000)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly StickyMinMaxLengthCheckConverter Singleton = new StickyMinMaxLengthCheckConverter();
+    }
+
+    internal class IndigoMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length >= 4 && value.Length <= 8)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length >= 4 && value.Length <= 8)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly IndigoMinMaxLengthCheckConverter Singleton = new IndigoMinMaxLengthCheckConverter();
+    }
+
+    internal class IndecentMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length >= 1 && value.Length <= 5)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length >= 1 && value.Length <= 5)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly IndecentMinMaxLengthCheckConverter Singleton = new IndecentMinMaxLengthCheckConverter();
+    }
+
+    internal class HilariousMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length >= 1 && value.Length <= 64)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length >= 1 && value.Length <= 64)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly HilariousMinMaxLengthCheckConverter Singleton = new HilariousMinMaxLengthCheckConverter();
+    }
+
+    internal class AmbitiousMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length >= 1 && value.Length <= 8)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length >= 1 && value.Length <= 8)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly AmbitiousMinMaxLengthCheckConverter Singleton = new AmbitiousMinMaxLengthCheckConverter();
+    }
+
+    internal class EventKindElementConverter : JsonConverter<EventKindElement>
+    {
+        public override bool CanConvert(Type t) => t == typeof(EventKindElement);
+
+        public override EventKindElement Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "club":
+                    return EventKindElement.Club;
+                case "gathering":
+                    return EventKindElement.Gathering;
+                case "market":
+                    return EventKindElement.Market;
+                case "performance":
+                    return EventKindElement.Performance;
+                case "raid":
+                    return EventKindElement.Raid;
+                case "roleplay":
+                    return EventKindElement.Roleplay;
+            }
+            throw new Exception("Cannot unmarshal type EventKindElement");
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventKindElement value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case EventKindElement.Club:
+                    JsonSerializer.Serialize(writer, "club", options);
+                    return;
+                case EventKindElement.Gathering:
+                    JsonSerializer.Serialize(writer, "gathering", options);
+                    return;
+                case EventKindElement.Market:
+                    JsonSerializer.Serialize(writer, "market", options);
+                    return;
+                case EventKindElement.Performance:
+                    JsonSerializer.Serialize(writer, "performance", options);
+                    return;
+                case EventKindElement.Raid:
+                    JsonSerializer.Serialize(writer, "raid", options);
+                    return;
+                case EventKindElement.Roleplay:
+                    JsonSerializer.Serialize(writer, "roleplay", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type EventKindElement");
+        }
+
+        public static readonly EventKindElementConverter Singleton = new EventKindElementConverter();
+    }
+
+    internal class EventRatingEnumConverter : JsonConverter<EventRatingEnum>
+    {
+        public override bool CanConvert(Type t) => t == typeof(EventRatingEnum);
+
+        public override EventRatingEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "ad":
+                    return EventRatingEnum.Ad;
+                case "sfw":
+                    return EventRatingEnum.Sfw;
+            }
+            throw new Exception("Cannot unmarshal type EventRatingEnum");
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventRatingEnum value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case EventRatingEnum.Ad:
+                    JsonSerializer.Serialize(writer, "ad", options);
+                    return;
+                case EventRatingEnum.Sfw:
+                    JsonSerializer.Serialize(writer, "sfw", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type EventRatingEnum");
+        }
+
+        public static readonly EventRatingEnumConverter Singleton = new EventRatingEnumConverter();
+    }
+
+    internal class EventRecurrenceEnumConverter : JsonConverter<EventRecurrenceEnum>
+    {
+        public override bool CanConvert(Type t) => t == typeof(EventRecurrenceEnum);
+
+        public override EventRecurrenceEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "biweekly":
+                    return EventRecurrenceEnum.Biweekly;
+                case "monthly":
+                    return EventRecurrenceEnum.Monthly;
+                case "none":
+                    return EventRecurrenceEnum.None;
+                case "weekly":
+                    return EventRecurrenceEnum.Weekly;
+            }
+            throw new Exception("Cannot unmarshal type EventRecurrenceEnum");
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventRecurrenceEnum value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case EventRecurrenceEnum.Biweekly:
+                    JsonSerializer.Serialize(writer, "biweekly", options);
+                    return;
+                case EventRecurrenceEnum.Monthly:
+                    JsonSerializer.Serialize(writer, "monthly", options);
+                    return;
+                case EventRecurrenceEnum.None:
+                    JsonSerializer.Serialize(writer, "none", options);
+                    return;
+                case EventRecurrenceEnum.Weekly:
+                    JsonSerializer.Serialize(writer, "weekly", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type EventRecurrenceEnum");
+        }
+
+        public static readonly EventRecurrenceEnumConverter Singleton = new EventRecurrenceEnumConverter();
+    }
+
+    internal class EventScopeEnumConverter : JsonConverter<EventScopeEnum>
+    {
+        public override bool CanConvert(Type t) => t == typeof(EventScopeEnum);
+
+        public override EventScopeEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "dc":
+                    return EventScopeEnum.Dc;
+                case "region":
+                    return EventScopeEnum.Region;
+                case "world":
+                    return EventScopeEnum.World;
+            }
+            throw new Exception("Cannot unmarshal type EventScopeEnum");
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventScopeEnum value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case EventScopeEnum.Dc:
+                    JsonSerializer.Serialize(writer, "dc", options);
+                    return;
+                case EventScopeEnum.Region:
+                    JsonSerializer.Serialize(writer, "region", options);
+                    return;
+                case EventScopeEnum.World:
+                    JsonSerializer.Serialize(writer, "world", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type EventScopeEnum");
+        }
+
+        public static readonly EventScopeEnumConverter Singleton = new EventScopeEnumConverter();
+    }
+
+    internal class CunningMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length >= 3 && value.Length <= 80)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length >= 3 && value.Length <= 80)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly CunningMinMaxLengthCheckConverter Singleton = new CunningMinMaxLengthCheckConverter();
+    }
+
+    internal class MagentaMinMaxLengthCheckConverter : JsonConverter<string>
+    {
+        public override bool CanConvert(Type t) => t == typeof(string);
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            if (value.Length <= 80)
+            {
+                return value;
+            }
+            throw new Exception("Cannot unmarshal type string");
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length <= 80)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+                return;
+            }
+            throw new Exception("Cannot marshal type string");
+        }
+
+        public static readonly MagentaMinMaxLengthCheckConverter Singleton = new MagentaMinMaxLengthCheckConverter();
+    }
+
+    internal class HousingDistrictEnumConverter : JsonConverter<HousingDistrictEnum>
+    {
+        public override bool CanConvert(Type t) => t == typeof(HousingDistrictEnum);
+
+        public override HousingDistrictEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "empyreum":
+                    return HousingDistrictEnum.Empyreum;
+                case "goblet":
+                    return HousingDistrictEnum.Goblet;
+                case "lavender_beds":
+                    return HousingDistrictEnum.LavenderBeds;
+                case "mist":
+                    return HousingDistrictEnum.Mist;
+                case "shirogane":
+                    return HousingDistrictEnum.Shirogane;
+            }
+            throw new Exception("Cannot unmarshal type HousingDistrictEnum");
+        }
+
+        public override void Write(Utf8JsonWriter writer, HousingDistrictEnum value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case HousingDistrictEnum.Empyreum:
+                    JsonSerializer.Serialize(writer, "empyreum", options);
+                    return;
+                case HousingDistrictEnum.Goblet:
+                    JsonSerializer.Serialize(writer, "goblet", options);
+                    return;
+                case HousingDistrictEnum.LavenderBeds:
+                    JsonSerializer.Serialize(writer, "lavender_beds", options);
+                    return;
+                case HousingDistrictEnum.Mist:
+                    JsonSerializer.Serialize(writer, "mist", options);
+                    return;
+                case HousingDistrictEnum.Shirogane:
+                    JsonSerializer.Serialize(writer, "shirogane", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type HousingDistrictEnum");
+        }
+
+        public static readonly HousingDistrictEnumConverter Singleton = new HousingDistrictEnumConverter();
+    }
+
+    internal class EventVenueEnumConverter : JsonConverter<EventVenueEnum>
+    {
+        public override bool CanConvert(Type t) => t == typeof(EventVenueEnum);
+
+        public override EventVenueEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "discord":
+                    return EventVenueEnum.Discord;
+                case "housing":
+                    return EventVenueEnum.Housing;
+                case "open_world":
+                    return EventVenueEnum.OpenWorld;
+            }
+            throw new Exception("Cannot unmarshal type EventVenueEnum");
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventVenueEnum value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case EventVenueEnum.Discord:
+                    JsonSerializer.Serialize(writer, "discord", options);
+                    return;
+                case EventVenueEnum.Housing:
+                    JsonSerializer.Serialize(writer, "housing", options);
+                    return;
+                case EventVenueEnum.OpenWorld:
+                    JsonSerializer.Serialize(writer, "open_world", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type EventVenueEnum");
+        }
+
+        public static readonly EventVenueEnumConverter Singleton = new EventVenueEnumConverter();
+    }
+
     internal class RegionEnumConverter : JsonConverter<RegionEnum>
     {
         public override bool CanConvert(Type t) => t == typeof(RegionEnum);
@@ -2021,33 +3163,6 @@ namespace Eikon.Contracts
         }
 
         public static readonly RegionEnumConverter Singleton = new RegionEnumConverter();
-    }
-
-    internal class TentacledMinMaxLengthCheckConverter : JsonConverter<string>
-    {
-        public override bool CanConvert(Type t) => t == typeof(string);
-
-        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            var value = reader.GetString();
-            if (value.Length <= 1000)
-            {
-                return value;
-            }
-            throw new Exception("Cannot unmarshal type string");
-        }
-
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-        {
-            if (value.Length <= 1000)
-            {
-                JsonSerializer.Serialize(writer, value, options);
-                return;
-            }
-            throw new Exception("Cannot marshal type string");
-        }
-
-        public static readonly TentacledMinMaxLengthCheckConverter Singleton = new TentacledMinMaxLengthCheckConverter();
     }
 
     internal class GenderElementConverter : JsonConverter<GenderElement>
@@ -2173,45 +3288,6 @@ namespace Eikon.Contracts
         public static readonly RaceElementConverter Singleton = new RaceElementConverter();
     }
 
-    internal class TierConverter : JsonConverter<Tier>
-    {
-        public override bool CanConvert(Type t) => t == typeof(Tier);
-
-        public override Tier Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            var value = reader.GetString();
-            switch (value)
-            {
-                case "dc":
-                    return Tier.Dc;
-                case "region":
-                    return Tier.Region;
-                case "world":
-                    return Tier.World;
-            }
-            throw new Exception("Cannot unmarshal type Tier");
-        }
-
-        public override void Write(Utf8JsonWriter writer, Tier value, JsonSerializerOptions options)
-        {
-            switch (value)
-            {
-                case Tier.Dc:
-                    JsonSerializer.Serialize(writer, "dc", options);
-                    return;
-                case Tier.Region:
-                    JsonSerializer.Serialize(writer, "region", options);
-                    return;
-                case Tier.World:
-                    JsonSerializer.Serialize(writer, "world", options);
-                    return;
-            }
-            throw new Exception("Cannot marshal type Tier");
-        }
-
-        public static readonly TierConverter Singleton = new TierConverter();
-    }
-
     internal class TribeElementConverter : JsonConverter<TribeElement>
     {
         public override bool CanConvert(Type t) => t == typeof(TribeElement);
@@ -2321,7 +3397,46 @@ namespace Eikon.Contracts
         public static readonly TribeElementConverter Singleton = new TribeElementConverter();
     }
 
-    internal class StickyMinMaxLengthCheckConverter : JsonConverter<string>
+    internal class TabConverter : JsonConverter<Tab>
+    {
+        public override bool CanConvert(Type t) => t == typeof(Tab);
+
+        public override Tab Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var value = reader.GetString();
+            switch (value)
+            {
+                case "browse":
+                    return Tab.Browse;
+                case "hosting":
+                    return Tab.Hosting;
+                case "saved":
+                    return Tab.Saved;
+            }
+            throw new Exception("Cannot unmarshal type Tab");
+        }
+
+        public override void Write(Utf8JsonWriter writer, Tab value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case Tab.Browse:
+                    JsonSerializer.Serialize(writer, "browse", options);
+                    return;
+                case Tab.Hosting:
+                    JsonSerializer.Serialize(writer, "hosting", options);
+                    return;
+                case Tab.Saved:
+                    JsonSerializer.Serialize(writer, "saved", options);
+                    return;
+            }
+            throw new Exception("Cannot marshal type Tab");
+        }
+
+        public static readonly TabConverter Singleton = new TabConverter();
+    }
+
+    internal class FriskyMinMaxLengthCheckConverter : JsonConverter<string>
     {
         public override bool CanConvert(Type t) => t == typeof(string);
 
@@ -2345,7 +3460,7 @@ namespace Eikon.Contracts
             throw new Exception("Cannot marshal type string");
         }
 
-        public static readonly StickyMinMaxLengthCheckConverter Singleton = new StickyMinMaxLengthCheckConverter();
+        public static readonly FriskyMinMaxLengthCheckConverter Singleton = new FriskyMinMaxLengthCheckConverter();
     }
 
     internal class StatusConverter : JsonConverter<Status>
@@ -2588,7 +3703,7 @@ namespace Eikon.Contracts
         public static readonly ReportReasonEnumConverter Singleton = new ReportReasonEnumConverter();
     }
 
-    internal class IndigoMinMaxLengthCheckConverter : JsonConverter<string>
+    internal class MischievousMinMaxLengthCheckConverter : JsonConverter<string>
     {
         public override bool CanConvert(Type t) => t == typeof(string);
 
@@ -2612,10 +3727,10 @@ namespace Eikon.Contracts
             throw new Exception("Cannot marshal type string");
         }
 
-        public static readonly IndigoMinMaxLengthCheckConverter Singleton = new IndigoMinMaxLengthCheckConverter();
+        public static readonly MischievousMinMaxLengthCheckConverter Singleton = new MischievousMinMaxLengthCheckConverter();
     }
 
-    internal class IndecentMinMaxLengthCheckConverter : JsonConverter<string>
+    internal class BraggadociousMinMaxLengthCheckConverter : JsonConverter<string>
     {
         public override bool CanConvert(Type t) => t == typeof(string);
 
@@ -2639,10 +3754,10 @@ namespace Eikon.Contracts
             throw new Exception("Cannot marshal type string");
         }
 
-        public static readonly IndecentMinMaxLengthCheckConverter Singleton = new IndecentMinMaxLengthCheckConverter();
+        public static readonly BraggadociousMinMaxLengthCheckConverter Singleton = new BraggadociousMinMaxLengthCheckConverter();
     }
 
-    internal class HilariousMinMaxLengthCheckConverter : JsonConverter<string>
+    internal class MinMaxLengthCheckConverter1 : JsonConverter<string>
     {
         public override bool CanConvert(Type t) => t == typeof(string);
 
@@ -2666,10 +3781,10 @@ namespace Eikon.Contracts
             throw new Exception("Cannot marshal type string");
         }
 
-        public static readonly HilariousMinMaxLengthCheckConverter Singleton = new HilariousMinMaxLengthCheckConverter();
+        public static readonly MinMaxLengthCheckConverter1 Singleton = new MinMaxLengthCheckConverter1();
     }
 
-    internal class AmbitiousMinMaxLengthCheckConverter : JsonConverter<string>
+    internal class MinMaxLengthCheckConverter2 : JsonConverter<string>
     {
         public override bool CanConvert(Type t) => t == typeof(string);
 
@@ -2693,7 +3808,7 @@ namespace Eikon.Contracts
             throw new Exception("Cannot marshal type string");
         }
 
-        public static readonly AmbitiousMinMaxLengthCheckConverter Singleton = new AmbitiousMinMaxLengthCheckConverter();
+        public static readonly MinMaxLengthCheckConverter2 Singleton = new MinMaxLengthCheckConverter2();
     }
 
     internal class WsClientFrameTConverter : JsonConverter<WsClientFrameT>

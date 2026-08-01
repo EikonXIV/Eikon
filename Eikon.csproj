@@ -60,6 +60,9 @@
   <!-- The notification chime, bundled into the assembly. Stripped to fmt+data only (no metadata). -->
   <ItemGroup>
     <EmbeddedResource Include="Assets\message-chime.wav" LogicalName="Eikon.message-chime.wav" />
+    <EmbeddedResource Include="Assets\Events\lounge.jpg" LogicalName="Eikon.Events.lounge.jpg" />
+    <EmbeddedResource Include="Assets\Events\rooftops.jpg" LogicalName="Eikon.Events.rooftops.jpg" />
+    <EmbeddedResource Include="Assets\Events\lakeside.jpg" LogicalName="Eikon.Events.lakeside.jpg" />
   </ItemGroup>
 
   <!-- Bundled UI fonts (all OFL; licenses in Assets\Fonts\LICENSES), loaded via the managed font atlas.
