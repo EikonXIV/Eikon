@@ -1,6 +1,15 @@
+using Eikon.Contracts;
 using Eikon.Navigation;
 
 namespace Eikon.Net;
+
+// A snapshot of an event queued to share into a chat, captured at the detail (which has the resolved
+// location line and counts). Carried in the envelope so the card renders without the recipient needing
+// access to the event; a tap tries to open it.
+internal sealed record EventShare(
+    Guid EventId, EventKindElement Kind, string Title, string BannerPreset,
+    DateTimeOffset StartsAt, string HostClock, string HostTzLabel, string Location,
+    long Attending, long? Capacity);
 
 // Carries the current selection across screens (the router navigates by screen only). Set before
 // navigating to profile detail or a chat.
@@ -36,5 +45,5 @@ internal sealed class Selection
 
     // An event queued to share into a conversation: set before switching to Messages so the picked chat
     // sends the event card. Cleared once sent.
-    public Guid? PendingShareEventId { get; set; }
+    public EventShare? PendingShareEvent { get; set; }
 }

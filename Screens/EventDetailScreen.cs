@@ -300,7 +300,7 @@ internal sealed class EventDetailScreen : IScreen
 
         var half = (contentW - Ui.Px(10f)) * 0.5f;
         if (this.FooterButton(dl, "##ed_share", FontAwesomeIcon.Share, "SHARE", pos.X + left, y, half, btnH, false))
-            this.ShareToChat(eventId);
+            this.ShareToChat(e);
         if (this.FooterButton(dl, "##ed_loc", FontAwesomeIcon.Copy, "LOCATION", pos.X + left + half + Ui.Px(10f), y, half, btnH, false))
             ImGui.SetClipboardText(this.LocationLine(e));
         y += btnH + Ui.Px(12f);
@@ -410,7 +410,7 @@ internal sealed class EventDetailScreen : IScreen
 
                 if (this.MenuRow(FontAwesomeIcon.Share, "Share to chat", false))
                 {
-                    this.ShareToChat(eventId);
+                    this.ShareToChat(e);
                     ImGui.CloseCurrentPopup();
                 }
 
@@ -436,9 +436,9 @@ internal sealed class EventDetailScreen : IScreen
             }
             else
             {
-                if (this.MenuRow(FontAwesomeIcon.Share, "Share to chat", false))
+                if (e != null && this.MenuRow(FontAwesomeIcon.Share, "Share to chat", false))
                 {
-                    this.ShareToChat(eventId);
+                    this.ShareToChat(e);
                     ImGui.CloseCurrentPopup();
                 }
 
@@ -495,9 +495,11 @@ internal sealed class EventDetailScreen : IScreen
         }
     }
 
-    private void ShareToChat(Guid eventId)
+    private void ShareToChat(EventDto e)
     {
-        this.selection.PendingShareEventId = eventId;
+        this.selection.PendingShareEvent = new EventShare(
+            e.Id, e.Kind, e.Title, e.BannerPreset ?? EventService.FallbackPreset(e.Id),
+            e.StartsAt, e.HostClock, e.HostTzLabel, this.LocationLine(e), e.Attending, e.Capacity);
         this.router.Navigate(Screen.Messages);
     }
 

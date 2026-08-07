@@ -20,6 +20,7 @@ internal sealed class MessagesScreen : IScreen
     private readonly InboxService inbox;
     private readonly Selection selection;
     private readonly PhotoService photoSvc;
+    private readonly ChatService chat;
     private readonly ThreadDeletions deletions;
 
     private enum Tab { Messages, Requests, Deleted }
@@ -34,6 +35,7 @@ internal sealed class MessagesScreen : IScreen
         this.inbox = inbox;
         this.selection = selection;
         this.photoSvc = photoSvc;
+        this.chat = chat;
         this.deletions = new ThreadDeletions(config, chat);
     }
 
@@ -52,6 +54,9 @@ internal sealed class MessagesScreen : IScreen
         var threads = conversations.Where(c => !c.IsRequest && !this.deletions.IsDeleted(c.UserId)).ToList();
         var requests = conversations.Where(c => c.IsRequest && !this.deletions.IsDeleted(c.UserId)).ToList();
         var deleted = conversations.Where(c => this.deletions.IsDeleted(c.UserId)).ToList();
+
+        if (this.selection.PendingShareEvent is { } share)
+            this.DrawSharingBanner(fullWidth, share);
 
         this.DrawHeader(fullWidth, threads.Count);
 
@@ -178,9 +183,45 @@ internal sealed class MessagesScreen : IScreen
 
     private void Open(ConversationSummaryDto conversation)
     {
+        // Picking a conversation while a share is pending sends the event card into it, then opens it.
+        if (this.selection.PendingShareEvent is { } share)
+        {
+            this.chat.SendEventCard(conversation.UserId, share);
+            this.selection.PendingShareEvent = null;
+        }
+
         this.selection.ProfileUserId = conversation.UserId;
         this.selection.ProfileDisplayName = conversation.DisplayName;
         this.router.Navigate(Screen.Chat);
+    }
+
+    // Banner over the inbox while an event is queued to share (mockup 21): a mono eyebrow, the event
+    // title, and a prompt, with a close that drops the pending share.
+    private void DrawSharingBanner(float fullWidth, EventShare share)
+    {
+        var pad = Ui.Px(20f);
+        var origin = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+
+        var y = origin.Y + Ui.Px(16f);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, y), Palette.TextSecondary.U32(), "SHARING AN EVENT");
+
+        var xLabel = FontAwesomeIcon.Times.ToIconString();
+        var xSize = Ui.Measure(this.fonts.Icon, xLabel);
+        var xPos = new Vector2((origin.X + fullWidth - pad) - xSize.X, y - Ui.Px(2f));
+        ImGui.SetCursorScreenPos(xPos);
+        if (ImGui.InvisibleButton("##share_cancel", xSize))
+            this.selection.PendingShareEvent = null;
+        Ui.TextAt(dl, this.fonts.Icon, xPos, (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextMuted).U32(), xLabel);
+
+        y += Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(8f);
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(origin.X + pad, y), Palette.TextPrimary.U32(), this.Fit(share.Title, fullWidth - (pad * 2f), this.fonts.Body));
+        y += Ui.Measure(this.fonts.Body, share.Title).Y + Ui.Px(4f);
+        Ui.TextAt(dl, this.fonts.Caption, new Vector2(origin.X + pad, y), Palette.TextMuted.U32(), "Pick a conversation to send it to.");
+        y += Ui.Measure(this.fonts.Caption, "X").Y + Ui.Px(14f);
+
+        dl.AddLine(new Vector2(origin.X, y), new Vector2(origin.X + fullWidth, y), Palette.Border.U32(), 1f);
+        ImGui.SetCursorScreenPos(new Vector2(origin.X, y + 1f));
     }
 
     private bool DrawRow(ConversationSummaryDto conversation, float fullWidth, float pad)

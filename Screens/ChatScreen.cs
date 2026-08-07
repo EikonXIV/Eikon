@@ -1,4 +1,5 @@
 using Dalamud.Interface;
+using Dalamud.Interface.ManagedFontAtlas;
 using Eikon.Config;
 using Eikon.Contracts;
 using Eikon.Navigation;
@@ -26,6 +27,7 @@ internal sealed class ChatScreen : IScreen
     private readonly InboxService inbox;
     private readonly PhotoService photoSvc;
     private readonly AlbumService albums;
+    private readonly EventService events;
     private readonly Configuration config;
     private readonly ThreadDeletions deletions;
 
@@ -47,7 +49,7 @@ internal sealed class ChatScreen : IScreen
     private Guid threadPeer;         // the open thread's peer, for resolving album covers in received cards
     private bool openAlbumPicker;    // "Share an album" was tapped in the overflow menu
 
-    public ChatScreen(ScreenRouter router, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, Configuration config)
+    public ChatScreen(ScreenRouter router, Kit kit, UiFonts fonts, ModerationFlow moderation, ChatService chat, Selection selection, IdentityService identity, Media media, ChatMediaCache mediaCache, Lightbox lightbox, InboxService inbox, PhotoService photoSvc, AlbumService albums, EventService events, Configuration config)
     {
         this.router = router;
         this.kit = kit;
@@ -62,6 +64,7 @@ internal sealed class ChatScreen : IScreen
         this.inbox = inbox;
         this.photoSvc = photoSvc;
         this.albums = albums;
+        this.events = events;
         this.config = config;
         this.deletions = new ThreadDeletions(config, chat);
     }
@@ -589,6 +592,12 @@ internal sealed class ChatScreen : IScreen
             return;
         }
 
+        if (message.IsEvent)
+        {
+            this.DrawEventBubble(message, contentWidth, showTime);
+            return;
+        }
+
         var maxWidth = contentWidth * 0.76f;
         var padX = Ui.Px(11f);
         var padY = Ui.Px(8f);
@@ -776,6 +785,130 @@ internal sealed class ChatScreen : IScreen
             if (pa.Id == aid)
                 return pa.CoverPhotoId;
         return null;
+    }
+
+    // Event share card (mockup 22). A 3:1 preset banner, a meta strip (kind eyebrow + attending count),
+    // the serif title, the host-clock time line, and the location. The snapshot rides the envelope, so
+    // the card renders without the recipient needing access to the event; a tap opens the detail. Shown
+    // the same way in both incoming and outgoing bubbles (only the horizontal side flips).
+    private void DrawEventBubble(ChatService.Message message, float contentWidth, bool showTime)
+    {
+        var mine = message.Mine;
+        var width = MathF.Min(contentWidth * 0.80f, Ui.Px(256f));
+        var bannerH = width / 3f;
+        var pad = Ui.Px(12f);
+        var metaH = Ui.Px(28f);
+
+        var title = message.EventTitle ?? "Event";
+        var innerW = width - (pad * 2f);
+        var (dayText, restText) = this.EventTimeLine(message);
+        var location = message.EventLocation ?? string.Empty;
+        var titleH = Ui.Measure(this.fonts.SerifName, title).Y;
+        var timeH = Ui.Measure(this.fonts.EventMeta, dayText).Y;
+        var locH = location.Length > 0 ? Ui.Measure(this.fonts.Caption, location).Y : 0f;
+        var bodyH = pad + titleH + Ui.Px(8f) + timeH + (locH > 0 ? Ui.Px(6f) + locH : 0f) + pad;
+        var height = bannerH + metaH + bodyH;
+
+        var leftX = ImGui.GetCursorScreenPos().X;
+        var top = ImGui.GetCursorScreenPos().Y;
+        var x = mine ? leftX + contentWidth - width : leftX;
+        var pos = new Vector2(x, top);
+        var dl = ImGui.GetWindowDrawList();
+
+        var id = message.ClientMsgId ?? message.MessageId?.ToString() ?? message.EventId.ToString();
+        ImGui.SetCursorScreenPos(pos);
+        var clicked = ImGui.InvisibleButton("##event_" + id, new Vector2(width, height));
+        ImGui.SetItemAllowOverlap();
+
+        dl.AddRectFilled(pos, pos + new Vector2(width, height), Palette.Surface2.U32());
+
+        // Banner (3:1), square like the board and detail. Placeholder fill while the preset loads.
+        var bmax = new Vector2(pos.X + width, pos.Y + bannerH);
+        var banner = this.events.PresetBanner(message.EventBannerPreset ?? EventService.FallbackPreset(message.EventId));
+        if (banner is { Width: > 0, Height: > 0 })
+        {
+            var (uvMin, uvMax) = Ui.CoverUv(banner.Width, banner.Height, width / bannerH);
+            dl.AddImage(banner.Handle, pos, bmax, uvMin, uvMax);
+        }
+        else
+        {
+            dl.AddRectFilled(pos, bmax, Palette.Surface1.U32());
+        }
+
+        // Meta strip: kind eyebrow (left), attending[/capacity] (right).
+        var stripTop = pos.Y + bannerH;
+        dl.AddRectFilled(new Vector2(pos.X, stripTop), new Vector2(pos.X + width, stripTop + metaH), Palette.WithAlpha(Palette.Paper, 0.04f).U32());
+        var kind = KindLabel(message.EventKind).ToUpperInvariant();
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + pad, stripTop + ((metaH - Ui.Measure(this.fonts.Eyebrow, kind).Y) * 0.5f)), Palette.TextSecondary.U32(), kind);
+        var countText = message.EventCapacity is { } cap ? $"{message.EventAttending}/{cap}" : message.EventAttending.ToString();
+        var cw = Ui.Measure(this.fonts.Eyebrow, countText).X;
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + width - pad - cw, stripTop + ((metaH - Ui.Measure(this.fonts.Eyebrow, countText).Y) * 0.5f)), Palette.TextMuted.U32(), countText);
+
+        // Body: title, time line (day in signal + clock/tz muted), location.
+        var by = stripTop + metaH + pad;
+        Ui.TextAt(dl, this.fonts.SerifName, new Vector2(pos.X + pad, by), Palette.TextPrimary.U32(), this.FitWith(title, innerW, this.fonts.SerifName));
+        by += titleH + Ui.Px(8f);
+        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + pad, by), Palette.Signal.U32(), dayText);
+        var dayW = Ui.Measure(this.fonts.EventMeta, dayText).X;
+        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + pad + dayW, by), Palette.TextSecondary.U32(), restText);
+        by += timeH;
+        if (location.Length > 0)
+        {
+            by += Ui.Px(6f);
+            Ui.TextAt(dl, this.fonts.Caption, new Vector2(pos.X + pad, by), Palette.TextMuted.U32(), this.FitWith(location, innerW, this.fonts.Caption));
+        }
+
+        dl.AddRect(pos, pos + new Vector2(width, height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+
+        if (clicked)
+        {
+            this.selection.EventId = message.EventId;
+            this.selection.EventName = title;
+            this.selection.EventReturn = Screen.Chat;
+            this.router.Navigate(Screen.EventDetail);
+        }
+
+        var extra = this.DrawBubbleTime(message, showTime, leftX, top + height, contentWidth);
+        ImGui.SetCursorScreenPos(new Vector2(leftX, top));
+        ImGui.Dummy(new Vector2(contentWidth, height + extra));
+    }
+
+    // The time line on an event card: the day label (Today / Tomorrow / weekday, from the viewer's local
+    // date) then the host wall clock and tz label, matching the detail's "20:00 PT" reading.
+    private (string day, string rest) EventTimeLine(ChatService.Message m)
+    {
+        var day = EventDayLabel(m.EventStartsAt.ToLocalTime());
+        var clock = string.IsNullOrEmpty(m.EventClock) ? m.EventStartsAt.ToLocalTime().ToString("HH:mm") : m.EventClock!;
+        var tz = string.IsNullOrEmpty(m.EventTzLabel) ? string.Empty : " " + m.EventTzLabel;
+        return (day, $"  ·  {clock}{tz}");
+    }
+
+    private static string EventDayLabel(DateTimeOffset local)
+    {
+        var diff = (local.Date - DateTimeOffset.Now.Date).Days;
+        return diff switch { 0 => "Today", 1 => "Tomorrow", _ => local.ToString("dddd") };
+    }
+
+    private static string KindLabel(EventKindElement kind) => kind switch
+    {
+        EventKindElement.Club => "Club night",
+        EventKindElement.Gathering => "Gathering",
+        EventKindElement.Performance => "Performance",
+        EventKindElement.Raid => "Raid",
+        EventKindElement.Roleplay => "Roleplay",
+        _ => "Market",
+    };
+
+    private string FitWith(string text, float maxWidth, IFontHandle font)
+    {
+        if (maxWidth <= 0f || Ui.Measure(font, text).X <= maxWidth)
+            return text;
+        const string ellipsis = "...";
+        var ew = Ui.Measure(font, ellipsis).X;
+        var n = text.Length;
+        while (n > 0 && Ui.Measure(font, text[..n]).X + ew > maxWidth)
+            n--;
+        return text[..n].TrimEnd() + ellipsis;
     }
 
     private string Fit(string text, float maxWidth)
