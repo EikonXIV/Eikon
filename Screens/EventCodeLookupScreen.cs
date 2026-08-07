@@ -188,7 +188,12 @@ internal sealed class EventCodeLookupScreen : IScreen
         var bs = Ui.Measure(this.fonts.Icon, back);
         ImGui.SetCursorScreenPos(new Vector2(origin.X + pad, midY - (bs.Y * 0.5f)));
         if (ImGui.InvisibleButton("##el_back", bs))
+        {
+            this.codeInput = string.Empty;
+            this.error = null;
+            this.searching = false;
             this.router.Navigate(Screen.Grid);
+        }
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
         var title = "ENTER A CODE";

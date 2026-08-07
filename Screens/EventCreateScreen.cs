@@ -272,6 +272,60 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.capacity = (int)(e.Capacity ?? 0);
     }
 
+    // Leave the wizard, resetting the form so the next visit starts clean (a fresh create) rather than
+    // showing a prior draft; an edit re-seeds from the event through EnsurePrefill on re-entry.
+    private void Leave(Screen to)
+    {
+        this.ResetForm();
+        this.prefilled = false;
+        this.router.Navigate(to);
+    }
+
+    private void ResetForm()
+    {
+        this.step = 0;
+        this.editId = null;
+        this.submitError = null;
+        this.publishing = false;
+        this.pendingPopup = null;
+
+        this.title = string.Empty;
+        this.kind = EventKindElement.Gathering;
+        this.description = string.Empty;
+        this.tagsText = string.Empty;
+        this.bannerPreset = EventService.PresetIds[0];
+        this.uploadBytes = null;
+        this.uploadPreview?.Dispose();
+        this.uploadPreview = null;
+
+        this.date = DateTime.Today;
+        this.calView = DateTime.Today;
+        this.hour = 20;
+        this.minute = 0;
+        this.tz = DefaultTz;
+        this.durHours = 2;
+        this.durMins = 0;
+        this.recurrence = EventRecurrenceEnum.None;
+
+        this.venue = EventVenueEnum.Housing;
+        this.venueWorldId = 0;
+        this.district = 0;
+        this.ward = 1;
+        this.plot = 1;
+        this.room = 0;
+        this.zoneIdx = 0;
+        this.aetheryteIdx = 0;
+        this.discordUrl = string.Empty;
+        this.discordNote = string.Empty;
+
+        this.scope = EventScopeEnum.World;
+        this.rating = EventRatingEnum.Sfw;
+        this.visibility = Visibility.Public;
+        this.code = EventFormat.GenerateCode();
+        this.capacity = 0;
+        this.codeCopiedAt = default;
+    }
+
     // ---- chrome ------------------------------------------------------------------------------
 
     private void DrawHeader(float width, float pad, float height)
@@ -288,7 +342,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var xs = Ui.Measure(this.fonts.Icon, x);
         ImGui.SetCursorScreenPos(new Vector2((origin.X + width - pad) - xs.X, midY - (xs.Y * 0.5f)));
         if (ImGui.InvisibleButton("##ec_close", xs))
-            this.router.Navigate(this.selection.EventReturn);
+            this.Leave(this.selection.EventReturn);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), x);
 
         dl.AddLine(new Vector2(origin.X, origin.Y + height), new Vector2(origin.X + width, origin.Y + height), Palette.Border.U32(), 1f);
@@ -337,7 +391,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         {
             this.submitError = null;
             if (this.step == 0)
-                this.router.Navigate(this.selection.EventReturn);
+                this.Leave(this.selection.EventReturn);
             else
                 this.step--;
         }
@@ -1324,7 +1378,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             {
                 this.selection.EventId = created.Id;
                 this.selection.EventReturn = Screen.Grid;
-                this.router.Navigate(Screen.EventDetail);
+                this.Leave(Screen.EventDetail);
             }
             else
             {
@@ -1342,7 +1396,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         try
         {
             if (await this.events.UpdateAsync(id, req))
-                this.router.Navigate(this.selection.EventReturn);
+                this.Leave(this.selection.EventReturn);
             else
                 this.submitError = "Couldn't save changes. Try again.";
         }
