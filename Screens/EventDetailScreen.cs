@@ -141,15 +141,20 @@ internal sealed class EventDetailScreen : IScreen
         var eyebrow = KindLabel(e.Kind).ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(mp.X + left, y), Palette.TextSecondary.U32(), eyebrow);
         var bx = mp.X + left + Ui.Measure(this.fonts.Eyebrow, eyebrow).X + Ui.Px(10f);
-        if (e.Rating == EventRatingEnum.Ad)
+        void Badge(string text, uint color)
         {
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(bx, y), Palette.Danger.U32(), "18+");
-            bx += Ui.Measure(this.fonts.Eyebrow, "18+").X + Ui.Px(8f);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(bx, y), color, text);
+            bx += Ui.Measure(this.fonts.Eyebrow, text).X + Ui.Px(8f);
         }
+
+        if (e.Rating == EventRatingEnum.Ad)
+            Badge("18+", Palette.Danger.U32());
         if (e.Visibility == Visibility.Private)
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(bx, y), Palette.TextSecondary.U32(), "PRIVATE");
+            Badge("PRIVATE", Palette.TextSecondary.U32());
         if (e.Cancelled)
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(bx, y), Palette.Danger.U32(), "CANCELLED");
+            Badge("CANCELLED", Palette.Danger.U32());
+        else if (IsEnded(e))
+            Badge("ENDED", Palette.TextMuted.U32());
 
         y += Ui.Measure(this.fonts.Eyebrow, eyebrow).Y + Ui.Px(10f);
         Ui.TextWrappedAt(dl, this.fonts.SerifTitle, new Vector2(mp.X + left, y), Palette.TextPrimary.U32(), e.Title, contentW);
@@ -305,13 +310,17 @@ internal sealed class EventDetailScreen : IScreen
             ImGui.SetClipboardText(this.LocationLine(e));
         y += btnH + Ui.Px(12f);
 
-        // Spots left / no cap.
-        var spots = e.Capacity is { } cap ? $"{Math.Max(0, cap - e.Attending)} spots left" : "No cap, walk-ups welcome";
-        var people = FontAwesomeIcon.User.ToIconString();
-        Ui.TextAt(dl, this.fonts.Icon, new Vector2(pos.X + left, y), Palette.TextMuted.U32(), people);
-        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + left + Ui.Measure(this.fonts.Icon, people).X + Ui.Px(8f), y), Palette.TextMuted.U32(), spots);
+        // Status line: cancelled / ended take over, else spots left / no cap.
+        string line;
+        FontAwesomeIcon lineIcon;
+        if (e.Cancelled) { line = "This event was cancelled."; lineIcon = FontAwesomeIcon.Ban; }
+        else if (IsEnded(e)) { line = "This event has ended."; lineIcon = FontAwesomeIcon.CheckCircle; }
+        else { line = e.Capacity is { } cap ? $"{Math.Max(0, cap - e.Attending)} spots left" : "No cap, walk-ups welcome"; lineIcon = FontAwesomeIcon.User; }
+        var glyph = lineIcon.ToIconString();
+        Ui.TextAt(dl, this.fonts.Icon, new Vector2(pos.X + left, y), Palette.TextMuted.U32(), glyph);
+        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + left + Ui.Measure(this.fonts.Icon, glyph).X + Ui.Px(8f), y), Palette.TextMuted.U32(), line);
 
-        var h = (y + Ui.Measure(this.fonts.EventMeta, spots).Y + Ui.Px(20f)) - pos.Y;
+        var h = (y + Ui.Measure(this.fonts.EventMeta, line).Y + Ui.Px(20f)) - pos.Y;
         ImGui.Dummy(new Vector2(width, h));
     }
 
@@ -577,6 +586,9 @@ internal sealed class EventDetailScreen : IScreen
         var diff = (local.Date - DateTimeOffset.Now.Date).Days;
         return diff switch { 0 => "Today", 1 => "Tomorrow", _ => local.ToString("dddd") };
     }
+
+    // An event is over once its start plus its duration is in the past (matches the server's board cutoff).
+    private static bool IsEnded(EventDto e) => !e.Cancelled && e.StartsAt.AddMinutes(e.DurationMins) < DateTimeOffset.Now;
 
     private IDisposable MenuStyle() => new Composite(new List<IDisposable>
     {

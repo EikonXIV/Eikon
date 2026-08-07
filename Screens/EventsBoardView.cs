@@ -336,6 +336,11 @@ internal sealed class EventsBoardView
         var cardH = bannerH + infoH;
         var pos = ImGui.GetCursorScreenPos();
 
+        // Reachable in the Hosting tab (which shows the host's own past events) and the Saved tab (which
+        // keeps cancelled ones); Browse excludes both server-side.
+        var cancelled = e.Cancelled;
+        var ended = !cancelled && e.StartsAt.AddMinutes(e.DurationMins) < DateTimeOffset.Now;
+
         if (ImGui.InvisibleButton($"##ev_{e.Id}", new Vector2(width, cardH)))
         {
             this.selection.EventId = e.Id;
@@ -359,6 +364,10 @@ internal sealed class EventsBoardView
             Ui.TextAt(dl, this.fonts.Icon, new Vector2(pos.X + ((width - gs.X) * 0.5f), pos.Y + ((bannerH - gs.Y) * 0.5f)), Palette.TextMuted.U32(), glyph);
         }
 
+        // Dim the banner for a cancelled or finished event so it reads as inactive at a glance.
+        if (cancelled || ended)
+            dl.AddRectFilled(pos, pos + new Vector2(width, bannerH), Palette.WithAlpha(Palette.Bg, 0.55f).U32());
+
         // Info row (inset by pad).
         var iy = pos.Y + bannerH + Ui.Px(12f);
         var timeX = pos.X + pad;
@@ -374,6 +383,16 @@ internal sealed class EventsBoardView
         var eyebrow = KindLabel(e.Kind).ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX, iy), Palette.TextSecondary.U32(), eyebrow);
         var markX = textX + Ui.Measure(this.fonts.Eyebrow, eyebrow).X + Ui.Px(8f);
+        if (cancelled)
+        {
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.Danger.U32(), "CANCELLED");
+            markX += Ui.Measure(this.fonts.Eyebrow, "CANCELLED").X + Ui.Px(6f);
+        }
+        else if (ended)
+        {
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.TextMuted.U32(), "ENDED");
+            markX += Ui.Measure(this.fonts.Eyebrow, "ENDED").X + Ui.Px(6f);
+        }
         if (e.Rating == EventRatingEnum.Ad)
         {
             Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.Danger.U32(), "18+");
