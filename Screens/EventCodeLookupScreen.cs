@@ -1,5 +1,6 @@
 using System;
 using Dalamud.Interface;
+using Dalamud.Interface.ManagedFontAtlas;
 using Eikon.Navigation;
 using Eikon.Net;
 using Eikon.UI;
@@ -34,6 +35,13 @@ internal sealed class EventCodeLookupScreen : IScreen
 
     public bool Chrome => false;
 
+    // Harness seam (Vitrine): prefill the code and a lookup error for a screenshot of the ready state.
+    internal void SetForTest(string code, string? error)
+    {
+        this.codeInput = code;
+        this.error = error;
+    }
+
     public void Draw()
     {
         var avail = ImGui.GetContentRegionAvail();
@@ -66,7 +74,7 @@ internal sealed class EventCodeLookupScreen : IScreen
         Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(tp.X + pad + lSz.X, tp.Y), Palette.TextSecondary.U32(), "Open the door.");
         ImGui.Dummy(new Vector2(0f, lSz.Y + Ui.Px(10f)));
 
-        var desc = "Private events never appear on the board. Enter the code a host gave you to see the full listing.";
+        var desc = "Private events never appear on the board. Paste the code a host gave you to see the full listing.";
         var descPos = ImGui.GetCursorScreenPos();
         Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(descPos.X + pad, descPos.Y), Palette.TextMuted.U32(), desc, w);
         ImGui.Dummy(new Vector2(0f, Ui.MeasureWrapped(this.fonts.Caption, desc, w).Y + Ui.Px(24f)));
@@ -75,28 +83,99 @@ internal sealed class EventCodeLookupScreen : IScreen
         dl.AddLine(new Vector2(hp.X, hp.Y), new Vector2(hp.X + width, hp.Y), Palette.Border.U32(), 1f);
         ImGui.Dummy(new Vector2(0f, Ui.Px(30f)));
 
-        // Code entry, centered.
-        var fieldW = Math.Min(w, Ui.Px(240f));
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - fieldW) * 0.5f));
+        // Full-width code field: a dark box with the code (or placeholder) centered and letter-spaced.
+        var fieldH = Ui.Px(54f);
+        var fp = ImGui.GetCursorScreenPos();
+        this.CodeField(fp.X + pad, fp.Y, w, fieldH);
+        ImGui.SetCursorScreenPos(new Vector2(fp.X, fp.Y + fieldH));   // neutralize the input's own advance
+
+        // Gap under the field, then the error (left-aligned) when a lookup missed.
+        ImGui.Dummy(new Vector2(0f, this.error is null ? Ui.Px(38f) : Ui.Px(14f)));
+        if (this.error is { } err)
+        {
+            var ep = ImGui.GetCursorScreenPos();
+            Ui.TextAt(dl, this.fonts.Caption, new Vector2(ep.X + pad, ep.Y), Palette.Danger.U32(), err);
+            ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Caption, err).Y + Ui.Px(16f)));
+        }
+
+        // Full-width action; muted until a full code is entered, cream once it is ready.
+        var btnH = Ui.Px(54f);
+        var bp = ImGui.GetCursorScreenPos();
+        var ready = this.codeInput.Length >= 6 && !this.searching;
+        if (this.FindButton(bp.X + pad, bp.Y, w, btnH, ready))
+            this.Find();
+        ImGui.SetCursorScreenPos(new Vector2(bp.X, bp.Y + btnH));
+    }
+
+    // Full-width code entry. A transparent InputText over the box captures typing (its native text and
+    // caret hidden); the code, or an "ABC123" placeholder, is drawn centered and letter-spaced on top.
+    private void CodeField(float x, float y, float w, float h)
+    {
+        var dl = ImGui.GetWindowDrawList();
+        var min = new Vector2(x, y);
+        dl.AddRectFilled(min, new Vector2(x + w, y + h), Palette.Surface2.U32());
+
         var code = this.codeInput;
-        this.kit.TextField("##el_code", ref code, "ABC123", fieldW);
+        var padY = (h - Ui.Measure(this.fonts.Body, "A").Y) * 0.5f;
+        using (ImRaii.PushColor(ImGuiCol.FrameBg, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.FrameBgHovered, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.FrameBgActive, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.Text, Vector4.Zero))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 0f))
+        using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), padY)))
+        using (this.fonts.Body.Push())
+        {
+            ImGui.SetCursorScreenPos(min);
+            ImGui.SetNextItemWidth(w);
+            ImGui.InputTextWithHint("##el_code", string.Empty, ref code, 6, ImGuiInputTextFlags.CharsUppercase);
+        }
+
         var upper = code.ToUpperInvariant();
         if (upper.Length > 6)
             upper = upper[..6];
         if (upper != this.codeInput)
             this.error = null;
         this.codeInput = upper;
-        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
 
-        if (this.error is { } err)
-            Ui.CenteredText(width, this.fonts.Caption, Palette.Danger, err);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
+        var display = this.codeInput.Length > 0 ? this.codeInput : "ABC123";
+        var color = (this.codeInput.Length > 0 ? Palette.TextPrimary : Palette.TextMuted).U32();
+        var midY = y + ((h - Ui.Measure(this.fonts.Count, display).Y) * 0.5f);
+        DrawTracked(dl, this.fonts.Count, display, x + (w * 0.5f), midY, Ui.Px(10f), color);
+    }
 
-        var btnW = Math.Min(w, Ui.Px(240f));
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - btnW) * 0.5f));
-        var ready = this.codeInput.Length >= 6 && !this.searching;
-        if (this.kit.PrimaryButton("##el_find", this.searching ? "Searching" : "Find event", btnW) && ready)
-            this.Find();
+    private bool FindButton(float x, float y, float w, float h, bool ready)
+    {
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        var clicked = ImGui.InvisibleButton("##el_find", new Vector2(w, h));
+        var hovered = ImGui.IsItemHovered();
+        var dl = ImGui.GetWindowDrawList();
+
+        var fill = ready
+            ? (hovered ? Palette.WithAlpha(Palette.TextPrimary, 0.88f) : Palette.TextPrimary)
+            : Palette.WithAlpha(Palette.TextPrimary, 0.22f);
+        dl.AddRectFilled(new Vector2(x, y), new Vector2(x + w, y + h), fill.U32());
+
+        var label = this.searching ? "SEARCHING" : "FIND EVENT";
+        var color = (ready ? Palette.Paper : Palette.TextSecondary).U32();
+        var midY = y + ((h - Ui.Measure(this.fonts.Eyebrow, label).Y) * 0.5f);
+        DrawTracked(dl, this.fonts.Eyebrow, label, x + (w * 0.5f), midY, Ui.Px(2f), color);
+        return clicked && ready;
+    }
+
+    // Draw text centered on centerX with a fixed gap between characters (the reference's spaced-out code).
+    private static void DrawTracked(ImDrawListPtr dl, IFontHandle font, string text, float centerX, float y, float tracking, uint color)
+    {
+        var total = 0f;
+        for (var i = 0; i < text.Length; i++)
+            total += Ui.Measure(font, text[i].ToString()).X + (i < text.Length - 1 ? tracking : 0f);
+        var x = centerX - (total * 0.5f);
+        foreach (var ch in text)
+        {
+            var s = ch.ToString();
+            Ui.TextAt(dl, font, new Vector2(x, y), color, s);
+            x += Ui.Measure(font, s).X + tracking;
+        }
     }
 
     private void DrawHeader(float width, float pad, float height)
