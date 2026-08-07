@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using Dalamud.Interface;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -21,7 +20,6 @@ namespace Eikon.Screens;
 internal sealed class EventCreateScreen : IScreen, IDisposable
 {
     private static readonly string[] Steps = { "BASICS", "TIMING", "PLACE", "ACCESS" };
-    private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     // Section heights: control content plus the gap to the next section. A labelled field is a 22px label
     // over a 44px box; a stepper box is 64px. Both sit above a 24px gap.
@@ -155,7 +153,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.profile = profile;
         this.media = media;
         this.selection = selection;
-        this.code = GenerateCode();
+        this.code = EventFormat.GenerateCode();
     }
 
     public Screen Id => Screen.EventCreate;
@@ -726,7 +724,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             var actY = cp.Y + ((boxH - newSz.Y) * 0.5f);
             ImGui.SetCursorScreenPos(new Vector2(newX, actY));
             if (ImGui.InvisibleButton("##ec_newcode", newSz))
-                this.code = GenerateCode();
+                this.code = EventFormat.GenerateCode();
             Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), "NEW");
 
             var copied = (DateTime.UtcNow - this.codeCopiedAt).TotalSeconds < 1.5;
@@ -1417,15 +1415,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (h12 == 0)
             h12 = 12;
         return $"{h12:00}:{minute:00} {ampm}";
-    }
-
-    private static string GenerateCode()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(6);
-        var s = new char[6];
-        for (var i = 0; i < 6; i++)
-            s[i] = CodeAlphabet[bytes[i] % CodeAlphabet.Length];
-        return new string(s);
     }
 
     private IDisposable MenuStyle() => new Composite(new List<IDisposable>

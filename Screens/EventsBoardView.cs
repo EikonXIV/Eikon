@@ -309,7 +309,7 @@ internal sealed class EventsBoardView
             if (dayKey != currentDay)
             {
                 currentDay = dayKey;
-                this.DrawDayHeader(dl, width, pad, DayLabel(local), local.ToString("MMM dd").ToUpperInvariant());
+                this.DrawDayHeader(dl, width, pad, EventFormat.DayLabel(local), local.ToString("MMM dd").ToUpperInvariant());
             }
 
             this.DrawCard(dl, e, width, pad);
@@ -374,13 +374,13 @@ internal sealed class EventsBoardView
         Ui.TextAt(dl, this.fonts.Count, new Vector2(timeX, iy), Palette.TextPrimary.U32(), e.HostClock);
         var bigH = Ui.Measure(this.fonts.Count, e.HostClock).Y;
         Ui.TextAt(dl, this.fonts.Mono, new Vector2(timeX, iy + bigH + Ui.Px(3f)), Palette.TextSecondary.U32(), e.HostTzLabel.ToUpperInvariant());
-        Ui.TextAt(dl, this.fonts.Mono, new Vector2(timeX, iy + bigH + Ui.Px(17f)), Palette.TextMuted.U32(), Duration(e.DurationMins));
+        Ui.TextAt(dl, this.fonts.Mono, new Vector2(timeX, iy + bigH + Ui.Px(17f)), Palette.TextMuted.U32(), EventFormat.Duration(e.DurationMins).ToUpperInvariant());
 
         var textX = pos.X + pad + Ui.Px(62f);
         var textRight = (pos.X + width) - pad;
         var textW = textRight - textX;
 
-        var eyebrow = KindLabel(e.Kind).ToUpperInvariant();
+        var eyebrow = EventFormat.KindLabel(e.Kind).ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX, iy), Palette.TextSecondary.U32(), eyebrow);
         var markX = textX + Ui.Measure(this.fonts.Eyebrow, eyebrow).X + Ui.Px(8f);
         if (cancelled)
@@ -502,39 +502,10 @@ internal sealed class EventsBoardView
         return string.Empty;
     }
 
-    private static string KindLabel(EventKindElement kind)
-    {
-        foreach (var k in KindRow)
-            if (k.Kind == kind)
-                return k.Label;
-        return kind.ToString();
-    }
-
     private static (string First, string Tail) SplitTitle(string title)
     {
         var space = title.IndexOf(' ');
         return space > 0 ? (title[..(space + 1)], title[(space + 1)..]) : (title, string.Empty);
-    }
-
-    private static string Duration(long mins)
-    {
-        if (mins < 60)
-            return $"{mins}M";
-        var h = mins / 60;
-        var m = mins % 60;
-        return m > 0 ? $"{h}H {m}M" : $"{h}H";
-    }
-
-    private static string DayLabel(DateTimeOffset local)
-    {
-        var today = DateTimeOffset.Now.Date;
-        var diff = (local.Date - today).Days;
-        return diff switch
-        {
-            0 => "Today",
-            1 => "Tomorrow",
-            _ => local.ToString("dddd"),
-        };
     }
 
     private string Fit(string text, float maxWidth, IFontHandle font)

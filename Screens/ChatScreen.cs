@@ -838,7 +838,7 @@ internal sealed class ChatScreen : IScreen
         // Meta strip: kind eyebrow (left), attending[/capacity] (right).
         var stripTop = pos.Y + bannerH;
         dl.AddRectFilled(new Vector2(pos.X, stripTop), new Vector2(pos.X + width, stripTop + metaH), Palette.WithAlpha(Palette.Paper, 0.04f).U32());
-        var kind = KindLabel(message.EventKind).ToUpperInvariant();
+        var kind = EventFormat.KindLabel(message.EventKind).ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + pad, stripTop + ((metaH - Ui.Measure(this.fonts.Eyebrow, kind).Y) * 0.5f)), Palette.TextSecondary.U32(), kind);
         var countText = message.EventCapacity is { } cap ? $"{message.EventAttending}/{cap}" : message.EventAttending.ToString();
         var cw = Ui.Measure(this.fonts.Eyebrow, countText).X;
@@ -877,27 +877,11 @@ internal sealed class ChatScreen : IScreen
     // date) then the host wall clock and tz label, matching the detail's "20:00 PT" reading.
     private (string day, string rest) EventTimeLine(ChatService.Message m)
     {
-        var day = EventDayLabel(m.EventStartsAt.ToLocalTime());
+        var day = EventFormat.DayLabel(m.EventStartsAt.ToLocalTime());
         var clock = string.IsNullOrEmpty(m.EventClock) ? m.EventStartsAt.ToLocalTime().ToString("HH:mm") : m.EventClock!;
         var tz = string.IsNullOrEmpty(m.EventTzLabel) ? string.Empty : " " + m.EventTzLabel;
         return (day, $"  ·  {clock}{tz}");
     }
-
-    private static string EventDayLabel(DateTimeOffset local)
-    {
-        var diff = (local.Date - DateTimeOffset.Now.Date).Days;
-        return diff switch { 0 => "Today", 1 => "Tomorrow", _ => local.ToString("dddd") };
-    }
-
-    private static string KindLabel(EventKindElement kind) => kind switch
-    {
-        EventKindElement.Club => "Club night",
-        EventKindElement.Gathering => "Gathering",
-        EventKindElement.Performance => "Performance",
-        EventKindElement.Raid => "Raid",
-        EventKindElement.Roleplay => "Roleplay",
-        _ => "Market",
-    };
 
     private string FitWith(string text, float maxWidth, IFontHandle font)
     {

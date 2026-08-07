@@ -138,7 +138,7 @@ internal sealed class EventDetailScreen : IScreen
         // Masthead: kind eyebrow + badges, serif title, host line.
         var mp = ImGui.GetCursorScreenPos();
         var y = mp.Y + Ui.Px(18f);
-        var eyebrow = KindLabel(e.Kind).ToUpperInvariant();
+        var eyebrow = EventFormat.KindLabel(e.Kind).ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(mp.X + left, y), Palette.TextSecondary.U32(), eyebrow);
         var bx = mp.X + left + Ui.Measure(this.fonts.Eyebrow, eyebrow).X + Ui.Px(10f);
         void Badge(string text, uint color)
@@ -173,7 +173,7 @@ internal sealed class EventDetailScreen : IScreen
         this.DrawDoors(dl, e, width, left, right);
 
         // Meta rows.
-        this.MetaRow(dl, width, left, right, "RUNS", Duration(e.DurationMins));
+        this.MetaRow(dl, width, left, right, "RUNS", EventFormat.Duration(e.DurationMins));
         this.YourTimeRow(dl, width, left, right, e);
         this.MetaRow(dl, width, left, right, VenueLabel(e.Venue.Type), this.LocationLine(e));
         if (e.Hosting && e.Visibility == Visibility.Private && !string.IsNullOrEmpty(e.EntryCode))
@@ -213,7 +213,7 @@ internal sealed class EventDetailScreen : IScreen
             Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(rx - capW, ry + Ui.Px(6f)), Palette.TextMuted.U32(), cap);
 
         var dayY = ry + Ui.Measure(this.fonts.EventTitle, e.HostClock).Y + Ui.Px(2f);
-        var stamp = $"{DayLabel(e.StartsAt.ToLocalTime())} · {e.StartsAt.ToLocalTime():MMM dd}".ToUpperInvariant();
+        var stamp = $"{EventFormat.DayLabel(e.StartsAt.ToLocalTime())} · {e.StartsAt.ToLocalTime():MMM dd}".ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Mono, new Vector2(lx, dayY), Palette.TextMuted.U32(), stamp);
 
         var h = (dayY + Ui.Measure(this.fonts.Mono, stamp).Y + Ui.Px(16f)) - pos.Y;
@@ -562,33 +562,7 @@ internal sealed class EventDetailScreen : IScreen
         _ => "DISCORD",
     };
 
-    private static string KindLabel(EventKindElement kind) => kind switch
-    {
-        EventKindElement.Club => "Club night",
-        EventKindElement.Gathering => "Gathering",
-        EventKindElement.Performance => "Performance",
-        EventKindElement.Raid => "Raid",
-        EventKindElement.Roleplay => "Roleplay",
-        _ => "Market",
-    };
-
-    private static string Duration(long mins)
-    {
-        if (mins < 60)
-            return $"{mins}m";
-        var h = mins / 60;
-        var m = mins % 60;
-        return m > 0 ? $"{h}h {m}m" : $"{h}h";
-    }
-
-    private static string DayLabel(DateTimeOffset local)
-    {
-        var diff = (local.Date - DateTimeOffset.Now.Date).Days;
-        return diff switch { 0 => "Today", 1 => "Tomorrow", _ => local.ToString("dddd") };
-    }
-
-    // An event is over once its start plus its duration is in the past (matches the server's board cutoff).
-    private static bool IsEnded(EventDto e) => !e.Cancelled && e.StartsAt.AddMinutes(e.DurationMins) < DateTimeOffset.Now;
+    private static bool IsEnded(EventDto e) => EventFormat.IsEnded(e.StartsAt, e.DurationMins, e.Cancelled);
 
     private IDisposable MenuStyle() => new Composite(new List<IDisposable>
     {
