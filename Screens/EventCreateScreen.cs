@@ -108,7 +108,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private EventKindElement kind = EventKindElement.Gathering;
     private string description = string.Empty;
     private string tagsText = string.Empty;
-    private string bannerPreset = "lounge";
+    private string bannerPreset = EventService.PresetIds[0];
     private byte[]? uploadBytes;
     private IDalamudTextureWrap? uploadPreview;
 
@@ -248,7 +248,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.kind = e.Kind;
         this.description = e.Description;
         this.tagsText = string.Join(", ", e.Tags ?? new List<string>());
-        this.bannerPreset = e.BannerPreset ?? "lounge";
+        this.bannerPreset = e.BannerPreset ?? EventService.PresetIds[0];
         var local = e.StartsAt.ToLocalTime();
         this.date = local.Date;
         this.hour = int.TryParse(e.HostClock.Split(':').FirstOrDefault(), out var h) ? h : local.Hour;
@@ -414,13 +414,14 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         dl.AddRect(new Vector2(pos.X + x, pos.Y), new Vector2(pos.X + x + w, pos.Y + previewH), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
-        // Filmstrip: 3 presets + upload tile.
+        // Filmstrip: the bundled presets + an upload tile.
+        var presetIds = EventService.PresetIds;
+        var cells = presetIds.Length + 1;
         var gap = Ui.Px(8f);
-        var cellW = (w - (gap * 3f)) / 4f;
+        var cellW = (w - (gap * (cells - 1))) / cells;
         var cellH = cellW / 3f * 2f;   // slightly taller thumbs read better
         var stripY = pos.Y + previewH + Ui.Px(10f);
-        string[] presetIds = { "lounge", "rooftops", "lakeside" };
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < presetIds.Length; i++)
         {
             var cx = pos.X + x + (i * (cellW + gap));
             ImGui.SetCursorScreenPos(new Vector2(cx, stripY));
@@ -446,7 +447,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             dl.AddRect(min, max, (selected ? Palette.TextPrimary : Palette.Border).U32(), 0f, ImDrawFlags.None, selected ? Ui.Px(2f) : 1f);
         }
 
-        var ux = pos.X + x + (3 * (cellW + gap));
+        var ux = pos.X + x + (presetIds.Length * (cellW + gap));
         ImGui.SetCursorScreenPos(new Vector2(ux, stripY));
         if (ImGui.InvisibleButton("##ec_upload", new Vector2(cellW, cellH)))
             this.PickBanner();

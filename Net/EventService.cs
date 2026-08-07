@@ -31,7 +31,7 @@ internal sealed class EventService : IDisposable
     private readonly ConcurrentDictionary<Guid, byte> loadingBanners = new();
     private readonly ConcurrentDictionary<string, IDalamudTextureWrap?> presets = new();
     private readonly ConcurrentDictionary<string, byte> loadingPresets = new();
-    private static readonly string[] PresetIds = { "lounge", "rooftops", "lakeside" };
+    internal static readonly string[] PresetIds = { "club", "hearth", "shores" };
 
     private Task fetchTask = Task.CompletedTask;
     private bool fetchedOnce;
