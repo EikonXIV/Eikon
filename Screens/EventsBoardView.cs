@@ -371,12 +371,15 @@ internal sealed class EventsBoardView
         // Info row (inset by pad).
         var iy = pos.Y + bannerH + Ui.Px(12f);
         var timeX = pos.X + pad;
-        Ui.TextAt(dl, this.fonts.Count, new Vector2(timeX, iy), Palette.TextPrimary.U32(), e.HostClock);
-        var bigH = Ui.Measure(this.fonts.Count, e.HostClock).Y;
-        Ui.TextAt(dl, this.fonts.Mono, new Vector2(timeX, iy + bigH + Ui.Px(3f)), Palette.TextSecondary.U32(), e.HostTzLabel.ToUpperInvariant());
-        Ui.TextAt(dl, this.fonts.Mono, new Vector2(timeX, iy + bigH + Ui.Px(17f)), Palette.TextMuted.U32(), EventFormat.Duration(e.DurationMins).ToUpperInvariant());
+        var clock = EventFormat.Clock12(e.HostClock);
+        Ui.TextAt(dl, this.fonts.Count, new Vector2(timeX, iy), Palette.TextPrimary.U32(), clock);
+        var bigH = Ui.Measure(this.fonts.Count, clock).Y;
+        var subY = iy + bigH + Ui.Px(4f);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(timeX, subY), Palette.TextSecondary.U32(), e.HostTzLabel.ToUpperInvariant());
+        var subH = Ui.Measure(this.fonts.Eyebrow, "X").Y;
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(timeX, subY + subH + Ui.Px(3f)), Palette.TextMuted.U32(), EventFormat.Duration(e.DurationMins).ToUpperInvariant());
 
-        var textX = pos.X + pad + Ui.Px(62f);
+        var textX = pos.X + pad + Ui.Px(90f);
         var textRight = (pos.X + width) - pad;
         var textW = textRight - textX;
 

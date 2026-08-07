@@ -30,6 +30,27 @@ internal static class EventFormat
         return m > 0 ? $"{h}h {m}m" : $"{h}h";
     }
 
+    // A 24-hour hour/minute rendered as a 12-hour clock with AM/PM (20:00 -> "8:00 PM").
+    internal static string Clock12(int hour, int minute)
+    {
+        var ampm = hour >= 12 ? "PM" : "AM";
+        var h12 = hour % 12;
+        if (h12 == 0)
+            h12 = 12;
+        return $"{h12}:{minute:00} {ampm}";
+    }
+
+    // A stored "HH:mm" host clock rendered in 12-hour; returns the input unchanged if it doesn't parse.
+    internal static string Clock12(string clock24)
+    {
+        var parts = clock24.Split(':');
+        return parts.Length == 2 && int.TryParse(parts[0], out var h) && int.TryParse(parts[1], out var m)
+            ? Clock12(h, m)
+            : clock24;
+    }
+
+    internal static string Clock12(DateTimeOffset time) => Clock12(time.Hour, time.Minute);
+
     // Today / Tomorrow / weekday, relative to now (passed in so tests are deterministic).
     internal static string DayLabel(DateTimeOffset local, DateTimeOffset now)
     {

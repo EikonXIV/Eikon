@@ -878,7 +878,7 @@ internal sealed class ChatScreen : IScreen
     private (string day, string rest) EventTimeLine(ChatService.Message m)
     {
         var day = EventFormat.DayLabel(m.EventStartsAt.ToLocalTime());
-        var clock = string.IsNullOrEmpty(m.EventClock) ? m.EventStartsAt.ToLocalTime().ToString("HH:mm") : m.EventClock!;
+        var clock = string.IsNullOrEmpty(m.EventClock) ? EventFormat.Clock12(m.EventStartsAt.ToLocalTime()) : EventFormat.Clock12(m.EventClock!);
         var tz = string.IsNullOrEmpty(m.EventTzLabel) ? string.Empty : " " + m.EventTzLabel;
         return (day, $"  ·  {clock}{tz}");
     }

@@ -199,8 +199,9 @@ internal sealed class EventDetailScreen : IScreen
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(rx - attW, y), Palette.TextSecondary.U32(), attend);
 
         var ry = y + Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(6f);
-        Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(lx, ry), Palette.TextPrimary.U32(), e.HostClock);
-        var clockW = Ui.Measure(this.fonts.EventTitle, e.HostClock).X;
+        var clock = EventFormat.Clock12(e.HostClock);
+        Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(lx, ry), Palette.TextPrimary.U32(), clock);
+        var clockW = Ui.Measure(this.fonts.EventTitle, clock).X;
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lx + clockW + Ui.Px(6f), ry + Ui.Px(6f)), Palette.TextSecondary.U32(), e.HostTzLabel.ToUpperInvariant());
 
         // Attending count, right-aligned: count in ink, /capacity muted.
@@ -212,7 +213,7 @@ internal sealed class EventDetailScreen : IScreen
         if (cap.Length > 0)
             Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(rx - capW, ry + Ui.Px(6f)), Palette.TextMuted.U32(), cap);
 
-        var dayY = ry + Ui.Measure(this.fonts.EventTitle, e.HostClock).Y + Ui.Px(2f);
+        var dayY = ry + Ui.Measure(this.fonts.EventTitle, clock).Y + Ui.Px(2f);
         var stamp = $"{EventFormat.DayLabel(e.StartsAt.ToLocalTime())} · {e.StartsAt.ToLocalTime():MMM dd}".ToUpperInvariant();
         Ui.TextAt(dl, this.fonts.Mono, new Vector2(lx, dayY), Palette.TextMuted.U32(), stamp);
 
@@ -240,7 +241,7 @@ internal sealed class EventDetailScreen : IScreen
         var rowH = Ui.Px(50f);
         var cy = pos.Y + (rowH * 0.5f);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + left, cy - (Ui.Measure(this.fonts.Eyebrow, "YOUR TIME").Y * 0.5f)), Palette.TextSecondary.U32(), "YOUR TIME");
-        var local = e.StartsAt.ToLocalTime().ToString("HH:mm");
+        var local = EventFormat.Clock12(e.StartsAt.ToLocalTime());
         var suffix = " local";
         var localW = Ui.Measure(this.fonts.EventMeta, local).X;
         var suffixW = Ui.Measure(this.fonts.EventMeta, suffix).X;

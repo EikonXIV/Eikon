@@ -575,7 +575,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             this.calView = new DateTime(this.date.Year, this.date.Month, 1);
             ImGui.OpenPopup("##ec_datepop");
         }
-        if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, To12H(this.hour, this.minute), FontAwesomeIcon.Clock))
+        if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, EventFormat.Clock12(this.hour, this.minute), FontAwesomeIcon.Clock))
             ImGui.OpenPopup("##ec_timepop");
         Block(rp, w, FieldBlock);
 
@@ -1461,15 +1461,6 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (this.catalog.Zones.Count <= this.zoneIdx || this.zoneIdx < 0)
             return new List<EventCatalog.Aetheryte>();
         return this.catalog.AetherytesInZone(this.catalog.Zones[this.zoneIdx].Id).ToList();
-    }
-
-    private static string To12H(int hour, int minute)
-    {
-        var ampm = hour >= 12 ? "PM" : "AM";
-        var h12 = hour % 12;
-        if (h12 == 0)
-            h12 = 12;
-        return $"{h12:00}:{minute:00} {ampm}";
     }
 
     private IDisposable MenuStyle() => new Composite(new List<IDisposable>

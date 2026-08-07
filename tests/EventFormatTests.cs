@@ -34,6 +34,33 @@ public class EventFormatTests
         Assert.Equal(expected, EventFormat.Duration(mins));
     }
 
+    [Theory]
+    [InlineData(0, 0, "12:00 AM")]
+    [InlineData(9, 5, "9:05 AM")]
+    [InlineData(12, 0, "12:00 PM")]
+    [InlineData(13, 30, "1:30 PM")]
+    [InlineData(20, 0, "8:00 PM")]
+    [InlineData(23, 45, "11:45 PM")]
+    public void Clock12_reads_in_twelve_hour_am_pm(int hour, int minute, string expected)
+    {
+        Assert.Equal(expected, EventFormat.Clock12(hour, minute));
+    }
+
+    [Theory]
+    [InlineData("20:00", "8:00 PM")]
+    [InlineData("00:15", "12:15 AM")]
+    [InlineData("09:30", "9:30 AM")]
+    public void Clock12_parses_a_stored_clock_string(string clock24, string expected)
+    {
+        Assert.Equal(expected, EventFormat.Clock12(clock24));
+    }
+
+    [Fact]
+    public void Clock12_returns_unparseable_input_unchanged()
+    {
+        Assert.Equal("later", EventFormat.Clock12("later"));
+    }
+
     [Fact]
     public void DayLabel_is_today_tomorrow_then_weekday()
     {
