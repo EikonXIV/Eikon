@@ -38,6 +38,9 @@ internal sealed class SafetyService
     public void Report(Guid targetId, ReportReasonEnum reason, string? details, string? sealedEvidence = null) =>
         this.Run(token => this.api.ReportAsync(token, new ReportRequest { TargetId = targetId, Reason = reason, Details = details, SealedEvidence = sealedEvidence }, CancellationToken.None));
 
+    public void ReportEvent(Guid hostId, Guid eventId, ReportReasonEnum reason, string? details) =>
+        this.Run(token => this.api.ReportAsync(token, new ReportRequest { TargetId = hostId, EventId = eventId, Reason = reason, Details = details }, CancellationToken.None));
+
     public void Favorite(Guid targetId, bool on) => this.Run(async token =>
     {
         await this.api.FavoriteAsync(token, targetId, on, CancellationToken.None);

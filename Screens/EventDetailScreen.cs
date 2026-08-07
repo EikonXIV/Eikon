@@ -23,13 +23,14 @@ internal sealed class EventDetailScreen : IScreen
     private readonly EventCatalog catalog;
     private readonly WorldCatalog worlds;
     private readonly Selection selection;
+    private readonly ModerationFlow moderation;
 
     private string codeInput = string.Empty;
     private int codeTries;
     private DateTime lockoutUntil;
     private bool confirmDelete;
 
-    public EventDetailScreen(ScreenRouter router, Kit kit, UiFonts fonts, EventService events, EventCatalog catalog, WorldCatalog worlds, Selection selection)
+    public EventDetailScreen(ScreenRouter router, Kit kit, UiFonts fonts, EventService events, EventCatalog catalog, WorldCatalog worlds, Selection selection, ModerationFlow moderation)
     {
         this.router = router;
         this.kit = kit;
@@ -38,6 +39,7 @@ internal sealed class EventDetailScreen : IScreen
         this.catalog = catalog;
         this.worlds = worlds;
         this.selection = selection;
+        this.moderation = moderation;
     }
 
     public Screen Id => Screen.EventDetail;
@@ -76,6 +78,7 @@ internal sealed class EventDetailScreen : IScreen
             this.DrawStatus(width, "Loading…");
 
         this.DrawMenu(detail, eventId);
+        this.moderation.Draw();
         this.DrawDeleteDialog(eventId);
     }
 
@@ -445,8 +448,11 @@ internal sealed class EventDetailScreen : IScreen
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (this.MenuRow(FontAwesomeIcon.Flag, "Report event", true))
+                if (e != null && this.MenuRow(FontAwesomeIcon.Flag, "Report event", true))
+                {
+                    this.moderation.OpenReportEvent(e.HostId, eventId, e.Title);
                     ImGui.CloseCurrentPopup();
+                }
             }
 
             ImGui.EndPopup();
