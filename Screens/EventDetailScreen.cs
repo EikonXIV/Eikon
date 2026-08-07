@@ -164,8 +164,6 @@ internal sealed class EventDetailScreen : IScreen
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(mp.X + left, y), Palette.TextSecondary.U32(), hosted);
         var hx = mp.X + left + Ui.Measure(this.fonts.EventMeta, hosted).X;
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(hx, y), Palette.TextPrimary.U32(), e.HostName);
-        hx += Ui.Measure(this.fonts.EventMeta, e.HostName).X;
-        Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(hx, y), Palette.TextMuted.U32(), $" · {e.HostHandle}");
         var mastheadH = (y + Ui.Measure(this.fonts.EventMeta, hosted).Y + Ui.Px(18f)) - mp.Y;
         ImGui.Dummy(new Vector2(width, mastheadH));
 
