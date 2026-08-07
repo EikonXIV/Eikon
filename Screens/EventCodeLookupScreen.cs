@@ -21,6 +21,7 @@ internal sealed class EventCodeLookupScreen : IScreen
     private string codeInput = string.Empty;
     private string? error;
     private bool searching;
+    private bool forceFocus;   // harness only: hold keyboard focus so the caret shows in a screenshot
 
     public EventCodeLookupScreen(ScreenRouter router, Kit kit, UiFonts fonts, EventService events, Selection selection)
     {
@@ -40,6 +41,7 @@ internal sealed class EventCodeLookupScreen : IScreen
     {
         this.codeInput = code;
         this.error = error;
+        this.forceFocus = true;
     }
 
     public void Draw()
@@ -109,18 +111,22 @@ internal sealed class EventCodeLookupScreen : IScreen
 
     // Full-width code entry. A transparent InputText over the box captures typing (its native text and
     // caret hidden); the code, or an "ABC123" placeholder, is drawn centered and letter-spaced on top.
+    // While the field owns the keyboard it gets a gold ring and a blinking caret so it reads as editable.
     private void CodeField(float x, float y, float w, float h)
     {
         var dl = ImGui.GetWindowDrawList();
         var min = new Vector2(x, y);
-        dl.AddRectFilled(min, new Vector2(x + w, y + h), Palette.Surface2.U32());
+        var max = new Vector2(x + w, y + h);
+        dl.AddRectFilled(min, max, Palette.Surface2.U32());
 
         var code = this.codeInput;
         var padY = (h - Ui.Measure(this.fonts.Body, "A").Y) * 0.5f;
+        bool focused;
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Vector4.Zero))
         using (ImRaii.PushColor(ImGuiCol.FrameBgHovered, Vector4.Zero))
         using (ImRaii.PushColor(ImGuiCol.FrameBgActive, Vector4.Zero))
         using (ImRaii.PushColor(ImGuiCol.Text, Vector4.Zero))
+        using (ImRaii.PushColor(ImGuiCol.TextSelectedBg, Vector4.Zero))
         using (ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 0f))
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), padY)))
@@ -128,7 +134,10 @@ internal sealed class EventCodeLookupScreen : IScreen
         {
             ImGui.SetCursorScreenPos(min);
             ImGui.SetNextItemWidth(w);
+            if (this.forceFocus)
+                ImGui.SetKeyboardFocusHere();
             ImGui.InputTextWithHint("##el_code", string.Empty, ref code, 6, ImGuiInputTextFlags.CharsUppercase);
+            focused = ImGui.IsItemActive();
         }
 
         var upper = code.ToUpperInvariant();
@@ -138,10 +147,27 @@ internal sealed class EventCodeLookupScreen : IScreen
             this.error = null;
         this.codeInput = upper;
 
-        var display = this.codeInput.Length > 0 ? this.codeInput : "ABC123";
-        var color = (this.codeInput.Length > 0 ? Palette.TextPrimary : Palette.TextMuted).U32();
-        var midY = y + ((h - Ui.Measure(this.fonts.Count, display).Y) * 0.5f);
-        DrawTracked(dl, this.fonts.Count, display, x + (w * 0.5f), midY, Ui.Px(10f), color);
+        var hasText = this.codeInput.Length > 0;
+        var font = this.fonts.Count;
+        var tracking = Ui.Px(10f);
+        var centerX = x + (w * 0.5f);
+        var glyphH = Ui.Measure(font, "0").Y;
+        var midY = y + ((h - glyphH) * 0.5f);
+
+        if (hasText)
+            DrawTracked(dl, font, this.codeInput, centerX, midY, tracking, Palette.TextPrimary.U32());
+        else if (!focused)
+            DrawTracked(dl, font, "ABC123", centerX, midY, tracking, Palette.TextMuted.U32());
+
+        if (focused)
+        {
+            dl.AddRect(min, max, Palette.Signal.U32(), 0f, ImDrawFlags.None, Ui.Px(1.5f));
+            if (ImGui.GetTime() % 1.0 < 0.55)
+            {
+                var caretX = hasText ? centerX + (TrackedWidth(font, this.codeInput, tracking) * 0.5f) + Ui.Px(4f) : centerX;
+                dl.AddRectFilled(new Vector2(caretX, midY), new Vector2(caretX + Ui.Px(2f), midY + glyphH), Palette.Signal.U32());
+            }
+        }
     }
 
     private bool FindButton(float x, float y, float w, float h, bool ready)
@@ -163,13 +189,19 @@ internal sealed class EventCodeLookupScreen : IScreen
         return clicked && ready;
     }
 
-    // Draw text centered on centerX with a fixed gap between characters (the reference's spaced-out code).
-    private static void DrawTracked(ImDrawListPtr dl, IFontHandle font, string text, float centerX, float y, float tracking, uint color)
+    // Total width of text drawn with a fixed gap between characters.
+    private static float TrackedWidth(IFontHandle font, string text, float tracking)
     {
         var total = 0f;
         for (var i = 0; i < text.Length; i++)
             total += Ui.Measure(font, text[i].ToString()).X + (i < text.Length - 1 ? tracking : 0f);
-        var x = centerX - (total * 0.5f);
+        return total;
+    }
+
+    // Draw text centered on centerX with a fixed gap between characters (the reference's spaced-out code).
+    private static void DrawTracked(ImDrawListPtr dl, IFontHandle font, string text, float centerX, float y, float tracking, uint color)
+    {
+        var x = centerX - (TrackedWidth(font, text, tracking) * 0.5f);
         foreach (var ch in text)
         {
             var s = ch.ToString();
