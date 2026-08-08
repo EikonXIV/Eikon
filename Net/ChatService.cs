@@ -35,6 +35,17 @@ internal sealed class ChatService
         public Guid? AlbumId;
         public string? AlbumName;
         public int AlbumCount;
+        public bool IsEvent;                  // an event share card (a snapshot rendered without access)
+        public Guid EventId;
+        public EventKindElement EventKind;
+        public string? EventTitle;
+        public string? EventBannerPreset;
+        public DateTimeOffset EventStartsAt;
+        public string? EventClock;
+        public string? EventTzLabel;
+        public string? EventLocation;
+        public long EventAttending;
+        public long? EventCapacity;
         public bool Nsfw;                     // image marked sensitive by the sender -> blur until revealed
         public string? ImageId;              // local sealed-image id (see ChatMediaCache)
         public string? OutEnvelope;          // image: the ratchet payload, kept so we can resend on a re-handshake
@@ -47,6 +58,8 @@ internal sealed class ChatService
     // Prefix marking a ratchet message whose plaintext is an album share card. Same idea as
     // ImageMagic: an album-less client shows the raw envelope; an album-aware one renders a card.
     private const string AlbumMagic = "album:";
+    // Prefix marking a ratchet message whose plaintext is an event share card. Same idea as AlbumMagic.
+    private const string EventMagic = "event:";
 
     private readonly RelayClient relay;
     private readonly MessageCrypto crypto;
@@ -97,6 +110,17 @@ internal sealed class ChatService
         {
             this.EnsureLoaded();
             return this.threads.TryGetValue(peer, out var list) ? list.ToList() : new List<Message>();
+        }
+    }
+
+    // Harness seam (Vitrine has InternalsVisibleTo): drop a ready-made message into a thread for offline
+    // screenshots, without going through the encrypt/relay path.
+    internal void SeedForTest(Guid peer, Message message)
+    {
+        lock (this.gate)
+        {
+            this.EnsureLoaded();
+            this.GetThread(peer).Add(message);
         }
     }
 
@@ -179,6 +203,49 @@ internal sealed class ChatService
             catch (Exception ex)
             {
                 this.log.Warning(ex, "Sharing album failed.");
+                message.State = MessageState.Failed;
+            }
+        });
+    }
+
+    // Share an event in chat: a ratchet message whose plaintext is an event card snapshot. The recipient
+    // renders the card (banner, kind, title, time, location) without needing access to the event; a tap
+    // tries to open it. Old clients show the raw envelope.
+    public void SendEventCard(Guid peer, EventShare e)
+    {
+        var clientMsgId = Guid.NewGuid().ToString();
+        var envelope = EventMagic + JsonSerializer.Serialize(new
+        {
+            e = e.EventId.ToString(), k = (int)e.Kind, t = e.Title, b = e.BannerPreset,
+            s = e.StartsAt.ToString("o"), hc = e.HostClock, tz = e.HostTzLabel, loc = e.Location,
+            at = e.Attending, cap = e.Capacity,
+        });
+        var message = new Message
+        {
+            Mine = true, State = MessageState.Pending, ClientMsgId = clientMsgId, SentAt = DateTimeOffset.UtcNow,
+            IsEvent = true, EventId = e.EventId, EventKind = e.Kind, EventTitle = e.Title, EventBannerPreset = e.BannerPreset,
+            EventStartsAt = e.StartsAt, EventClock = e.HostClock, EventTzLabel = e.HostTzLabel, EventLocation = e.Location,
+            EventAttending = e.Attending, EventCapacity = e.Capacity, OutEnvelope = envelope,
+        };
+        lock (this.gate)
+        {
+            this.EnsureLoaded();
+            this.GetThread(peer).Add(message);
+            this.pending[clientMsgId] = message;
+            this.Save();
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var enc = await this.crypto.EncryptAsync(peer, envelope, CancellationToken.None);
+                if (enc is null) { message.State = MessageState.Failed; return; }
+                this.relay.SendMessage(peer.ToString(), enc.Value.Ciphertext, enc.Value.Header, enc.Value.Nonce, clientMsgId);
+            }
+            catch (Exception ex)
+            {
+                this.log.Warning(ex, "Sharing event failed.");
                 message.State = MessageState.Failed;
             }
         });
@@ -269,6 +336,11 @@ internal sealed class ChatService
                 message = BuildAlbumMessage(dto, text)
                     ?? new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
             }
+            else if (text.StartsWith(EventMagic, StringComparison.Ordinal))
+            {
+                message = BuildEventMessage(dto, text)
+                    ?? new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
+            }
             else
             {
                 message = new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
@@ -339,6 +411,33 @@ internal sealed class ChatService
             {
                 Mine = false, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt,
                 IsAlbum = true, AlbumId = albumId, AlbumName = name, AlbumCount = count,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Message? BuildEventMessage(EncryptedMessageDto dto, string envelopeText)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(envelopeText[EventMagic.Length..]);
+            var root = doc.RootElement;
+            return new Message
+            {
+                Mine = false, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt, IsEvent = true,
+                EventId = Guid.Parse(root.GetProperty("e").GetString()!),
+                EventKind = (EventKindElement)root.GetProperty("k").GetInt32(),
+                EventTitle = root.TryGetProperty("t", out var t) ? t.GetString() : null,
+                EventBannerPreset = root.TryGetProperty("b", out var b) ? b.GetString() : null,
+                EventStartsAt = root.TryGetProperty("s", out var s) && s.GetString() is { } iso ? DateTimeOffset.Parse(iso) : default,
+                EventClock = root.TryGetProperty("hc", out var hc) ? hc.GetString() : null,
+                EventTzLabel = root.TryGetProperty("tz", out var tz) ? tz.GetString() : null,
+                EventLocation = root.TryGetProperty("loc", out var loc) ? loc.GetString() : null,
+                EventAttending = root.TryGetProperty("at", out var at) && at.TryGetInt64(out var atv) ? atv : 0,
+                EventCapacity = root.TryGetProperty("cap", out var cap) && cap.ValueKind == JsonValueKind.Number && cap.TryGetInt64(out var cv) ? cv : null,
             };
         }
         catch
@@ -446,7 +545,7 @@ internal sealed class ChatService
 
     private async Task ResendAsync(Guid peer, Message message)
     {
-        var payload = message.IsImage || message.IsAlbum ? message.OutEnvelope : message.Text;
+        var payload = message.IsImage || message.IsAlbum || message.IsEvent ? message.OutEnvelope : message.Text;
         if (string.IsNullOrEmpty(payload))
         {
             message.State = MessageState.Failed;   // image envelope wasn't retained (e.g. across a restart)
@@ -513,7 +612,7 @@ internal sealed class ChatService
                     var list = this.GetThread(peer);
                     foreach (var m in msgs)
                     {
-                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, SentAt = m.SentAt });
+                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, IsEvent = m.IsEvent, EventId = m.EventId, EventKind = (EventKindElement)m.EventKind, EventTitle = m.EventTitle, EventBannerPreset = m.EventBannerPreset, EventStartsAt = m.EventStartsAt, EventClock = m.EventClock, EventTzLabel = m.EventTzLabel, EventLocation = m.EventLocation, EventAttending = m.EventAttending, EventCapacity = m.EventCapacity, SentAt = m.SentAt });
                         if (m.MessageId is { } id)
                             this.seen.Add(id);
                     }
@@ -539,7 +638,7 @@ internal sealed class ChatService
         {
             var dto = new Dictionary<string, List<MessageDto>>();
             foreach (var (peer, list) in this.threads)
-                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, SentAt = m.SentAt });
+                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, IsEvent = m.IsEvent, EventId = m.EventId, EventKind = (int)m.EventKind, EventTitle = m.EventTitle, EventBannerPreset = m.EventBannerPreset, EventStartsAt = m.EventStartsAt, EventClock = m.EventClock, EventTzLabel = m.EventTzLabel, EventLocation = m.EventLocation, EventAttending = m.EventAttending, EventCapacity = m.EventCapacity, SentAt = m.SentAt });
             var sealedBytes = this.vault.SealLocal(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(dto)));
 
             var tmp = this.historyPath + ".tmp";
@@ -568,6 +667,17 @@ internal sealed class ChatService
         public Guid? AlbumId { get; set; }
         public string? AlbumName { get; set; }
         public int AlbumCount { get; set; }
+        public bool IsEvent { get; set; }
+        public Guid EventId { get; set; }
+        public int EventKind { get; set; }
+        public string? EventTitle { get; set; }
+        public string? EventBannerPreset { get; set; }
+        public DateTimeOffset EventStartsAt { get; set; }
+        public string? EventClock { get; set; }
+        public string? EventTzLabel { get; set; }
+        public string? EventLocation { get; set; }
+        public long EventAttending { get; set; }
+        public long? EventCapacity { get; set; }
         public DateTimeOffset? SentAt { get; set; }
     }
 }

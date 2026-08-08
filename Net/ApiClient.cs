@@ -123,6 +123,33 @@ internal interface IApiClient
     Task DenyAlbumRequestAsync(string accessToken, string requestId, CancellationToken ct);
 
     Task<List<PeerAlbumDto>> ListPeerAlbumsAsync(string accessToken, string userId, CancellationToken ct);
+
+    // ---- events ----
+    Task<HousingReferenceResponse> GetHousingAsync(CancellationToken ct);
+
+    Task<EventsResponse> ListEventsAsync(string accessToken, EventsQuery query, CancellationToken ct);
+
+    Task<EventDto?> GetEventAsync(string accessToken, string eventId, CancellationToken ct);
+
+    Task<EventDto> CreateEventAsync(string accessToken, CreateEventRequest request, CancellationToken ct);
+
+    Task UpdateEventAsync(string accessToken, string eventId, UpdateEventRequest request, CancellationToken ct);
+
+    Task CancelEventAsync(string accessToken, string eventId, CancellationToken ct);
+
+    Task RestoreEventAsync(string accessToken, string eventId, CancellationToken ct);
+
+    Task<string> RegenerateEventCodeAsync(string accessToken, string eventId, CancellationToken ct);
+
+    Task DeleteEventAsync(string accessToken, string eventId, CancellationToken ct);
+
+    Task UploadEventBannerAsync(string accessToken, string eventId, byte[] image, string contentType, CancellationToken ct);
+
+    Task<string> EventBannerViewUrlAsync(string accessToken, string eventId, CancellationToken ct);
+
+    Task<(long Attending, bool SavedByMe)> SaveEventAsync(string accessToken, Guid eventId, bool on, CancellationToken ct);
+
+    Task<EventDto?> LookupEventAsync(string accessToken, string code, CancellationToken ct);
 }
 
 internal sealed class ApiClient : IApiClient, IDisposable
@@ -580,6 +607,105 @@ internal sealed class ApiClient : IApiClient, IDisposable
         var (status, body) = await this.SendAsync(HttpMethod.Get, $"/api/users/{userId}/albums", null, accessToken, ct);
         Ensure(status, body, "/api/users/:id/albums");
         return PeerAlbumsResponse.FromJson(body).Albums ?? new List<PeerAlbumDto>();
+    }
+
+    // ---- events ----
+
+    public async Task<HousingReferenceResponse> GetHousingAsync(CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/housing", null, null, ct);
+        Ensure(status, body, "/api/housing");
+        return HousingReferenceResponse.FromJson(body);
+    }
+
+    public async Task<EventsResponse> ListEventsAsync(string accessToken, EventsQuery query, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(query, Converter.Settings);
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/events/list", json, accessToken, ct);
+        Ensure(status, body, "/api/events/list");
+        return EventsResponse.FromJson(body);
+    }
+
+    public async Task<EventDto?> GetEventAsync(string accessToken, string eventId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, "/api/events/" + eventId, null, accessToken, ct);
+        if (status == 404)
+            return null;
+        Ensure(status, body, "/api/events/:id");
+        return EventDto.FromJson(body);
+    }
+
+    public async Task<EventDto> CreateEventAsync(string accessToken, CreateEventRequest request, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(request, Converter.Settings);
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/events", json, accessToken, ct);
+        Ensure(status, body, "/api/events");
+        return CreateEventResponse.FromJson(body).Event;
+    }
+
+    public async Task UpdateEventAsync(string accessToken, string eventId, UpdateEventRequest request, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(request, Converter.Settings);
+        var (status, body) = await this.SendAsync(HttpMethod.Patch, "/api/events/" + eventId, json, accessToken, ct);
+        Ensure(status, body, "/api/events/:id");
+    }
+
+    public async Task CancelEventAsync(string accessToken, string eventId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/events/{eventId}/cancel", null, accessToken, ct);
+        Ensure(status, body, "/api/events/:id/cancel");
+    }
+
+    public async Task RestoreEventAsync(string accessToken, string eventId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/events/{eventId}/restore", null, accessToken, ct);
+        Ensure(status, body, "/api/events/:id/restore");
+    }
+
+    public async Task<string> RegenerateEventCodeAsync(string accessToken, string eventId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/events/{eventId}/code/regenerate", null, accessToken, ct);
+        Ensure(status, body, "/api/events/:id/code/regenerate");
+        return RegenerateCodeResponse.FromJson(body).EntryCode;
+    }
+
+    public async Task DeleteEventAsync(string accessToken, string eventId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Delete, "/api/events/" + eventId, null, accessToken, ct);
+        Ensure(status, body, "/api/events/:id");
+    }
+
+    public async Task UploadEventBannerAsync(string accessToken, string eventId, byte[] image, string contentType, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(new { imageBase64 = Convert.ToBase64String(image), contentType });
+        var (status, body) = await this.SendAsync(HttpMethod.Post, $"/api/events/{eventId}/banner", json, accessToken, ct);
+        Ensure(status, body, "/api/events/:id/banner");
+    }
+
+    public async Task<string> EventBannerViewUrlAsync(string accessToken, string eventId, CancellationToken ct)
+    {
+        var (status, body) = await this.SendAsync(HttpMethod.Get, $"/api/events/{eventId}/banner/view-url", null, accessToken, ct);
+        Ensure(status, body, "/api/events/:id/banner/view-url");
+        return EventBannerUrlResponse.FromJson(body).Url.ToString();
+    }
+
+    public async Task<(long Attending, bool SavedByMe)> SaveEventAsync(string accessToken, Guid eventId, bool on, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(new { eventId, on });
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/events/save", json, accessToken, ct);
+        Ensure(status, body, "/api/events/save");
+        var res = SaveEventResponse.FromJson(body);
+        return (res.Attending, res.SavedByMe);
+    }
+
+    public async Task<EventDto?> LookupEventAsync(string accessToken, string code, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(new { code });
+        var (status, body) = await this.SendAsync(HttpMethod.Post, "/api/events/lookup", json, accessToken, ct);
+        if (status == 404)
+            return null;
+        Ensure(status, body, "/api/events/lookup");
+        return LookupEventResponse.FromJson(body).Event;
     }
 
     private static void Ensure(int status, string body, string path)

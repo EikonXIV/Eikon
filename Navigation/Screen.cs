@@ -27,4 +27,7 @@ internal enum Screen
     AlbumRequests,
     AlbumAccess,
     AlbumViewer,
+    EventDetail,
+    EventCreate,
+    EventCodeLookup,
 }

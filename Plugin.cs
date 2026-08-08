@@ -100,6 +100,9 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<BlockedService>();
         services.AddSingleton<PhotoService>();
         services.AddSingleton<AlbumService>();
+        services.AddSingleton<EventCatalog>();
+        services.AddSingleton<EventService>();
+        services.AddSingleton<EventsBoardView>();
         services.AddSingleton<SafetyService>();
         services.AddSingleton<ModerationKeyService>();
         services.AddSingleton<Media>();
@@ -136,6 +139,9 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, AlbumRequestsScreen>();
         services.AddSingleton<IScreen, AlbumAccessScreen>();
         services.AddSingleton<IScreen, AlbumViewerScreen>();
+        services.AddSingleton<IScreen, EventDetailScreen>();
+        services.AddSingleton<IScreen, EventCreateScreen>();
+        services.AddSingleton<IScreen, EventCodeLookupScreen>();
 
         services.AddSingleton<SoundService>();
         services.AddSingleton<NotificationService>();

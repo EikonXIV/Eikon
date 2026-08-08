@@ -58,6 +58,7 @@ internal sealed class ModerationFlow
     private int reason = -1;
     private bool includeMessages;
     private bool submitted;
+    private Guid? reportEventId;   // set => this is an event report (host = targetId), not a person report
 
     public ModerationFlow(ThemeService theme, Kit kit, UiFonts fonts, SafetyService safety, ChatService chat, Configuration config, ModerationKeyService moderationKeys, Media media)
     {
@@ -97,6 +98,16 @@ internal sealed class ModerationFlow
         this.moderationKeys.EnsureLoaded();
     }
 
+    public void OpenReportEvent(Guid hostId, Guid eventId, string title)
+    {
+        this.targetId = hostId;
+        this.target = title;
+        this.ResetReport();
+        this.reportEventId = eventId;
+        this.openReport = true;
+        this.moderationKeys.EnsureLoaded();
+    }
+
     public void Draw()
     {
         if (this.openMenu)
@@ -127,6 +138,7 @@ internal sealed class ModerationFlow
         this.reason = -1;
         this.includeMessages = false;
         this.submitted = false;
+        this.reportEventId = null;
     }
 
     // Build the sealed evidence blob for the report: a small JSON snapshot (reported user, reason,
@@ -443,19 +455,25 @@ internal sealed class ModerationFlow
             for (var i = 0; i < Reasons.Length; i++)
                 this.ReasonRow(i, width);
 
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.MenuDivider(width);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
-        this.includeMessages = this.IncludeRow(width);
-        ImGui.Dummy(new Vector2(0f, Ui.Px(2f)));
-        this.SealedNote();
+        if (this.reportEventId is null)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
+            this.MenuDivider(width);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
+            this.includeMessages = this.IncludeRow(width);
+            ImGui.Dummy(new Vector2(0f, Ui.Px(2f)));
+            this.SealedNote();
+        }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         if (this.reason >= 0)
         {
             if (this.kit.DangerButton("##rp_submit", "Submit report", width))
             {
-                this.safety.Report(this.targetId, ReasonWire[this.reason], null, this.BuildEvidence());
+                if (this.reportEventId is { } eid)
+                    this.safety.ReportEvent(this.targetId, eid, ReasonWire[this.reason], null);
+                else
+                    this.safety.Report(this.targetId, ReasonWire[this.reason], null, this.BuildEvidence());
                 this.submitted = true;
             }
         }
@@ -477,15 +495,20 @@ internal sealed class ModerationFlow
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextWrapped("Thanks, we'll review it. You can also block this person so they can't reach you.");
+            ImGui.TextWrapped(this.reportEventId is null
+                ? "Thanks, we'll review it. You can also block this person so they can't reach you."
+                : "Thanks, we'll take a look.");
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        if (this.kit.DangerButton("##rp_block", $"Block {this.target}", width))
+        if (this.reportEventId is null)
         {
-            this.safety.Block(this.targetId);
-            ImGui.CloseCurrentPopup();
+            if (this.kit.DangerButton("##rp_block", $"Block {this.target}", width))
+            {
+                this.safety.Block(this.targetId);
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         }
-        ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         if (this.kit.PrimaryButton("##rp_done", "Done", width))
             ImGui.CloseCurrentPopup();
     }
