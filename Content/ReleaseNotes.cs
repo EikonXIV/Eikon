@@ -12,6 +12,17 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 3, 0),
+            "August 2026",
+            New:
+            [
+                "Events. Host a gathering or find one to go to on the new Events board in Discover, filtered by World, Data Center or Region. Each event has its own page with the doors time in your timezone, the place, and how many are going.",
+                "Private events. Keep an event off the board and share a code with the people you want there, so only they can open it.",
+                "Share to chat. Send an event straight into a conversation, and open it from the message.",
+            ],
+            Improved: [],
+            Fixed: []),
+        new Release(
             new Version(2, 2, 0),
             "July 2026",
             New:
