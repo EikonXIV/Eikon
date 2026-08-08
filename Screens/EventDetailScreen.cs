@@ -29,6 +29,8 @@ internal sealed class EventDetailScreen : IScreen
     private int codeTries;
     private DateTime lockoutUntil;
     private bool confirmDelete;
+    private bool openMenu;        // the header sets this; DrawMenu opens the popup in the body's ID scope
+    private Vector2 menuAnchor;   // screen pos of the overflow button, so the menu drops under it
 
     public EventDetailScreen(ScreenRouter router, Kit kit, UiFonts fonts, EventService events, EventCatalog catalog, WorldCatalog worlds, Selection selection, ModerationFlow moderation)
     {
@@ -82,6 +84,9 @@ internal sealed class EventDetailScreen : IScreen
         this.DrawDeleteDialog(eventId);
     }
 
+    // Harness seam (Vitrine): open the overflow menu for a screenshot.
+    internal void OpenMenuForTest() => this.openMenu = true;
+
     private void DrawHeader(float fullWidth, float pad, float height, EventDto? detail)
     {
         var origin = ImGui.GetCursorScreenPos();
@@ -106,7 +111,8 @@ internal sealed class EventDetailScreen : IScreen
             var ds = Ui.Measure(this.fonts.Icon, dots);
             ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth - pad) - ds.X, midY - (ds.Y * 0.5f)));
             if (ImGui.InvisibleButton("##ed_more", ds))
-                ImGui.OpenPopup("##ed_menu");
+                this.openMenu = true;
+            this.menuAnchor = new Vector2(ImGui.GetItemRectMax().X, ImGui.GetItemRectMax().Y + Ui.Px(4f));
             Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), dots);
         }
 
@@ -395,6 +401,13 @@ internal sealed class EventDetailScreen : IScreen
 
     private void DrawMenu(EventDto? e, Guid eventId)
     {
+        if (this.openMenu)
+        {
+            ImGui.OpenPopup("##ed_menu");
+            this.openMenu = false;
+        }
+
+        ImGui.SetNextWindowPos(this.menuAnchor, ImGuiCond.Always, new Vector2(1f, 0f));
         using (this.MenuStyle())
         {
             if (!ImGui.BeginPopup("##ed_menu"))
