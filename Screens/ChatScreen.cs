@@ -639,6 +639,12 @@ internal sealed class ChatScreen : IScreen
         var blurred = message.Nsfw && message.ImageId != null && !this.revealed.Contains(message.ImageId);
         var texture = (!blurred && message.ImageId != null) ? this.mediaCache.Texture(message.ImageId) : null;
 
+        // The photo is fetched here rather than on receipt, so a download that fails leaves a bubble that
+        // retries instead of losing the message. Once the retries are spent it says so.
+        if (!blurred && texture == null)
+            this.chat.EnsureImage(message);
+        var unavailable = !blurred && texture == null && this.chat.ImageUnavailable(message);
+
         float w, h;
         if (texture is { Width: > 0, Height: > 0 })
         {
@@ -683,6 +689,15 @@ internal sealed class ChatScreen : IScreen
                 var label = "Tap to reveal";
                 var ls = Ui.Measure(this.fonts.Caption, label);
                 Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (ls.X * 0.5f), center.Y + Ui.Px(4f)), Palette.TextSecondary.U32(), label);
+            }
+            else if (unavailable)
+            {
+                var broken = FontAwesomeIcon.ExclamationTriangle.ToIconString();
+                var bs = Ui.Measure(this.fonts.Icon, broken);
+                Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (bs.X * 0.5f), center.Y - bs.Y), Palette.TextMuted.U32(), broken);
+                var label = "Photo unavailable";
+                var ls = Ui.Measure(this.fonts.Caption, label);
+                Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (ls.X * 0.5f), center.Y + Ui.Px(4f)), Palette.TextMuted.U32(), label);
             }
             else
             {

@@ -12,6 +12,16 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 3, 1),
+            "August 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Notifications for messages that never turned up. A message Eikon couldn't finish receiving would announce itself again on every login, with nothing to open when you got there.",
+                "Photos in chat that wouldn't load now say so in the message, instead of the whole message going missing.",
+            ]),
+        new Release(
             new Version(2, 3, 0),
             "August 2026",
             New:
