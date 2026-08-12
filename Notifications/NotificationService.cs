@@ -61,7 +61,9 @@ internal sealed class NotificationService
         this.sound = sound;
         this.albums = albums;
 
-        relay.MessageReceived += m => this.pending.Enqueue(m.SenderId);
+        // Hook the decrypted, stored message rather than the raw relay frame: a frame we can't turn into
+        // a readable message must not raise a toast with nothing behind it.
+        chat.MessageAdded += peer => this.pending.Enqueue(peer);
         relay.AlbumRequestReceived += n => this.albumPending.Enqueue((ToastKind.AlbumRequest, n));
         relay.AlbumGranted += n => this.albumPending.Enqueue((ToastKind.AlbumApproved, n));
         chat.Start();   // keep the relay running so notifications fire even before Messages is opened

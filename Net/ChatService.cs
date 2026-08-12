@@ -48,6 +48,11 @@ internal sealed class ChatService
         public long? EventCapacity;
         public bool Nsfw;                     // image marked sensitive by the sender -> blur until revealed
         public string? ImageId;              // local sealed-image id (see ChatMediaCache)
+        // Where the photo blob lives and the key that opens it, kept so the download can be retried long
+        // after the message arrived. Receiving no longer blocks on the fetch, so these are the only way
+        // back to the bytes. Null on messages received before this field existed.
+        public string? MediaKey;
+        public string? MediaBlobKey;
         public string? OutEnvelope;          // image: the ratchet payload, kept so we can resend on a re-handshake
         public DateTimeOffset? SentAt;       // sent (local clock) or received (server createdAt); null for messages from before this field existed
     }
@@ -75,6 +80,13 @@ internal sealed class ChatService
     private readonly Dictionary<Guid, DateTime> rekeySentAt = new();      // debounce outgoing rekey requests
     private readonly Dictionary<Guid, DateTime> rekeyHandledAt = new();   // debounce inbound rekey handling
     private static readonly TimeSpan RekeyDebounce = TimeSpan.FromSeconds(5);
+
+    // On-demand image fetches: what's in flight, how many tries each has had, and when to try next.
+    private readonly object mediaGate = new();
+    private readonly HashSet<string> mediaFetching = new();
+    private readonly Dictionary<string, int> mediaAttempts = new();
+    private readonly Dictionary<string, DateTime> mediaRetryAfter = new();
+    private const int MediaMaxAttempts = 4;
     private readonly string historyPath;
     private bool started;
     private bool historyLoaded;
@@ -103,6 +115,10 @@ internal sealed class ChatService
         this.relay.RekeyRequested += this.OnRekeyRequested;
         this.relay.Start();
     }
+
+    // A message from a peer was decrypted and stored (peer id). Raised once per message, so it's the
+    // signal for anything user-facing: a raw relay frame may never become a readable message.
+    public event Action<Guid>? MessageAdded;
 
     public IReadOnlyList<Message> Thread(Guid peer)
     {
@@ -321,15 +337,15 @@ internal sealed class ChatService
                 return;
             }
 
-            // An image message carries an envelope (storage key + blob key) we must fetch + decrypt
-            // before showing it. If that fails, don't ack so the relay redelivers it later.
+            // An image message carries an envelope naming the blob and the key that opens it. We only
+            // parse it here; the photo itself is fetched on demand (EnsureImage) when the bubble draws.
+            // Receiving must never depend on the network, or a failed fetch would drop the message
+            // un-acked and the relay would redeliver it - and re-notify - forever.
             Message message;
             if (text.StartsWith(ImageMagic, StringComparison.Ordinal))
             {
-                var built = await this.BuildImageMessage(dto, text);
-                if (built is null)
-                    return;
-                message = built;
+                message = BuildImageMessage(dto, text)
+                    ?? new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
             }
             else if (text.StartsWith(AlbumMagic, StringComparison.Ordinal))
             {
@@ -346,6 +362,7 @@ internal sealed class ChatService
                 message = new Message { Mine = false, Text = text, State = MessageState.Delivered, MessageId = dto.Id, SentAt = dto.CreatedAt };
             }
 
+            var added = false;
             lock (this.gate)
             {
                 this.EnsureLoaded();
@@ -353,47 +370,121 @@ internal sealed class ChatService
                 {
                     this.GetThread(dto.SenderId).Add(message);
                     this.Save();
+                    added = true;
                 }
             }
+
+            // Announce only a message that actually landed in a thread, so a frame we couldn't turn into
+            // one can't raise a notification with nothing behind it (and a redelivery can't re-raise it).
+            if (added)
+                this.MessageAdded?.Invoke(dto.SenderId);
 
             // Ack on every successful decrypt (new or duplicate) so the relay stops redelivering.
             this.relay.Ack(dto.Id);
         });
     }
 
-    private async Task<Message?> BuildImageMessage(EncryptedMessageDto dto, string envelopeText)
+    // The parts of an image envelope: where the blob lives, the key that opens it, and how to present it.
+    internal readonly record struct ImageEnvelope(string StorageKey, string BlobKey, bool Nsfw, string Caption);
+
+    // Parse an image envelope. Pure (no I/O), so receiving an image can't fail on the network and is
+    // unit-testable. Returns null when the payload isn't a well-formed envelope.
+    internal static ImageEnvelope? ParseImageEnvelope(string envelopeText)
     {
         try
         {
             using var doc = JsonDocument.Parse(envelopeText[ImageMagic.Length..]);
             var root = doc.RootElement;
-            var storageKey = root.GetProperty("sk").GetString()!;
-            var key = Convert.FromBase64String(root.GetProperty("k").GetString()!);
-            var nsfw = root.TryGetProperty("nsfw", out var n) && n.ValueKind == JsonValueKind.True;
-            var caption = root.TryGetProperty("cap", out var c) ? c.GetString() ?? string.Empty : string.Empty;
-
-            var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
-            if (string.IsNullOrEmpty(token))
-                return null;
-            var url = await this.api.ChatMediaViewUrlAsync(token, storageKey, CancellationToken.None);
-            var blob = await this.api.DownloadBytesAsync(url, CancellationToken.None);
-            var bytes = CryptoLib.DecryptBlob(key, blob);
-            if (bytes is null)
-                return null;
-
-            var imageId = dto.Id.ToString();
-            this.media.Save(imageId, bytes);
-            return new Message
-            {
-                Mine = false, Text = caption, State = MessageState.Delivered, MessageId = dto.Id,
-                IsImage = true, Nsfw = nsfw, ImageId = imageId, SentAt = dto.CreatedAt,
-            };
+            return new ImageEnvelope(
+                root.GetProperty("sk").GetString()!,
+                root.GetProperty("k").GetString()!,
+                root.TryGetProperty("nsfw", out var n) && n.ValueKind == JsonValueKind.True,
+                root.TryGetProperty("cap", out var c) ? c.GetString() ?? string.Empty : string.Empty);
         }
-        catch (Exception ex)
+        catch
         {
-            this.log.Warning(ex, "Receiving image failed.");
             return null;
         }
+    }
+
+    private static Message? BuildImageMessage(EncryptedMessageDto dto, string envelopeText)
+    {
+        if (ParseImageEnvelope(envelopeText) is not { } env)
+            return null;
+        return new Message
+        {
+            Mine = false, Text = env.Caption, State = MessageState.Delivered, MessageId = dto.Id,
+            IsImage = true, Nsfw = env.Nsfw, ImageId = dto.Id.ToString(), SentAt = dto.CreatedAt,
+            MediaKey = env.StorageKey, MediaBlobKey = env.BlobKey,
+        };
+    }
+
+    // Fetch and unseal an image's blob, once, on demand. The receive path no longer does this: a photo
+    // that can't be fetched now leaves a visible bubble that retries, instead of dropping the whole
+    // message un-acked and having the relay redeliver it forever.
+    public void EnsureImage(Message message)
+    {
+        if (message.ImageId is not { } imageId || message.MediaKey is not { } storageKey || message.MediaBlobKey is null)
+            return;
+        if (this.media.Has(imageId))
+            return;
+
+        lock (this.mediaGate)
+        {
+            if (this.mediaFetching.Contains(imageId))
+                return;
+            if (this.mediaRetryAfter.TryGetValue(imageId, out var next) && DateTime.UtcNow < next)
+                return;
+            this.mediaFetching.Add(imageId);
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
+                if (string.IsNullOrEmpty(token))
+                    return;
+                var url = await this.api.ChatMediaViewUrlAsync(token, storageKey, CancellationToken.None);
+                var blob = await this.api.DownloadBytesAsync(url, CancellationToken.None);
+                var bytes = CryptoLib.DecryptBlob(Convert.FromBase64String(message.MediaBlobKey!), blob);
+                if (bytes is null)
+                    return;
+                this.media.Save(imageId, bytes);
+            }
+            catch (Exception ex)
+            {
+                this.log.Warning(ex, "Fetching a chat image failed.");
+            }
+            finally
+            {
+                lock (this.mediaGate)
+                {
+                    this.mediaFetching.Remove(imageId);
+                    if (!this.media.Has(imageId))
+                    {
+                        this.mediaAttempts.TryGetValue(imageId, out var tries);
+                        this.mediaAttempts[imageId] = ++tries;
+                        // Back off hard, then stop: a purged or corrupt blob is never coming back, and the
+                        // bubble shows "Photo unavailable" once the attempts are spent.
+                        this.mediaRetryAfter[imageId] = DateTime.UtcNow.AddSeconds(Math.Min(300, 5 * Math.Pow(4, tries)));
+                    }
+                }
+            }
+        });
+    }
+
+    // True once we've tried enough times to say the photo isn't coming (drives the placeholder bubble).
+    public bool ImageUnavailable(Message message)
+    {
+        if (message.ImageId is not { } imageId)
+            return false;
+        if (this.media.Has(imageId))
+            return false;
+        if (message.MediaKey is null)
+            return true;   // received before the key was persisted: nothing to retry with
+        lock (this.mediaGate)
+            return this.mediaAttempts.TryGetValue(imageId, out var tries) && tries >= MediaMaxAttempts;
     }
 
     // Parse an album share card envelope into a card message. Nothing to fetch: the album's photos load
@@ -612,7 +703,7 @@ internal sealed class ChatService
                     var list = this.GetThread(peer);
                     foreach (var m in msgs)
                     {
-                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, IsEvent = m.IsEvent, EventId = m.EventId, EventKind = (EventKindElement)m.EventKind, EventTitle = m.EventTitle, EventBannerPreset = m.EventBannerPreset, EventStartsAt = m.EventStartsAt, EventClock = m.EventClock, EventTzLabel = m.EventTzLabel, EventLocation = m.EventLocation, EventAttending = m.EventAttending, EventCapacity = m.EventCapacity, SentAt = m.SentAt });
+                        list.Add(new Message { Mine = m.Mine, Text = m.Text, State = (MessageState)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, MediaKey = m.MediaKey, MediaBlobKey = m.MediaBlobKey, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, IsEvent = m.IsEvent, EventId = m.EventId, EventKind = (EventKindElement)m.EventKind, EventTitle = m.EventTitle, EventBannerPreset = m.EventBannerPreset, EventStartsAt = m.EventStartsAt, EventClock = m.EventClock, EventTzLabel = m.EventTzLabel, EventLocation = m.EventLocation, EventAttending = m.EventAttending, EventCapacity = m.EventCapacity, SentAt = m.SentAt });
                         if (m.MessageId is { } id)
                             this.seen.Add(id);
                     }
@@ -638,7 +729,7 @@ internal sealed class ChatService
         {
             var dto = new Dictionary<string, List<MessageDto>>();
             foreach (var (peer, list) in this.threads)
-                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, IsEvent = m.IsEvent, EventId = m.EventId, EventKind = (int)m.EventKind, EventTitle = m.EventTitle, EventBannerPreset = m.EventBannerPreset, EventStartsAt = m.EventStartsAt, EventClock = m.EventClock, EventTzLabel = m.EventTzLabel, EventLocation = m.EventLocation, EventAttending = m.EventAttending, EventCapacity = m.EventCapacity, SentAt = m.SentAt });
+                dto[peer.ToString()] = list.ConvertAll(m => new MessageDto { Mine = m.Mine, Text = m.Text, State = (int)m.State, MessageId = m.MessageId, IsImage = m.IsImage, Nsfw = m.Nsfw, ImageId = m.ImageId, MediaKey = m.MediaKey, MediaBlobKey = m.MediaBlobKey, IsAlbum = m.IsAlbum, AlbumId = m.AlbumId, AlbumName = m.AlbumName, AlbumCount = m.AlbumCount, IsEvent = m.IsEvent, EventId = m.EventId, EventKind = (int)m.EventKind, EventTitle = m.EventTitle, EventBannerPreset = m.EventBannerPreset, EventStartsAt = m.EventStartsAt, EventClock = m.EventClock, EventTzLabel = m.EventTzLabel, EventLocation = m.EventLocation, EventAttending = m.EventAttending, EventCapacity = m.EventCapacity, SentAt = m.SentAt });
             var sealedBytes = this.vault.SealLocal(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(dto)));
 
             var tmp = this.historyPath + ".tmp";
@@ -663,6 +754,8 @@ internal sealed class ChatService
         public bool IsImage { get; set; }
         public bool Nsfw { get; set; }
         public string? ImageId { get; set; }
+        public string? MediaKey { get; set; }
+        public string? MediaBlobKey { get; set; }
         public bool IsAlbum { get; set; }
         public Guid? AlbumId { get; set; }
         public string? AlbumName { get; set; }
