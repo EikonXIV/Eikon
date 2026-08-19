@@ -23,6 +23,10 @@ internal sealed class Selection
     // to that chat, from favorites back to favorites, from the grid back to the grid.
     public Screen ProfileReturn { get; set; } = Screen.Grid;
 
+    // Where the data center travel picker returns on back or apply: the grid or Settings, whichever
+    // opened it.
+    public Screen TravelReturn { get; set; } = Screen.Grid;
+
     // The album being viewed or edited (album detail, viewer, access sheet). Name is a snapshot for the
     // header before the album list loads.
     public Guid? AlbumId { get; set; }

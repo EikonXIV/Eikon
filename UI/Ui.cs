@@ -74,6 +74,53 @@ internal static class Ui
         drawList.AddCircleFilled(P(12f, 12f), (1.7f / 24f) * box, glow, 12);
     }
 
+    // The mark's diamond on its own, in the tomestone core's proportions (4 wide to 5.5 tall per
+    // half-height), for the travel crossing and the scope-row travel control. `halfHeight` sets the size.
+    public static void Diamond(ImDrawListPtr drawList, Vector2 center, float halfHeight, uint color, float thickness)
+    {
+        var (a, b, c, d) = DiamondPoints(center, halfHeight);
+        drawList.AddQuad(a, b, c, d, color, thickness);
+    }
+
+    public static void DiamondFilled(ImDrawListPtr drawList, Vector2 center, float halfHeight, uint color)
+    {
+        var (a, b, c, d) = DiamondPoints(center, halfHeight);
+        drawList.AddQuadFilled(a, b, c, d, color);
+    }
+
+    private static (Vector2 Top, Vector2 Right, Vector2 Bottom, Vector2 Left) DiamondPoints(Vector2 center, float halfHeight)
+    {
+        var halfWidth = halfHeight * (4f / 5.5f);
+        return (
+            center - new Vector2(0f, halfHeight),
+            center + new Vector2(halfWidth, 0f),
+            center + new Vector2(0f, halfHeight),
+            center - new Vector2(halfWidth, 0f));
+    }
+
+    // Text drawn one glyph at a time with extra tracking between glyphs, centered on `centerX`.
+    // ImGui has no letter-spacing, so the crossing caption's tracked caps are laid out by hand.
+    public static void TrackedText(ImDrawListPtr drawList, IFontHandle font, float centerX, float y, uint color, string text, float spacing)
+    {
+        if (text.Length == 0)
+            return;
+        var widths = new float[text.Length];
+        var total = 0f;
+        for (var i = 0; i < text.Length; i++)
+        {
+            widths[i] = Measure(font, text[i].ToString()).X;
+            total += widths[i];
+        }
+
+        total += spacing * (text.Length - 1);
+        var x = centerX - (total * 0.5f);
+        for (var i = 0; i < text.Length; i++)
+        {
+            TextAt(drawList, font, new Vector2(x, y), color, text[i].ToString());
+            x += widths[i] + spacing;
+        }
+    }
+
     // Filled rectangle with an independent radius per corner, in the order top-left, top-right,
     // bottom-right, bottom-left. ImGui's AddRectFilled only takes one radius; the chat bubbles need a
     // small "tail tuck" on their sender-side bottom corner (DESIGN/SCREENS: 14/14/14/4 and 14/14/4/14),

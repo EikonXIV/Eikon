@@ -561,6 +561,10 @@ namespace Eikon.Contracts
         public string Cursor { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("dcIds")]
+        public List<long> DcIds { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("genders")]
         public List<GenderElement> Genders { get; set; }
 

@@ -87,7 +87,10 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<ITokenProvider>(sp => sp.GetRequiredService<AuthService>());
         services.AddSingleton<WorldCatalog>();
         services.AddSingleton<ProfileService>();
-        services.AddSingleton<DiscoveryService>();
+        services.AddSingleton(sp => new DiscoveryService(
+            sp.GetRequiredService<IApiClient>(), sp.GetRequiredService<ITokenProvider>(), sp.GetRequiredService<ILog>(),
+            sp.GetRequiredService<Configuration>().TravelDcIds));
+        services.AddSingleton<TravelService>();
         services.AddSingleton<ProfileDetailService>();
         services.AddSingleton<Selection>();
         services.AddSingleton<IdentityService>();
@@ -122,6 +125,7 @@ public sealed class Plugin : IDalamudPlugin
         services.AddSingleton<IScreen, RestoreAccountScreen>();
         services.AddSingleton<IScreen, GridScreen>();
         services.AddSingleton<IScreen, FilterScreen>();
+        services.AddSingleton<IScreen, DcTravelScreen>();
         services.AddSingleton<IScreen, ProfileDetailScreen>();
         services.AddSingleton<IScreen, MessagesScreen>();
         services.AddSingleton<IScreen, ChatScreen>();
