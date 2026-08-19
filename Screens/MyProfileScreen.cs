@@ -141,6 +141,8 @@ internal sealed class MyProfileScreen : IScreen
             if (body.Success)
             {
                 var contentWidth = ImGui.GetContentRegionAvail().X;
+                if (this.profiles.SaveFailed)
+                    this.DrawSaveFailed(contentWidth);
                 if (loaded is null)
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(80f)));
@@ -169,6 +171,24 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.SetCursorPos(new Vector2(ctaPad, stripH + bodyH + Ui.Px(10f)));
         if (this.EditCta(avail.X - (ctaPad * 2f), Ui.Px(44f)))
             this.OpenForm();
+    }
+
+    // The last save was rejected or never reached the server: say so, since the preview below is the
+    // server's copy and will not show the edit.
+    private void DrawSaveFailed(float contentWidth)
+    {
+        var pad = Ui.Px(16f);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+        ImGui.Indent(pad);
+        using (this.fonts.Caption.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
+        {
+            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth - (pad * 2f));
+            ImGui.TextWrapped("Your last change couldn't be saved. Edit your profile and save again.");
+            ImGui.PopTextWrapPos();
+        }
+        ImGui.Unindent(pad);
+        ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
     }
 
     private void DrawPreviewStrip(float fullWidth, float height)
@@ -688,7 +708,7 @@ internal sealed class MyProfileScreen : IScreen
     private void CloseForm(bool save)
     {
         if (save)
-            this.profiles.Save(this.BuildRequest());
+            _ = this.SaveThenRefresh(this.BuildRequest());
         else if (this.profiles.Mine is { } mine)
             this.ApplyFromServer(mine);
 
@@ -698,11 +718,20 @@ internal sealed class MyProfileScreen : IScreen
         this.editing = false;
     }
 
+    // The preview is the server's copy; refetch it again once the save has landed so it doesn't show
+    // the pre-save state (the immediate Invalidate in CloseForm can race the save).
+    private async Task SaveThenRefresh(SaveProfileRequest request)
+    {
+        if (await this.profiles.SaveAsync(request, System.Threading.CancellationToken.None))
+            this.details.Invalidate();
+    }
+
     private void DrawForm(float contentWidth)
     {
         // Header: cancel (left), save (right).
         var buttonWidth = Ui.Px(84f);
         var rowX = ImGui.GetCursorPosX();
+        var canSave = this.NameProblem() is null && this.RaceProblem() is null;
         if (this.kit.SecondaryButton("##f_cancel", "Cancel", buttonWidth))
         {
             this.CloseForm(false);
@@ -710,7 +739,7 @@ internal sealed class MyProfileScreen : IScreen
         }
         ImGui.SameLine();
         ImGui.SetCursorPosX(rowX + contentWidth - buttonWidth);
-        if (this.kit.PrimaryButton("##f_save", "Save", buttonWidth))
+        if (this.SaveButton("##f_save", "Save", buttonWidth, canSave))
         {
             this.CloseForm(true);
             return;
@@ -724,7 +753,8 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         this.kit.SectionLabel("Identity");
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.kit.TextField("##f_name", ref this.displayName, "Display name", contentWidth);
+        this.kit.TextField("##f_name", ref this.displayName, "Display name", contentWidth, Limits.DisplayNameMax);
+        this.Problem(this.NameProblem());
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.Field("Pronouns");
         this.Single("f_pn", Options.Pronouns, ref this.pronoun, contentWidth);
@@ -749,11 +779,12 @@ internal sealed class MyProfileScreen : IScreen
         this.Field("Into");
         this.Multi("f_into", Options.Interests, this.interests, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Tribe");
-        this.Multi("f_tribe", Options.Tribes, this.tribes, contentWidth);
+        this.Field($"Tribe · up to {Limits.TribesMax}");
+        this.Multi("f_tribe", Options.Tribes, this.tribes, contentWidth, Limits.TribesMax);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Race");
-        this.Multi("f_race", Options.Races, this.races, contentWidth);
+        this.Field($"Race · up to {Limits.RacesMax}");
+        this.Multi("f_race", Options.Races, this.races, contentWidth, Limits.RacesMax, Limits.RacesMin);
+        this.Problem(this.RaceProblem());
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         this.kit.SectionLabel("About");
@@ -762,7 +793,8 @@ internal sealed class MyProfileScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
         using (this.fonts.Caption.Push())
-            ImGui.InputTextMultiline("##f_bio", ref this.bio, 300, new Vector2(contentWidth, Ui.Px(110f)));
+            ImGui.InputTextMultiline("##f_bio", ref this.bio, Limits.BioMax, new Vector2(contentWidth, Ui.Px(110f)));
+        this.bio = Limits.Clamp(this.bio, Limits.BioMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         this.kit.SectionLabel("After dark");
@@ -771,7 +803,7 @@ internal sealed class MyProfileScreen : IScreen
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
         var half = (contentWidth - Ui.Px(10f)) * 0.5f;
-        if (this.kit.PrimaryButton("##f_save2", "Save changes", half))
+        if (this.SaveButton("##f_save2", "Save changes", half, canSave))
         {
             this.CloseForm(true);
             return;
@@ -828,6 +860,13 @@ internal sealed class MyProfileScreen : IScreen
 
     private void DrawAfterDark(float contentWidth)
     {
+        if (this.IsLalafell)
+        {
+            this.nsfwEnabled = false;
+            this.Helper("After dark isn't available for Lalafell profiles.");
+            return;
+        }
+
         using (this.fonts.Body.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
             ImGui.TextUnformatted("Enable after dark (18+)");
@@ -865,11 +904,43 @@ internal sealed class MyProfileScreen : IScreen
             selected = hit;
     }
 
-    private void Multi(string id, string[] labels, bool[] flags, float contentWidth)
+    // max caps how many can be on (further chips grey out); min keeps at least that many on.
+    private void Multi(string id, string[] labels, bool[] flags, float contentWidth, int max = 0, int min = 0)
     {
-        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth);
-        if (hit >= 0)
-            flags[hit] = !flags[hit];
+        var count = flags.Count(f => f);
+        var atCap = max > 0 && count >= max;
+        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth, disabled: atCap ? i => !flags[i] : null);
+        if (hit < 0)
+            return;
+        if (flags[hit] ? count <= min : atCap)
+            return;
+        flags[hit] = !flags[hit];
+    }
+
+    private bool IsLalafell => this.races[ProfileMapper.IndexOfRace(RaceElement.Lalafell)];
+
+    // Why a field can't be saved yet, shown right under it; null when it is fine. These mirror the
+    // server's SaveProfileRequest so a save never bounces silently.
+    private string? NameProblem() => this.displayName.Trim().Length == 0 ? "Add a display name." : null;
+
+    private string? RaceProblem() => this.races.Count(r => r) < Limits.RacesMin ? "Pick at least one race." : null;
+
+    private void Problem(string? text)
+    {
+        if (text is null)
+            return;
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        using (this.fonts.Caption.Push())
+        using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
+            ImGui.TextWrapped(text);
+    }
+
+    private bool SaveButton(string id, string label, float width, bool enabled)
+    {
+        if (enabled)
+            return this.kit.PrimaryButton(id, label, width);
+        this.kit.SecondaryButton(id, label, width);
+        return false;
     }
 
     // ---- small pieces ----
@@ -936,8 +1007,8 @@ internal sealed class MyProfileScreen : IScreen
         Bio = string.IsNullOrWhiteSpace(this.bio) ? null : this.bio,
         LookingFor = ProfileMapper.LookingForOf(this.lookingFor),
         Interests = Options.Interests.Where((_, i) => this.interests[i]).ToList(),
-        NsfwEnabled = this.nsfwEnabled,
-        AfterDark = this.nsfwEnabled
+        NsfwEnabled = this.nsfwEnabled && !this.IsLalafell,
+        AfterDark = this.nsfwEnabled && !this.IsLalafell
             ? new AfterDarkDto
             {
                 Position = ProfileMapper.Position(this.position),

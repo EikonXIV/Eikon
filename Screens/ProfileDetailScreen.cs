@@ -115,8 +115,10 @@ internal sealed class ProfileDetailScreen : IScreen
             this.router.Navigate(this.selection.ProfileReturn);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        var name = this.selection.ProfileDisplayName ?? this.current?.DisplayName ?? string.Empty;
-        var handle = Handle(name, this.current?.World);
+        // Only the profile being shown feeds the handle: on a failed load `this.current` is still the
+        // previously viewed member, and their world must not be stitched onto this one's name.
+        var name = this.selection.ProfileDisplayName is { Length: > 0 } picked ? picked : loaded?.DisplayName ?? string.Empty;
+        var handle = Handle(name, loaded?.World);
         var title = $"PROFILE · {handle}";
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);

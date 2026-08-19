@@ -431,7 +431,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         // Banner preview + filmstrip.
         this.DrawBannerPicker(dl, x, w);
 
-        this.Field(dl, "Title", x, w, () => { var t = this.title; this.kit.TextField("##ec_title", ref t, "The Velvet Hour", w); this.title = t; });
+        this.Field(dl, "Title", x, w, () => { var t = this.title; this.kit.TextField("##ec_title", ref t, "The Velvet Hour", w, Limits.EventTitleMax); this.title = t; });
 
         // Kind chips.
         this.Label(dl, "KIND", x);
@@ -440,11 +440,11 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         this.Field(dl, "Description", x, w, () =>
         {
             var d = this.description;
-            this.kit.TextField("##ec_desc", ref d, "What happens, who it's for, house rules.", w);
+            this.kit.TextField("##ec_desc", ref d, "What happens, who it's for, house rules.", w, Limits.EventDescriptionMax);
             this.description = d;
         });
 
-        this.Field(dl, "Tags (comma separated)", x, w, () =>
+        this.Field(dl, $"Tags (comma separated, up to {Limits.EventTagsMax})", x, w, () =>
         {
             var t = this.tagsText;
             this.kit.TextField("##ec_tags", ref t, "DJ, Lounge, 18+", w);
@@ -724,7 +724,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         else
         {
             this.Field(dl, "Invite link", x, w, () => { var u = this.discordUrl; this.kit.TextField("##ec_durl", ref u, "https://discord.gg/…", w); this.discordUrl = u; });
-            this.Field(dl, "Channel note (optional)", x, w, () => { var n = this.discordNote; this.kit.TextField("##ec_dnote", ref n, "Prog voice", w); this.discordNote = n; });
+            this.Field(dl, "Channel note (optional)", x, w, () => { var n = this.discordNote; this.kit.TextField("##ec_dnote", ref n, "Prog voice", w, Limits.EventDiscordNoteMax); this.discordNote = n; });
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
@@ -1324,7 +1324,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         }
 
         var (startsAt, iana, label) = this.ResolveStart();
-        var tags = this.tagsText.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+        var tags = this.tagsText.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).Take(Limits.EventTagsMax).ToList();
         var hostClock = $"{this.hour:00}:{this.minute:00}";
         var durationMins = (this.durHours * 60) + this.durMins;
 

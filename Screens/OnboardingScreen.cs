@@ -44,6 +44,8 @@ internal sealed class OnboardingScreen : IScreen
     private int size = 2;
     private readonly bool[] meet = new bool[Options.Meet.Length];
     private readonly bool[] kinks = new bool[Options.Kinks.Length];
+    private volatile bool finalizing;
+    private string? saveError;
 
     public OnboardingScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, WorldCatalog catalog, ProfileService profiles, PhotoManager photos)
     {
@@ -186,7 +188,7 @@ internal sealed class OnboardingScreen : IScreen
     {
         this.kit.SectionLabel("Display name");
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        this.kit.TextField("##ob_name", ref this.displayName, "How friends know you", contentWidth);
+        this.kit.TextField("##ob_name", ref this.displayName, "How friends know you", contentWidth, Limits.DisplayNameMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
         this.kit.SectionLabel("Pronouns");
@@ -246,18 +248,21 @@ internal sealed class OnboardingScreen : IScreen
 
     private void DrawVibe(float contentWidth)
     {
-        this.kit.SectionLabel("Body / tribe");
+        this.kit.SectionLabel($"Body / tribe · up to {Limits.TribesMax}");
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var t = this.kit.ChipFlow("ob_tribe", Options.Tribes, i => this.tribes[i], contentWidth, showCheck: false);
-        if (t >= 0)
-            this.tribes[t] = !this.tribes[t];
+        this.Multi("ob_tribe", Options.Tribes, this.tribes, contentWidth, Limits.TribesMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Race");
+        this.kit.SectionLabel($"Race · up to {Limits.RacesMax}");
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var r = this.kit.ChipFlow("ob_race", Options.Races, i => this.races[i], contentWidth, showCheck: false);
-        if (r >= 0)
-            this.races[r] = !this.races[r];
+        this.Multi("ob_race", Options.Races, this.races, contentWidth, Limits.RacesMax);
+        if (!this.races.Any(r => r))
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+                ImGui.TextUnformatted("Pick at least one to continue.");
+        }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
         this.kit.SectionLabel("Looking for");
@@ -269,6 +274,19 @@ internal sealed class OnboardingScreen : IScreen
 
     private void DrawAfterDark(float contentWidth)
     {
+        if (this.IsLalafell)
+        {
+            this.nsfwEnabled = false;
+            using (this.fonts.SerifName.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
+                ImGui.TextUnformatted("After dark");
+            ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
+                ImGui.TextWrapped("After dark isn't available for Lalafell profiles. Continue to add photos.");
+            return;
+        }
+
         using (this.fonts.SerifName.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
             ImGui.TextUnformatted("Enable after dark");
@@ -334,6 +352,14 @@ internal sealed class OnboardingScreen : IScreen
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
             ImGui.TextUnformatted("Up to 6, reviewed before they go live.");
+
+        if (this.saveError is { } error)
+        {
+            ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
+            using (this.fonts.Caption.Push())
+            using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
+                ImGui.TextWrapped(error);
+        }
     }
 
     private void DrawNav(float contentWidth)
@@ -374,9 +400,13 @@ internal sealed class OnboardingScreen : IScreen
         }
 
         var last = this.step == StepCount - 1;
-        if (this.CanAdvance())
+        if (this.finalizing)
         {
-            if (this.kit.PrimaryButton("##ob_forward", last ? "Finalize" : "Continue", forwardWidth))
+            this.kit.SecondaryButton("##ob_forward_busy", "Saving…", forwardWidth);
+        }
+        else if (this.CanAdvance())
+        {
+            if (this.kit.PrimaryButton("##ob_forward", last ? (this.saveError is null ? "Finalize" : "Try again") : "Continue", forwardWidth))
             {
                 if (last)
                     this.Complete();
@@ -413,9 +443,14 @@ internal sealed class OnboardingScreen : IScreen
     }
 
     // Create (or unlock) the local key vault from the passphrase and publish the public bundle,
-    // then enter the app. Key material never leaves the device; only public keys are published.
+    // then save the profile and enter the app. Key material never leaves the device; only public keys
+    // are published. The app is only entered once the server has the profile: without that row the
+    // member is invisible everywhere, so a failed save stays on this step with a retry.
     private void Complete()
     {
+        if (this.finalizing)
+            return;
+
         try
         {
             if (!this.keyVault.HasIdentity)
@@ -432,9 +467,35 @@ internal sealed class OnboardingScreen : IScreen
             // unavailable until the vault initializes). Surfaced properly in C3.
         }
 
-        this.profiles.Save(this.BuildProfile());
-        this.router.Navigate(Screen.Grid);
+        this.finalizing = true;
+        this.saveError = null;
+        var request = this.BuildProfile();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (await this.profiles.SaveAsync(request, System.Threading.CancellationToken.None))
+                    this.router.Navigate(Screen.Grid);
+                else
+                    this.saveError = "Couldn't save your profile. Check your connection and try again.";
+            }
+            finally
+            {
+                this.finalizing = false;
+            }
+        });
     }
+
+    // Shared multi-select with a cap: at the cap the unselected chips grey out and stop responding.
+    private void Multi(string id, string[] labels, bool[] flags, float contentWidth, int max)
+    {
+        var atCap = flags.Count(f => f) >= max;
+        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth, showCheck: false, disabled: atCap ? i => !flags[i] : null);
+        if (hit >= 0 && (flags[hit] || !atCap))
+            flags[hit] = !flags[hit];
+    }
+
+    private bool IsLalafell => this.races[ProfileMapper.IndexOfRace(RaceElement.Lalafell)];
 
     private SaveProfileRequest BuildProfile() => new()
     {
@@ -447,8 +508,8 @@ internal sealed class OnboardingScreen : IScreen
         Tribes = ProfileMapper.TribesOf(this.tribes),
         LookingFor = ProfileMapper.LookingForOf(this.lookingFor),
         Interests = new List<string>(),
-        NsfwEnabled = this.nsfwEnabled,
-        AfterDark = this.nsfwEnabled
+        NsfwEnabled = this.nsfwEnabled && !this.IsLalafell,
+        AfterDark = this.nsfwEnabled && !this.IsLalafell
             ? new AfterDarkDto
             {
                 Position = ProfileMapper.Position(this.position),

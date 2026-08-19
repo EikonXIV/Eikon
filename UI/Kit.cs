@@ -1,4 +1,5 @@
 using Dalamud.Interface;
+using Eikon.Net;
 using Eikon.UI.Theme;
 
 namespace Eikon.UI;
@@ -25,7 +26,8 @@ internal sealed class Kit
     // An editorial tag chip: hard-square, hairline outline with secondary text; selected chips fill
     // with ink, flip the text to paper, and gain a small drawn check. Returns true on click.
     // showCheck draws a tick beside the label when selected. Onboarding opts out for a fill-only chip.
-    public bool Chip(string id, string label, bool selected, bool showCheck = true)
+    // A disabled chip (a multi-select at its cap) draws muted, ignores hover, and never reports a click.
+    public bool Chip(string id, string label, bool selected, bool showCheck = true, bool disabled = false)
     {
         var padX = Ui.Px(12f);
         var height = Ui.Px(32f);
@@ -35,11 +37,16 @@ internal sealed class Kit
         var padY = (height - textSize.Y) * 0.5f;
 
         var pos = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton(id, size);
-        var hovered = ImGui.IsItemHovered();
+        var clicked = ImGui.InvisibleButton(id, size) && !disabled;
+        var hovered = ImGui.IsItemHovered() && !disabled;
         var drawList = ImGui.GetWindowDrawList();
 
-        if (selected)
+        if (disabled && !selected)
+        {
+            drawList.AddRect(pos, pos + size, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
+            Ui.TextAt(drawList, this.fonts.LabelSmall, pos + new Vector2(padX, padY), Palette.TextMuted.U32(), label);
+        }
+        else if (selected)
         {
             drawList.AddRectFilled(pos, pos + size, Palette.TextPrimary.U32(), 0f);
             if (showCheck)
@@ -300,7 +307,7 @@ internal sealed class Kit
 
     // Wrapping chip row for single or multi select. `selected` reports whether index i is on;
     // returns the clicked index, or -1 if nothing was clicked this frame.
-    public int ChipFlow(string idPrefix, IReadOnlyList<string> labels, Func<int, bool> selected, float maxWidth, bool showCheck = true)
+    public int ChipFlow(string idPrefix, IReadOnlyList<string> labels, Func<int, bool> selected, float maxWidth, bool showCheck = true, Func<int, bool>? disabled = null)
     {
         var clicked = -1;
         var spacing = Ui.Px(6f);
@@ -328,7 +335,7 @@ internal sealed class Kit
                     lineWidth = chipWidth;
                 }
 
-                if (this.Chip($"{idPrefix}{i}", labels[i], selected(i), showCheck))
+                if (this.Chip($"{idPrefix}{i}", labels[i], selected(i), showCheck, disabled?.Invoke(i) ?? false))
                     clicked = i;
             }
         }
@@ -470,7 +477,11 @@ internal sealed class Kit
         ImGui.Dummy(new Vector2(w, height));
     }
 
-    public void TextField(string id, ref string value, string hint, float width)
+    // maxLength bounds the value in UTF-16 units (what the server's string caps count); 0 = unbounded.
+    // The cap is applied inside ImGui's edit buffer (see TrimToMax) rather than on the returned string,
+    // because while the field is focused ImGui's own buffer is authoritative and an external clamp
+    // would only land on blur, letting the member type well past the limit first.
+    public void TextField(string id, ref string value, string hint, float width, int maxLength = 0)
     {
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
@@ -479,8 +490,54 @@ internal sealed class Kit
         using (this.fonts.Body.Push())
         {
             ImGui.SetNextItemWidth(width);
-            ImGui.InputTextWithHint(id, hint, ref value);
+            if (maxLength > 0)
+            {
+                var max = maxLength;
+                ImGui.InputTextWithHint(id, hint, ref value, ByteBufferFor(maxLength), ImGuiInputTextFlags.CallbackAlways, TrimToMax, ref max);
+                value = Limits.Clamp(value, maxLength);
+            }
+            else
+            {
+                ImGui.InputTextWithHint(id, hint, ref value);
+            }
         }
+    }
+
+    // A UTF-8 buffer that can hold maxLength UTF-16 units (at most 3 bytes per BMP unit, 2 per
+    // surrogate half) plus the terminator, never smaller than the binding's default.
+    private static int ByteBufferFor(int maxLength) => Math.Max(512, (maxLength * 3) + 1);
+
+    // CallbackAlways: cut the live buffer back to `max` UTF-16 units, at a code point boundary. Runs
+    // every frame the field is active, so a paste or type-over-selection is trimmed the same frame.
+    private static int TrimToMax(ref ImGuiInputTextCallbackData data, ref int max)
+    {
+        if (data.EventFlag != ImGuiInputTextFlags.CallbackAlways)
+            return 0;
+
+        var text = data.BufTextSpan;
+        var units = 0;
+        var cut = 0;
+        while (cut < text.Length)
+        {
+            var b = text[cut];
+            var bytes = b < 0x80 ? 1 : (b & 0xE0) == 0xC0 ? 2 : (b & 0xF0) == 0xE0 ? 3 : 4;
+            var width = bytes == 4 ? 2 : 1;
+            if (units + width > max)
+                break;
+            units += width;
+            cut += bytes;
+        }
+
+        if (cut >= text.Length)
+            return 0;
+
+        data.BufTextLen = cut;
+        data.BufSpan[cut] = 0;
+        data.BufDirty = 1;
+        if (data.CursorPos > cut) data.CursorPos = cut;
+        if (data.SelectionStart > cut) data.SelectionStart = cut;
+        if (data.SelectionEnd > cut) data.SelectionEnd = cut;
+        return 0;
     }
 
     // Chat composer. Multiline so it can hold line breaks. The Enter/Shift split keys off the Shift

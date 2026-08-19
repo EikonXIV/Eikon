@@ -242,7 +242,7 @@ internal sealed class AlbumsScreen : IScreen
         var addWidth = Ui.Px(84f);
         var fieldWidth = width - addWidth;
 
-        this.kit.TextField("##album_new_name", ref this.newName, atCap ? $"Album limit is {MaxAlbums}" : "New album name", fieldWidth);
+        this.kit.TextField("##album_new_name", ref this.newName, atCap ? $"Album limit is {MaxAlbums}" : "New album name", fieldWidth, Limits.AlbumNameMax);
         var height = ImGui.GetItemRectSize().Y;
         ImGui.SameLine(0f, 0f);
 

@@ -24,6 +24,12 @@ internal sealed class ProfileService
 
     public SaveProfileRequest? Mine { get; private set; }
 
+    public bool Saving { get; private set; }
+
+    // Set when the most recent save was rejected or never reached the server; cleared by the next
+    // successful save. Screens surface it instead of letting an edit silently evaporate.
+    public bool SaveFailed { get; private set; }
+
     // Load the member's own profile once, in the background.
     public void EnsureLoaded()
     {
@@ -51,22 +57,38 @@ internal sealed class ProfileService
         });
     }
 
-    // Fire and forget; the profile is local-authoritative in the UI, the server copy follows.
-    public void Save(SaveProfileRequest request)
+    // Fire and forget; the profile is local-authoritative in the UI, the server copy follows. The
+    // outcome lands in SaveFailed so the caller's next frame can show it.
+    public void Save(SaveProfileRequest request) => _ = this.SaveAsync(request, CancellationToken.None);
+
+    // Awaitable save for flows that must not proceed without a server-side profile (onboarding).
+    public async Task<bool> SaveAsync(SaveProfileRequest request, CancellationToken ct)
     {
-        _ = Task.Run(async () =>
+        this.Saving = true;
+        try
         {
-            try
+            var token = await this.auth.GetAccessTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
             {
-                var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
-                if (string.IsNullOrEmpty(token))
-                    return;
-                await this.api.SaveProfileAsync(token, request, CancellationToken.None);
+                this.SaveFailed = true;
+                return false;
             }
-            catch (Exception ex)
-            {
-                this.log.Warning(ex, "Saving profile failed.");
-            }
-        });
+
+            await this.api.SaveProfileAsync(token, request, ct);
+            this.Mine = request;
+            this.Loaded = true;
+            this.SaveFailed = false;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.log.Warning(ex, "Saving profile failed.");
+            this.SaveFailed = true;
+            return false;
+        }
+        finally
+        {
+            this.Saving = false;
+        }
     }
 }
