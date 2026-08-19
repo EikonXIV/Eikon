@@ -125,7 +125,7 @@ internal sealed class AlbumDetailScreen : IScreen
             this.nameText = album.Name;
         }
 
-        this.kit.TextField("##ad_name", ref this.nameText, "Album name", contentWidth);
+        this.kit.TextField("##ad_name", ref this.nameText, "Album name", contentWidth, Limits.AlbumNameMax);
         if (!ImGui.IsItemDeactivatedAfterEdit())
             return;
 

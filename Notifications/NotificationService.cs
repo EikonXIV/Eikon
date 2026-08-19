@@ -21,7 +21,8 @@ internal sealed class NotificationToast
 {
     public ToastKind Kind = ToastKind.Message;
     public Guid Peer;
-    public string Name = "New message";
+    public string Name = "New message";   // toast title; falls back to a generic label when the peer is unknown
+    public string? PeerName;              // the peer's real display name, or null when not known (never the fallback)
     public string? Subtitle;      // null for messages (rendered from Count); set for album toasts
     public Guid? AlbumId;
     public string? AlbumName;
@@ -92,12 +93,13 @@ internal sealed class NotificationService
             if (existing != null)
             {
                 existing.Count++;
-                existing.Name = name;
+                existing.Name = name ?? "New message";
+                existing.PeerName = name;
                 existing.ExpiresAt = now + LifetimeMs;
             }
             else
             {
-                this.Add(new NotificationToast { Peer = peer, Name = name, Count = 1, ExpiresAt = now + LifetimeMs });
+                this.Add(new NotificationToast { Peer = peer, Name = name ?? "New message", PeerName = name, Count = 1, ExpiresAt = now + LifetimeMs });
             }
 
             shown = true;
@@ -127,7 +129,7 @@ internal sealed class NotificationService
             {
                 this.Add(new NotificationToast
                 {
-                    Kind = kind, Peer = notice.PeerId, Name = notice.PeerName, Subtitle = subtitle,
+                    Kind = kind, Peer = notice.PeerId, Name = notice.PeerName, PeerName = notice.PeerName, Subtitle = subtitle,
                     AlbumId = notice.AlbumId, AlbumName = notice.AlbumName, Count = 1, ExpiresAt = now + LifetimeMs,
                 });
             }
@@ -173,11 +175,13 @@ internal sealed class NotificationService
             : this.router.Current == Screen.AlbumViewer && this.selection.AlbumId == albumId;
     }
 
-    private string NameOf(Guid peer)
+    // Null when the peer isn't in the inbox yet (a first message, or a sender with no profile); the
+    // caller picks the generic title, and a tap must not carry the placeholder on as a display name.
+    private string? NameOf(Guid peer)
     {
         foreach (var c in this.inbox.Conversations)
             if (c.UserId == peer)
                 return c.DisplayName;
-        return "New message";
+        return null;
     }
 }

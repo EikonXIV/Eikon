@@ -158,7 +158,7 @@ internal sealed class EikonBootstrap : IDisposable
                 break;
             case ToastKind.AlbumApproved:
                 this.selection.ProfileUserId = toast.Peer;
-                this.selection.ProfileDisplayName = toast.Name;
+                this.selection.ProfileDisplayName = toast.PeerName ?? string.Empty;
                 this.selection.AlbumId = toast.AlbumId;
                 this.selection.AlbumName = toast.AlbumName ?? string.Empty;
                 this.selection.AlbumReturn = Screen.ProfileDetail;
@@ -167,7 +167,7 @@ internal sealed class EikonBootstrap : IDisposable
                 break;
             default:
                 this.selection.ProfileUserId = toast.Peer;
-                this.selection.ProfileDisplayName = toast.Name;
+                this.selection.ProfileDisplayName = toast.PeerName ?? string.Empty;
                 this.router.Navigate(Screen.Chat);
                 break;
         }

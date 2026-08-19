@@ -25,9 +25,6 @@ internal sealed class DeleteAccountFlow
         "Something else",
     };
 
-    // Matches the server's DeleteAccountRequest.note cap (contracts/src/dtos.ts).
-    private const int NoteMaxLength = 1000;
-
     private enum Step { Form, Deleting, Done }
 
     private readonly ThemeService theme;
@@ -134,9 +131,7 @@ internal sealed class DeleteAccountFlow
             this.selectedReasons.Remove(clicked);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.kit.TextField("##del_note", ref this.note, "Anything else? (optional)", width);
-        if (this.note.Length > NoteMaxLength)   // keep within the server's note cap so submit can't 400
-            this.note = this.note[..NoteMaxLength];
+        this.kit.TextField("##del_note", ref this.note, "Anything else? (optional)", width, Limits.DeleteNoteMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         this.acknowledged = this.AckRow();
