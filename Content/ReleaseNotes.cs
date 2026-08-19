@@ -12,6 +12,20 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 3, 2),
+            "August 2026",
+            New: [],
+            Improved:
+            [
+                "Profile limits are shown as you edit. Race and tribe say how many you can pick and grey out once you're there, the display name stops at 20 characters, and anything still missing is called out right under the field, with Save waiting until it's sorted.",
+                "After dark isn't available for Lalafell profiles, and the editor now says so instead of quietly failing to save.",
+            ],
+            Fixed:
+            [
+                "Profiles that never saved. Going past a limit (more than four races, say) made a save fail with no warning, so you didn't show up on the grid, your own preview was empty, and edits seemed to vanish. Setting up an account now waits for the profile to save and lets you try again if it doesn't, and the editor tells you when a change didn't go through.",
+                "The profile header no longer borrows the previously viewed member's world when a profile fails to load.",
+            ]),
+        new Release(
             new Version(2, 3, 1),
             "August 2026",
             New: [],
