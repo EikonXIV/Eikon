@@ -10,6 +10,7 @@ internal enum Screen
     RestoreAccount,
     Grid,
     Filter,
+    DcTravel,
     ProfileDetail,
     Messages,
     Chat,

@@ -16,12 +16,16 @@ internal sealed class DiscoveryService
     private string? nextCursor;
     private int epoch;
     private int previewEpoch;
+    private List<int> travelDcIds;
 
-    public DiscoveryService(IApiClient api, ITokenProvider auth, ILog log)
+    // `travelDcIds` seeds the data center travel set from the saved config (Plugin.cs passes it in;
+    // Configuration itself stays out of here so the service is constructible without Dalamud loaded).
+    public DiscoveryService(IApiClient api, ITokenProvider auth, ILog log, IEnumerable<int>? travelDcIds = null)
     {
         this.api = api;
         this.auth = auth;
         this.log = log;
+        this.travelDcIds = Normalize(travelDcIds);
     }
 
     public bool Loading { get; private set; }
@@ -41,6 +45,10 @@ internal sealed class DiscoveryService
     public int TierIndex => Math.Max(0, Array.IndexOf(TierOrder, this.Tier));
 
     public bool OnlineOnly { get; private set; }
+
+    // Data center travel: extra data_centers ids browsed alongside home on the DC/Region tiers. Kept
+    // outside the query so a filter Apply/Reset cannot drop it; Snapshot attaches it to every request.
+    public IReadOnlyList<int> TravelDcIds => this.travelDcIds;
 
     public IReadOnlyList<BasicProfileDto> Profiles { get; private set; } = Array.Empty<BasicProfileDto>();
 
@@ -68,6 +76,28 @@ internal sealed class DiscoveryService
         this.Fetch();
     }
 
+    // Change the travel set. Travelling from the World tier lands on DC (that is where the new data
+    // centers show), so one fetch covers both. Returns whether a fetch was issued.
+    public bool SetTravel(IReadOnlyList<int> dcIds)
+    {
+        var next = Normalize(dcIds);
+        var switchTier = this.Tier == Tier.World && next.Count > 0;
+        if (this.fetchedOnce && !switchTier && next.SequenceEqual(this.travelDcIds))
+            return false;
+        this.travelDcIds = next;
+        if (switchTier)
+        {
+            this.Tier = Tier.Dc;
+            this.query.Tier = Tier.Dc;
+        }
+
+        this.Fetch();
+        return true;
+    }
+
+    internal static List<int> Normalize(IEnumerable<int>? ids) =>
+        (ids ?? Array.Empty<int>()).Where(id => id > 0).Distinct().OrderBy(id => id).Take(16).ToList();
+
     // Apply a full query from the filter sheet (preserves whatever tier/online it carries).
     public void Apply(DiscoverQuery next)
     {
@@ -86,7 +116,7 @@ internal sealed class DiscoveryService
     public void Preview(DiscoverQuery draft)
     {
         var myEpoch = ++this.previewEpoch;
-        var snapshot = Clone(draft);
+        var snapshot = this.Snapshot(draft);
         snapshot.Cursor = null!;
         _ = Task.Run(async () =>
         {
@@ -140,7 +170,7 @@ internal sealed class DiscoveryService
         this.Reloading = true;
         var myEpoch = ++this.epoch;
         this.query.Cursor = null!;
-        var snapshot = Clone(this.query);
+        var snapshot = this.Snapshot(this.query);
         this.fetchTask = Task.Run(async () =>
         {
             try
@@ -191,7 +221,7 @@ internal sealed class DiscoveryService
             return;
         this.Loading = true;
         var myEpoch = this.epoch;
-        var snapshot = Clone(this.query);
+        var snapshot = this.Snapshot(this.query);
         snapshot.Cursor = this.nextCursor;
         _ = Task.Run(async () =>
         {
@@ -222,7 +252,7 @@ internal sealed class DiscoveryService
         });
     }
 
-    private static DiscoverQuery Clone(DiscoverQuery q) => new()
+    private DiscoverQuery Snapshot(DiscoverQuery q) => new()
     {
         Tier = q.Tier,
         OnlineOnly = q.OnlineOnly,
@@ -235,5 +265,6 @@ internal sealed class DiscoveryService
         AgeMin = q.AgeMin,
         AgeMax = q.AgeMax,
         Cursor = q.Cursor,
+        DcIds = this.travelDcIds.Count > 0 ? this.travelDcIds.Select(id => (long)id).ToList() : null!,
     };
 }

@@ -59,4 +59,42 @@ internal sealed class WorldCatalog
                     return $"{dc.Name} · {w.Name}";
         return "Pick a world";
     }
+
+    public Dc? DcOfWorld(int worldId)
+    {
+        foreach (var dc in this.DataCenters)
+            foreach (var w in dc.Worlds)
+                if (w.Id == worldId)
+                    return dc;
+        return null;
+    }
+
+    public Dc? DcById(int dcId)
+    {
+        foreach (var dc in this.DataCenters)
+            if (dc.Id == dcId)
+                return dc;
+        return null;
+    }
+
+    // Region strings arrive as the generated enum's names ("Na", "Eu", "Jp", "Oce").
+    public static string RegionCode(string region) => region switch
+    {
+        "NorthAmerica" or "North America" or "NA" or "Na" => "NA",
+        "Europe" or "EU" or "Eu" => "EU",
+        "Japan" or "JP" or "Jp" => "JP",
+        "Oceania" or "OCE" or "Oce" => "OCE",
+        _ => (region.Length > 3 ? region[..3] : region).ToUpperInvariant(),
+    };
+
+    public static string RegionName(string region) => RegionCode(region) switch
+    {
+        "NA" => "North America",
+        "EU" => "Europe",
+        "JP" => "Japan",
+        "OCE" => "Oceania",
+        var other => other,
+    };
+
+    public static readonly string[] RegionOrder = { "NA", "EU", "JP", "OCE" };
 }

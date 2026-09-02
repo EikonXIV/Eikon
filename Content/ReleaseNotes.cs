@@ -12,6 +12,19 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 4, 0),
+            "August 2026",
+            New:
+            [
+                "Data center travel. Browse other data centers alongside your home one, in any region, without changing your home world. Open the diamond beside World / DC / Region on the grid, or Settings > Connection, and pick where to travel. DC shows your home plus every data center you picked; Region widens to all of their regions.",
+                "Crossing the aether. Travelling plays a short transition over the grid while the new roster loads. Click it to skip.",
+            ],
+            Improved:
+            [
+                "Members you reach through travel show their data center next to their world on the grid.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(2, 3, 2),
             "August 2026",
             New: [],

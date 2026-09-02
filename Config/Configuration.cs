@@ -88,5 +88,10 @@ internal sealed class Configuration : IPluginConfiguration
     // background. Purely additive and optional, so old and new plugin builds read each other's config.
     public Dictionary<string, string> ChatBackgrounds { get; set; } = new();
 
+    // Data center travel: data_centers ids (from /api/worlds) the member browses alongside their home
+    // data center on the DC and Region tiers. Home is implied and never stored here. Local by design (the
+    // server only ever sees it per request), additive and optional, so old builds simply ignore it.
+    public List<int> TravelDcIds { get; set; } = new();
+
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 }

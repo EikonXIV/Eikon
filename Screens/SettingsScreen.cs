@@ -37,6 +37,8 @@ internal sealed class SettingsScreen : IScreen
     private readonly ProfileService profiles;
     private readonly PhotoService photoSvc;
     private readonly WorldCatalog catalog;
+    private readonly TravelService travel;
+    private readonly Selection selection;
 
     private bool discreet;
     private bool onlyVerifiedMessage;
@@ -45,8 +47,10 @@ internal sealed class SettingsScreen : IScreen
     private bool inDataCenter;     // the Data center picker sub-view is open over the main list
     private int pickerDc = -1;     // selected data center in the picker (its world list expands below)
 
-    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow, ProfileService profiles, PhotoService photoSvc, WorldCatalog catalog)
+    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow, ProfileService profiles, PhotoService photoSvc, WorldCatalog catalog, TravelService travel, Selection selection)
     {
+        this.travel = travel;
+        this.selection = selection;
         this.router = router;
         this.theme = theme;
         this.kit = kit;
@@ -190,6 +194,11 @@ internal sealed class SettingsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         if (this.DrawDataCenterRow(contentWidth))
             this.OpenDataCenterPicker();
+        if (this.NavRow("##s_travel", "Data center travel", this.TravelSummary(), Palette.TextPrimary, true, contentWidth))
+        {
+            this.selection.TravelReturn = Screen.Settings;
+            this.router.Navigate(Screen.DcTravel);
+        }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         this.kit.SectionLabel("Content & safety");
@@ -382,6 +391,16 @@ internal sealed class SettingsScreen : IScreen
         return clicked;
     }
 
+    // "+2 · Aether, Crystal", or "Home only" when nothing beyond the home data center is picked.
+    private string TravelSummary()
+    {
+        if (!this.travel.Travelling)
+            return "Home only";
+        var names = this.travel.AwayNames();
+        var summary = $"+{this.travel.AwayCount} · {names}";
+        return summary.Length > 28 ? $"+{this.travel.AwayCount} data centers" : summary;
+    }
+
     private void OpenDataCenterPicker()
     {
         this.inDataCenter = true;
@@ -466,7 +485,7 @@ internal sealed class SettingsScreen : IScreen
         foreach (var dc in this.catalog.DataCenters)
             foreach (var w in dc.Worlds)
                 if (w.Id == worldId)
-                    return (dc.Name, RegionCode(dc.Region));
+                    return (dc.Name, WorldCatalog.RegionCode(dc.Region));
         return ("Not set", string.Empty);
     }
 
@@ -480,15 +499,6 @@ internal sealed class SettingsScreen : IScreen
                     return i;
         return -1;
     }
-
-    private static string RegionCode(string region) => region switch
-    {
-        "NorthAmerica" or "North America" or "NA" => "NA",
-        "Europe" or "EU" => "EU",
-        "Japan" or "JP" => "JP",
-        "Oceania" or "OCE" => "OCE",
-        _ => (region.Length > 3 ? region[..3] : region).ToUpperInvariant(),
-    };
 
     private void DrawFooter(float fullWidth)
     {

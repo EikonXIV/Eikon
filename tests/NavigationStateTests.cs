@@ -24,5 +24,6 @@ public class NavigationStateTests
         Assert.Null(s.AlbumId);
         Assert.Equal(string.Empty, s.AlbumName);
         Assert.Equal(Screen.Albums, s.AlbumReturn);
+        Assert.Equal(Screen.Grid, s.TravelReturn);
     }
 }

@@ -261,12 +261,6 @@ internal sealed class ProfileDetailScreen : IScreen
 
     private void DrawDataTable(float fullWidth)
     {
-        var proximity = this.current.Proximity switch
-        {
-            Proximity.SameWorld => "Same world",
-            Proximity.SameDc => "Same DC",
-            _ => "Same region",
-        };
         var pronoun = this.current.PronounCustom is { Length: > 0 } pc ? pc : ProfileMapper.Label(this.current.Pronoun);
         var race = string.Join(" / ", ProfileMapper.Labels(this.current.Races));
 
@@ -278,7 +272,6 @@ internal sealed class ProfileDetailScreen : IScreen
             ("Pronouns", pronoun, false),
             ("World", this.current.World, false),
             ("Data Center", this.current.Dc, false),
-            ("Proximity", proximity, false),
         };
 
         var origin = ImGui.GetCursorScreenPos();
