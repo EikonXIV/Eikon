@@ -493,11 +493,17 @@ internal sealed class GridScreen : IScreen
         Ui.CenteredText(width, this.fonts.Caption, Palette.TextMuted, text);
     }
 
+    // While the crossing plate blocks input the buttons become inert placeholders, like the tiles: a
+    // button submitted under the plate would take the click ImGui gives to the first item and the
+    // overlay's skip would never see it.
     private void DrawEmpty(float width, bool interactive)
     {
         ImGui.Dummy(new Vector2(0f, Ui.Px(36f)));
         var buttonWidth = Ui.Px(180f);
         var wideWidth = Ui.Px(240f);
+
+        bool Primary(string id, string label, float w) => interactive ? this.kit.PrimaryButton(id, label, w) : Placeholder(w);
+        bool Secondary(string id, string label, float w) => interactive ? this.kit.SecondaryButton(id, label, w) : Placeholder(w);
 
         // Filtered to favorites and empty: the tier prompts below would send the member widening a pool
         // that is not the reason the grid is empty.
@@ -505,7 +511,7 @@ internal sealed class GridScreen : IScreen
         {
             this.kit.EmptyState(FontAwesomeIcon.Star.ToIconString(), "No favorites yet", "People you star appear here for quick access.", width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (this.kit.PrimaryButton("##empty_favs", "Browse everyone", buttonWidth) && interactive)
+            if (Primary("##empty_favs", "Browse everyone", buttonWidth))
                 this.favoritesOnly = false;
             return;
         }
@@ -514,27 +520,33 @@ internal sealed class GridScreen : IScreen
         {
             this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), "Quiet on your world", "No one nearby right now. Try the wider Data Center pool.", width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (this.kit.PrimaryButton("##empty_dc", "Switch to DC", buttonWidth) && interactive)
+            if (Primary("##empty_dc", "Switch to DC", buttonWidth))
                 this.discovery.SetTier(Tier.Dc);
         }
         else if (this.discovery.Tier == Tier.Dc)
         {
             this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), "Quiet on your data center", "Widen to your whole region, or travel to another data center.", width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (this.kit.PrimaryButton("##empty_region", "Switch to Region", buttonWidth) && interactive)
+            if (Primary("##empty_region", "Switch to Region", buttonWidth))
                 this.discovery.SetTier(Tier.Region);
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - wideWidth) * 0.5f));
-            if (this.kit.SecondaryButton("##empty_travel", "Travel to another data center", wideWidth) && interactive)
+            if (Secondary("##empty_travel", "Travel to another data center", wideWidth))
                 this.OpenTravel();
         }
         else
         {
             this.kit.EmptyState(FontAwesomeIcon.SlidersH.ToIconString(), "No one matches", "Loosen your filters to see more people.", width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (this.kit.SecondaryButton("##empty_reset", "Reset filters", buttonWidth) && interactive)
+            if (Secondary("##empty_reset", "Reset filters", buttonWidth))
                 this.discovery.Reset();
         }
+    }
+
+    private static bool Placeholder(float width)
+    {
+        ImGui.Dummy(new Vector2(width, Ui.Px(38f)));
+        return false;
     }
 
     // The aether crossing, drawn last inside the grid child so it paints over the tiles: a plate that

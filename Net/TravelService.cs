@@ -33,12 +33,13 @@ internal sealed class TravelService
 
     public WorldCatalog.Dc? HomeDc => this.catalog.DcOfWorld((int)(this.profiles.Mine?.WorldId ?? 0));
 
+    // Only ids the catalog knows count, so a stale or not-yet-resolvable id never shows as "+1".
     public int AwayCount
     {
         get
         {
             var home = this.HomeDc?.Id;
-            return this.DcIds.Count(id => id != home);
+            return this.DcIds.Count(id => id != home && this.catalog.DcById(id) != null);
         }
     }
 

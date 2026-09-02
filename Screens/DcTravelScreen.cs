@@ -7,7 +7,7 @@ using Eikon.UI.Theme;
 namespace Eikon.Screens;
 
 // Data center travel picker (warm-editorial), reached from the grid's scope row or Settings. Full bleed
-// like the filter sheet: a back / DATA CENTER TRAVEL / HOME ONLY header, one chip block per region with
+// like the filter sheet: a back / DATA CENTER TRAVEL / CLEAR header, one chip block per region with
 // the home data center pinned on, and a sticky footer (Home only + Travel). Travel applies the draft
 // through TravelService, which persists it and arms the grid's crossing.
 internal sealed class DcTravelScreen : IScreen
@@ -66,6 +66,10 @@ internal sealed class DcTravelScreen : IScreen
         this.DrawFooter(avail, footerHeight);
     }
 
+    // Both the catalog and the member's own profile must be in before the chips and footer appear:
+    // the home chip is pinned from the profile's world, so an early Travel could otherwise store home.
+    private bool Ready => this.catalog.Ready && this.profiles.Loaded;
+
     private int HomeId => this.travel.HomeDc?.Id ?? 0;
 
     private int AwayCount => this.draft.Count(id => id != this.HomeId);
@@ -89,7 +93,7 @@ internal sealed class DcTravelScreen : IScreen
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
-        const string clear = "HOME ONLY";
+        const string clear = "CLEAR";
         var clearSize = Ui.Measure(this.fonts.Eyebrow, clear);
         ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth) - pad - clearSize.X, midY - (clearSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##dct_clear", clearSize))
@@ -114,7 +118,7 @@ internal sealed class DcTravelScreen : IScreen
         ImGui.PopTextWrapPos();
         ImGui.Unindent(pad);
 
-        if (!this.catalog.Ready)
+        if (!this.Ready)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
             Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, "Loading worlds…");
@@ -179,6 +183,9 @@ internal sealed class DcTravelScreen : IScreen
         ImGui.SetCursorPos(new Vector2(0f, avail.Y - height));
         var top = ImGui.GetCursorScreenPos();
         dl.AddLine(top, new Vector2(top.X + avail.X, top.Y), Palette.Border.U32(), 1f);
+
+        if (!this.Ready)
+            return;
 
         var width = avail.X - (pad * 2f) - gap;
         var homeWidth = MathF.Floor(width * 0.4f);
