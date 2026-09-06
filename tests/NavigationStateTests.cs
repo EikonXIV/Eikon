@@ -16,6 +16,16 @@ public class NavigationStateTests
     }
 
     [Fact]
+    public void ScreenRouter_reaches_the_settings_album_requests_page()
+    {
+        var router = new ScreenRouter(Screen.Settings);
+        router.Navigate(Screen.AlbumRequestsSettings);
+        Assert.Equal(Screen.AlbumRequestsSettings, router.Current);
+        router.Navigate(Screen.Settings);
+        Assert.Equal(Screen.Settings, router.Current);
+    }
+
+    [Fact]
     public void Selection_has_sensible_defaults()
     {
         var s = new Selection();

@@ -21,6 +21,7 @@ internal enum Screen
     Guidelines,
     WhatsNew,
     Blocked,
+    AlbumRequestsSettings,
     Appearance,
     Typeface,
     Albums,

@@ -39,6 +39,7 @@ internal sealed class SettingsScreen : IScreen
     private readonly WorldCatalog catalog;
     private readonly TravelService travel;
     private readonly Selection selection;
+    private readonly AlbumService albums;
 
     private bool discreet;
     private bool onlyVerifiedMessage;
@@ -47,10 +48,11 @@ internal sealed class SettingsScreen : IScreen
     private bool inDataCenter;     // the Data center picker sub-view is open over the main list
     private int pickerDc = -1;     // selected data center in the picker (its world list expands below)
 
-    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow, ProfileService profiles, PhotoService photoSvc, WorldCatalog catalog, TravelService travel, Selection selection)
+    public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow, ProfileService profiles, PhotoService photoSvc, WorldCatalog catalog, TravelService travel, Selection selection, AlbumService albums)
     {
         this.travel = travel;
         this.selection = selection;
+        this.albums = albums;
         this.router = router;
         this.theme = theme;
         this.kit = kit;
@@ -93,6 +95,7 @@ internal sealed class SettingsScreen : IScreen
             return;
         }
 
+        this.albums.EnsureRequests();
         this.DrawHeader(contentWidth);
 
         this.kit.SectionLabel("Appearance");
@@ -150,6 +153,17 @@ internal sealed class SettingsScreen : IScreen
         {
             this.onlyVerifiedMessage = nextOnlyVerified;
             this.SaveSettings();
+        }
+
+        ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
+        this.kit.SectionLabel("Albums");
+        ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
+        var pending = this.albums.Requests.Count;
+        var pendingValue = pending == 0 ? "None" : pending == 1 ? "1 pending" : $"{pending} pending";
+        if (this.NavRow("##s_albumreqs", "Access requests", pendingValue, Palette.TextPrimary, true, contentWidth))
+        {
+            this.albums.ReloadRequests();
+            this.router.Navigate(Screen.AlbumRequestsSettings);
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));

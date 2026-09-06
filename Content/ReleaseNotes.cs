@@ -12,6 +12,18 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(2, 5, 0),
+            "September 2026",
+            New:
+            [
+                "Album access requests in Settings. A new Albums section shows how many people are waiting on your private albums, and opens a page listing every request across all of them, each with Approve and Deny.",
+            ],
+            Improved:
+            [
+                "The pending count stays live as new requests arrive, and request toasts stay quiet while you're already looking at the list.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(2, 4, 0),
             "August 2026",
             New:

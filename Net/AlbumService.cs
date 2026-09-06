@@ -48,6 +48,8 @@ internal sealed class AlbumService : IDisposable
 
     public IReadOnlyList<AlbumRequestDto> Requests { get; private set; } = Array.Empty<AlbumRequestDto>();
 
+    public bool RequestsLoaded => this.requestsLoaded;
+
     public void EnsureLoaded()
     {
         if (this.Loaded || this.mineLoading)

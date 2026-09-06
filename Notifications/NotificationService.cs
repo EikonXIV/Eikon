@@ -115,6 +115,8 @@ internal sealed class NotificationService
             // the same thread PeerAlbums() is read on, so the cache stays consistent.
             if (kind == ToastKind.AlbumApproved)
                 this.albums.InvalidatePeer(notice.PeerId);
+            if (kind == ToastKind.AlbumRequest)
+                this.albums.ReloadRequests();
 
             if (!this.config.NotificationsEnabled) continue;
             if (this.IsViewingAlbums(kind, notice.AlbumId)) continue;
@@ -171,7 +173,7 @@ internal sealed class NotificationService
         if (!this.mainWindow.IsOpen)
             return false;
         return kind == ToastKind.AlbumRequest
-            ? this.router.Current == Screen.AlbumRequests
+            ? this.router.Current is Screen.AlbumRequests or Screen.AlbumRequestsSettings
             : this.router.Current == Screen.AlbumViewer && this.selection.AlbumId == albumId;
     }
 
