@@ -40,7 +40,7 @@ internal sealed class FavoritesScreen : IScreen
         this.favorites.EnsureLoaded();
         var profiles = this.favorites.Profiles;
 
-        this.kit.SectionLabel("Favorites");
+        this.kit.SectionLabel(Loc.T("favorites.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
 
         if (profiles.Count == 0)
@@ -48,15 +48,15 @@ internal sealed class FavoritesScreen : IScreen
             if (!this.favorites.Loaded)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading...");
+                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("favorites.loading"));
                 return;
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(48f)));
-            this.kit.EmptyState(FontAwesomeIcon.Star.ToIconString(), "No favorites yet", "People you star appear here for quick access.", contentWidth);
+            this.kit.EmptyState(FontAwesomeIcon.Star.ToIconString(), Loc.T("favorites.empty.title"), Loc.T("favorites.empty.body"), contentWidth);
             var buttonWidth = Ui.Px(180f);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((contentWidth - buttonWidth) * 0.5f));
-            if (this.kit.PrimaryButton("##fav_browse", "Browse the grid", buttonWidth))
+            if (this.kit.PrimaryButton("##fav_browse", Loc.T("favorites.empty.action"), buttonWidth))
                 this.router.Navigate(Screen.Grid);
             return;
         }

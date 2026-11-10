@@ -103,7 +103,7 @@ internal sealed class AppearanceScreen : IScreen
         var cs = Ui.Measure(this.fonts.Icon, chevron);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X, midY - (cs.Y * 0.5f)), (hovered ? Palette.TextPrimary : Palette.TextMuted).U32(), chevron);
 
-        var label = group.ToUpperInvariant();
+        var label = Loc.Upper(Loc.T(Themes.GroupKey(group)));
         var ls = Ui.Measure(this.fonts.Eyebrow, label);
         Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(pos.X + Ui.Px(22f), midY - (ls.Y * 0.5f)), Palette.TextSecondary.U32(), label);
 
@@ -146,8 +146,10 @@ internal sealed class AppearanceScreen : IScreen
 
     private void DrawCard(ThemeDef def, float cellW, float previewH)
     {
-        var nameH = Ui.Measure(this.fonts.Body, def.Name).Y;
-        var tagH = Ui.Measure(this.fonts.Caption, def.Tag).Y;
+        var name = Loc.T(Themes.NameKey(def));
+        var tag = Loc.T(Themes.TagKey(def));
+        var nameH = Ui.Measure(this.fonts.Body, name).Y;
+        var tagH = Ui.Measure(this.fonts.Caption, tag).Y;
         var cardH = previewH + Ui.Px(10f) + nameH + Ui.Px(2f) + tagH + Ui.Px(10f);
 
         var pos = ImGui.GetCursorScreenPos();
@@ -164,7 +166,7 @@ internal sealed class AppearanceScreen : IScreen
         // Selected badge: an "ON" pill in the accent, over the top-right of the preview.
         if (selected)
         {
-            const string on = "ON";
+            var on = Loc.T("appearance.on");
             var os = Ui.Measure(this.fonts.Eyebrow, on);
             var bpad = new Vector2(Ui.Px(5f), Ui.Px(3f));
             var bsize = os + (bpad * 2f);
@@ -175,8 +177,8 @@ internal sealed class AppearanceScreen : IScreen
 
         var textX = pos.X + Ui.Px(10f);
         var textY = pos.Y + previewH + Ui.Px(10f);
-        Ui.TextAt(dl, this.fonts.Body, new Vector2(textX, textY), Palette.TextPrimary.U32(), def.Name);
-        Ui.TextAt(dl, this.fonts.Caption, new Vector2(textX, textY + nameH + Ui.Px(2f)), Palette.TextMuted.U32(), def.Tag);
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(textX, textY), Palette.TextPrimary.U32(), name);
+        Ui.TextAt(dl, this.fonts.Caption, new Vector2(textX, textY + nameH + Ui.Px(2f)), Palette.TextMuted.U32(), tag);
 
         if (clicked)
             this.theme.SetTheme(def.Id);
@@ -233,7 +235,7 @@ internal sealed class AppearanceScreen : IScreen
             this.router.Navigate(Screen.Settings);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        const string title = "THEME";
+        var title = Loc.T("appearance.title");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 

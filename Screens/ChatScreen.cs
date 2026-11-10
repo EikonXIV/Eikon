@@ -372,7 +372,7 @@ internal sealed class ChatScreen : IScreen
         // Status line under the name: a presence dot and a word, mirroring the inbox rows.
         var statusY = origin.Y + Ui.Px(37f);
         drawList.AddCircleFilled(new Vector2(textX + Ui.Px(3f), statusY + Ui.Px(6f)), Ui.Px(3.5f), (online ? Palette.Online : Palette.Afk).U32(), 12);
-        Ui.TextAt(drawList, this.fonts.Mono, new Vector2(textX + Ui.Px(12f), statusY), Palette.TextMuted.U32(), online ? "ONLINE" : "OFFLINE");
+        Ui.TextAt(drawList, this.fonts.Mono, new Vector2(textX + Ui.Px(12f), statusY), Palette.TextMuted.U32(), Loc.T(online ? "chat.status.online" : "chat.status.offline"));
 
         if (tapClicked)
         {
@@ -410,19 +410,19 @@ internal sealed class ChatScreen : IScreen
         uint color;
         if (mismatched)
         {
-            note = "Safety identity changed · tap to review";
+            note = Loc.T("chat.e2e.changed");
             glyphIcon = FontAwesomeIcon.ExclamationTriangle;
             color = Palette.Danger.U32();
         }
         else if (verified)
         {
-            note = "Encrypted · identity verified";
+            note = Loc.T("chat.e2e.verified");
             glyphIcon = FontAwesomeIcon.CheckCircle;
             color = Palette.Online.U32();
         }
         else
         {
-            note = "Encrypted · tap to verify";
+            note = Loc.T("chat.e2e.unverified");
             glyphIcon = FontAwesomeIcon.Lock;
             color = Palette.TextMuted.U32();
         }
@@ -473,18 +473,18 @@ internal sealed class ChatScreen : IScreen
             var mismatched = this.identity.Mismatched(peer);
             this.IconBadge(width, mismatched ? FontAwesomeIcon.ExclamationTriangle : FontAwesomeIcon.ShieldAlt, mismatched ? Palette.Danger : Palette.Signal);
             ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Safety number");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("chat.safety.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-                ImGui.TextWrapped($"Compare this with {name} over a channel you trust (voice or in person). If it matches on both sides, no one is intercepting your messages.");
+                Ui.TextWrapped(Loc.T("chat.safety.body", name));
 
             if (mismatched)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
                 using (this.fonts.Caption.Push())
                 using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-                    ImGui.TextWrapped("This person's safety identity changed since you last saw it. That can be a new device, or someone intercepting. Re-verify the number below out of band before trusting it.");
+                    Ui.TextWrapped(Loc.T("chat.safety.changed"));
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
@@ -492,7 +492,7 @@ internal sealed class ChatScreen : IScreen
             if (number is null)
             {
                 using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                    ImGui.TextWrapped("Send a message first so keys are exchanged, then come back to verify.");
+                    Ui.TextWrapped(Loc.T("chat.safety.noKeys"));
             }
             else
             {
@@ -500,19 +500,19 @@ internal sealed class ChatScreen : IScreen
                 ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
                 if (this.identity.IsVerified(peer))
                     this.DrawVerifiedBadge(width);
-                else if (this.kit.PrimaryButton("##safety_verify", "Mark as verified", width))
+                else if (this.kit.PrimaryButton("##safety_verify", Loc.T("chat.safety.markVerified"), width))
                     this.identity.MarkVerified(peer);
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            if (mismatched && this.kit.DangerButton("##safety_reset", "Reset this contact's identity", width))
+            if (mismatched && this.kit.DangerButton("##safety_reset", Loc.T("chat.safety.reset"), width))
             {
                 this.identity.ForgetPin(peer);   // accept the change; the next message re-pins it
                 ImGui.CloseCurrentPopup();
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            if (this.kit.SecondaryButton("##safety_close", "Close", width))
+            if (this.kit.SecondaryButton("##safety_close", Loc.T("chat.safety.close"), width))
                 ImGui.CloseCurrentPopup();
 
             ImGui.EndPopup();
@@ -567,7 +567,7 @@ internal sealed class ChatScreen : IScreen
     {
         var glyph = FontAwesomeIcon.CheckCircle.ToIconString();
         var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
-        const string label = "Verified";
+        var label = Loc.T("chat.safety.verified");
         var labelSize = Ui.Measure(this.fonts.Caption, label);
         var total = glyphSize.X + Ui.Px(7f) + labelSize.X;
         var pos = ImGui.GetCursorScreenPos();
@@ -686,7 +686,7 @@ internal sealed class ChatScreen : IScreen
                 var eye = FontAwesomeIcon.EyeSlash.ToIconString();
                 var es = Ui.Measure(this.fonts.Icon, eye);
                 Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (es.X * 0.5f), center.Y - es.Y), Palette.TextSecondary.U32(), eye);
-                var label = "Tap to reveal";
+                var label = Loc.T("chat.image.reveal");
                 var ls = Ui.Measure(this.fonts.Caption, label);
                 Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (ls.X * 0.5f), center.Y + Ui.Px(4f)), Palette.TextSecondary.U32(), label);
             }
@@ -695,13 +695,13 @@ internal sealed class ChatScreen : IScreen
                 var broken = FontAwesomeIcon.ExclamationTriangle.ToIconString();
                 var bs = Ui.Measure(this.fonts.Icon, broken);
                 Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (bs.X * 0.5f), center.Y - bs.Y), Palette.TextMuted.U32(), broken);
-                var label = "Photo unavailable";
+                var label = Loc.T("chat.image.unavailable");
                 var ls = Ui.Measure(this.fonts.Caption, label);
                 Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (ls.X * 0.5f), center.Y + Ui.Px(4f)), Palette.TextMuted.U32(), label);
             }
             else
             {
-                var label = "Loading...";
+                var label = Loc.T("chat.image.loading");
                 var ls = Ui.Measure(this.fonts.Caption, label);
                 Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (ls.X * 0.5f), center.Y - (ls.Y * 0.5f)), Palette.TextMuted.U32(), label);
             }
@@ -765,14 +765,14 @@ internal sealed class ChatScreen : IScreen
         var textX = tpos.X + thumb + Ui.Px(11f);
         var kickerColor = (mine ? Palette.WithAlpha(Palette.Paper, 0.6f) : Palette.TextMuted).U32();
         var nameColor = (mine ? Palette.Paper : Palette.TextPrimary).U32();
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(12f)), kickerColor, mine ? "Shared album" : "Shared an album");
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(12f)), kickerColor, Loc.T(mine ? "chat.album.sharedMine" : "chat.album.sharedTheirs"));
 
-        var albumName = message.AlbumName ?? "Album";
+        var albumName = message.AlbumName ?? Loc.T("chat.album.fallbackName");
         var maxTextW = (pos.X + width - pad) - textX;
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(27f)), nameColor, this.Fit(albumName, maxTextW));
 
-        var count = message.AlbumCount == 1 ? "1 photo" : message.AlbumCount + " photos";
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(46f)), kickerColor, mine ? count : count + "  ·  View");
+        var count = Loc.N(mine ? "chat.album.photos" : "chat.album.photosView", message.AlbumCount);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(46f)), kickerColor, count);
 
         if (clicked && message.AlbumId is { } target)
         {
@@ -814,7 +814,7 @@ internal sealed class ChatScreen : IScreen
         var pad = Ui.Px(12f);
         var metaH = Ui.Px(28f);
 
-        var title = message.EventTitle ?? "Event";
+        var title = message.EventTitle ?? Loc.T("chat.event.fallbackTitle");
         var innerW = width - (pad * 2f);
         var (dayText, restText) = this.EventTimeLine(message);
         var location = message.EventLocation ?? string.Empty;
@@ -853,7 +853,7 @@ internal sealed class ChatScreen : IScreen
         // Meta strip: kind eyebrow (left), attending[/capacity] (right).
         var stripTop = pos.Y + bannerH;
         dl.AddRectFilled(new Vector2(pos.X, stripTop), new Vector2(pos.X + width, stripTop + metaH), Palette.WithAlpha(Palette.Paper, 0.04f).U32());
-        var kind = EventFormat.KindLabel(message.EventKind).ToUpperInvariant();
+        var kind = Loc.Upper(EventFormat.KindLabel(message.EventKind));
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + pad, stripTop + ((metaH - Ui.Measure(this.fonts.Eyebrow, kind).Y) * 0.5f)), Palette.TextSecondary.U32(), kind);
         var countText = message.EventCapacity is { } cap ? $"{message.EventAttending}/{cap}" : message.EventAttending.ToString();
         var cw = Ui.Measure(this.fonts.Eyebrow, countText).X;
@@ -926,14 +926,14 @@ internal sealed class ChatScreen : IScreen
     {
         var label = message.State switch
         {
-            MessageState.Pending => "Sending...",
-            MessageState.Sent => "Sent",
-            MessageState.Delivered => "Delivered",
-            MessageState.Failed => "Failed to send",
+            MessageState.Pending => Loc.T("chat.receipt.sending"),
+            MessageState.Sent => Loc.T("chat.receipt.sent"),
+            MessageState.Delivered => Loc.T("chat.receipt.delivered"),
+            MessageState.Failed => Loc.T("chat.receipt.failed"),
             _ => string.Empty,
         };
         if (message.SentAt is { } sa && label.Length > 0)
-            label = $"{sa.ToLocalTime():t} · {label}";
+            label = Loc.T("chat.receipt.timed", sa.ToLocalTime().ToString(Loc.T("chat.time"), Loc.Culture), label);
         var color = message.State == MessageState.Failed ? Palette.Danger : Palette.TextMuted;
         var size = Ui.Measure(this.fonts.Caption, label);
         var pos = ImGui.GetCursorScreenPos();
@@ -947,7 +947,7 @@ internal sealed class ChatScreen : IScreen
     {
         if (!showTime || message.SentAt is not { } sa)
             return 0f;
-        var time = sa.ToLocalTime().ToString("t");
+        var time = sa.ToLocalTime().ToString(Loc.T("chat.time"), Loc.Culture);
         var ts = Ui.Measure(this.fonts.Caption, time);
         var x = message.Mine ? leftX + contentWidth - ts.X : leftX;
         Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Caption, new Vector2(x, y + Ui.Px(3f)), Palette.TextMuted.U32(), time);
@@ -969,14 +969,14 @@ internal sealed class ChatScreen : IScreen
 
     private void DrawDaySeparator(string label, float contentWidth) => this.DrawSeparator(label, Palette.TextSecondary, contentWidth);
 
-    private void DrawEarlierDivider(float contentWidth) => this.DrawSeparator("earlier messages", Palette.TextMuted, contentWidth);
+    private void DrawEarlierDivider(float contentWidth) => this.DrawSeparator(Loc.T("chat.separator.earlier"), Palette.TextMuted, contentWidth);
 
     // Centered eyebrow (tracked mono caps): the day markers and the pre-timestamp boundary.
     private void DrawSeparator(string label, Vector4 textColor, float contentWidth)
     {
         var blockHeight = Ui.Px(30f);
         var pos = ImGui.GetCursorScreenPos();
-        var text = label.ToUpperInvariant();
+        var text = Loc.Upper(label);
         var ls = Ui.Measure(this.fonts.Eyebrow, text);
         var midY = pos.Y + (blockHeight * 0.5f);
         Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + ((contentWidth - ls.X) * 0.5f), midY - (ls.Y * 0.5f)), textColor.U32(), text);
@@ -988,12 +988,12 @@ internal sealed class ChatScreen : IScreen
         var day = sentAt.ToLocalTime().Date;
         var today = DateTime.Today;
         if (day == today)
-            return "Today";
+            return Loc.T("chat.day.today");
         if (day == today.AddDays(-1))
-            return "Yesterday";
+            return Loc.T("chat.day.yesterday");
         if (day > today.AddDays(-7))
-            return day.ToString("dddd");
-        return day.Year == today.Year ? day.ToString("MMM d") : day.ToString("MMM d, yyyy");
+            return day.ToString(Loc.T("chat.day.weekday"), Loc.Culture);
+        return day.ToString(Loc.T(day.Year == today.Year ? "chat.day.sameYear" : "chat.day.otherYear"), Loc.Culture);
     }
 
     // Floating jump-to-latest button. Called from inside the scroll child so it paints over the
@@ -1071,7 +1071,7 @@ internal sealed class ChatScreen : IScreen
         var fieldX = pad + edge + control;
         var sendX = (avail.X - pad) - edge - control;
         ImGui.SetCursorPos(new Vector2(fieldX, fieldTop));
-        var enterSend = this.kit.ComposerField("##chat_draft", ref this.draft, "Write a message", (sendX - Ui.Px(6f)) - fieldX, fieldHeight, this.refocusComposer);
+        var enterSend = this.kit.ComposerField("##chat_draft", ref this.draft, Loc.T("chat.composer.placeholder"), (sendX - Ui.Px(6f)) - fieldX, fieldHeight, this.refocusComposer);
         this.refocusComposer = false;
 
         ImGui.SetCursorPos(new Vector2(sendX, fieldBottom - control));
@@ -1127,7 +1127,7 @@ internal sealed class ChatScreen : IScreen
                 return;
 
             var width = ImGui.GetContentRegionAvail().X;
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Send photo");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("chat.sendPhoto.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
 
             if (this.pendingImagePath != null)
@@ -1148,14 +1148,14 @@ internal sealed class ChatScreen : IScreen
             ImGui.SameLine(0f, Ui.Px(9f));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                ImGui.TextUnformatted("Mark NSFW (blurred until tapped)");
+                ImGui.TextUnformatted(Loc.T("chat.sendPhoto.nsfw"));
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-            this.kit.TextField("##img_caption", ref this.draft, "Caption (optional)", width);
+            this.kit.TextField("##img_caption", ref this.draft, Loc.T("chat.sendPhoto.caption"), width);
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
             var half = (width - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##img_cancel", "Cancel", half))
+            if (this.kit.SecondaryButton("##img_cancel", Loc.T("chat.sendPhoto.cancel"), half))
             {
                 this.pendingImagePath = null;
                 this.draft = string.Empty;
@@ -1163,7 +1163,7 @@ internal sealed class ChatScreen : IScreen
             }
 
             ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.PrimaryButton("##img_send", "Send", half) && this.pendingImagePath != null)
+            if (this.kit.PrimaryButton("##img_send", Loc.T("chat.sendPhoto.send"), half) && this.pendingImagePath != null)
             {
                 this.chat.SendImage(peer, this.pendingImagePath, this.pendingNsfw, this.draft.Trim());
                 this.pendingImagePath = null;
@@ -1201,11 +1201,11 @@ internal sealed class ChatScreen : IScreen
                 return;
 
             var width = ImGui.GetContentRegionAvail().X;
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Share an album");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("chat.shareAlbum.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-                ImGui.TextWrapped($"{name} will be able to open the album you pick. A private album unlocks just for them.");
+                Ui.TextWrapped(Loc.T("chat.shareAlbum.body", name));
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
 
             var mine = this.albums.Mine;
@@ -1217,7 +1217,7 @@ internal sealed class ChatScreen : IScreen
                     if (mine.Count == 0)
                     {
                         ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                        this.kit.EmptyState(FontAwesomeIcon.LayerGroup.ToIconString(), "No albums yet", "Create an album to share it here.", rowWidth);
+                        this.kit.EmptyState(FontAwesomeIcon.LayerGroup.ToIconString(), Loc.T("chat.shareAlbum.empty.title"), Loc.T("chat.shareAlbum.empty.body"), rowWidth);
                     }
                     else
                     {
@@ -1241,7 +1241,7 @@ internal sealed class ChatScreen : IScreen
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-            if (this.kit.SecondaryButton("##album_pick_cancel", "Cancel", width))
+            if (this.kit.SecondaryButton("##album_pick_cancel", Loc.T("chat.shareAlbum.cancel"), width))
                 ImGui.CloseCurrentPopup();
 
             ImGui.EndPopup();
@@ -1277,8 +1277,7 @@ internal sealed class ChatScreen : IScreen
         var textX = tpos.X + thumb + Ui.Px(12f);
         var maxTextW = (pos.X + width - Ui.Px(12f)) - textX;
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(13f)), Palette.TextPrimary.U32(), this.Fit(album.Name, maxTextW));
-        var count = album.PhotoCount == 1 ? "1 photo" : album.PhotoCount + " photos";
-        var sub = count + "  ·  " + (album.Visibility == AlbumVisibilityEnum.Public ? "Public" : "Private");
+        var sub = Loc.N(album.Visibility == AlbumVisibilityEnum.Public ? "chat.shareAlbum.public" : "chat.shareAlbum.private", (int)album.PhotoCount);
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(32f)), Palette.TextMuted.U32(), sub);
 
         return clicked;

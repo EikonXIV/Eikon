@@ -11,7 +11,7 @@ internal sealed class Media
 
     public void PickImage(Action<string> onPicked)
     {
-        this.dialogs.OpenFileDialog("Choose a photo", "Images{.png,.jpg,.jpeg,.bmp,.webp}", (ok, path) =>
+        this.dialogs.OpenFileDialog(Loc.T("media.pickImage.title"), "Images{.png,.jpg,.jpeg,.bmp,.webp}", (ok, path) =>
         {
             if (ok && !string.IsNullOrEmpty(path))
                 onPicked(path);

@@ -26,6 +26,10 @@ internal sealed class Configuration : IPluginConfiguration
     // other's config, and an id an older or newer build cannot resolve falls back to the default.
     public string? FontSetId { get; set; }
 
+    // UI language as a locale id ("ja", "zh-Hans", ...), or null for English. Additive and optional, so
+    // old and new builds read each other's config; an id a build cannot resolve behaves as null.
+    public string? Language { get; set; }
+
     // Discovery grid layout: 0 = Expanded (2-column portrait tiles, the default), 1 = Compact
     // (3-column square tiles, denser for large pools). Purely a local display preference, so old and
     // new builds read each other's config; an unknown value falls back to Expanded.

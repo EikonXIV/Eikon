@@ -99,11 +99,11 @@ internal sealed class FilterScreen : IScreen
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), backGlyph);
 
         var active = this.ActiveCount();
-        var title = active > 0 ? $"FILTERS · {active}" : "FILTERS";
+        var title = active > 0 ? Loc.T("filter.title.active", active) : Loc.T("filter.title");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
-        const string reset = "RESET";
+        var reset = Loc.T("filter.reset");
         var resetSize = Ui.Measure(this.fonts.Eyebrow, reset);
         ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth) - pad - resetSize.X, midY - (resetSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##filter_reset", resetSize))
@@ -121,41 +121,41 @@ internal sealed class FilterScreen : IScreen
         var pad = Ui.Px(20f);
         var contentWidth = fullWidth - (pad * 2f);
 
-        this.BlockTop("Scope", pad);
+        this.BlockTop(Loc.T("filter.block.scope"), pad);
         this.DrawScope(pad, contentWidth);
         this.BlockBottom(fullWidth);
 
         this.DrawOnlineRow(fullWidth, pad);
 
-        this.BlockTop("Looking for", pad);
+        this.BlockTop(Loc.T("filter.block.lookingFor"), pad);
         this.Toggle(this.lookingFor, this.ChipCloud("f_lf", Options.LookingFor, this.lookingFor, pad, contentWidth));
         this.BlockBottom(fullWidth);
 
-        this.BlockTop("Age", pad);
+        this.BlockTop(Loc.T("filter.block.age"), pad);
         this.DrawAge(pad, contentWidth);
         this.BlockBottom(fullWidth);
 
-        this.BlockTop("Body / tribe", pad);
+        this.BlockTop(Loc.T("filter.block.tribe"), pad);
         this.Toggle(this.tribes, this.ChipCloud("f_tribe", Options.Tribes, this.tribes, pad, contentWidth));
         this.BlockBottom(fullWidth);
 
-        this.BlockTop("Gender", pad);
+        this.BlockTop(Loc.T("filter.block.gender"), pad);
         this.Toggle(this.genders, this.ChipCloud("f_gn", Options.Genders, this.genders, pad, contentWidth));
         this.BlockBottom(fullWidth);
 
         this.DrawAfterDarkHeading(pad, contentWidth);
 
-        this.BlockTop("Position", pad);
+        this.BlockTop(Loc.T("filter.block.position"), pad);
         this.Toggle(this.positions, this.ChipCloud("f_pos", Options.Positions, this.positions, pad, contentWidth));
         this.BlockBottom(fullWidth);
 
-        this.BlockTop("Meet", pad);
+        this.BlockTop(Loc.T("filter.block.meet"), pad);
         this.Toggle(this.meet, this.ChipCloud("f_meet", Options.Meet, this.meet, pad, contentWidth));
         this.BlockBottom(fullWidth);
 
         // The last block draws no closing hairline: the footer's top border is the divider there,
         // and two rules would stack.
-        this.BlockTop("Kinks", pad);
+        this.BlockTop(Loc.T("filter.block.kinks"), pad);
         this.Toggle(this.kinks, this.ChipCloud("f_kink", Options.Kinks, this.kinks, pad, contentWidth));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
@@ -166,7 +166,7 @@ internal sealed class FilterScreen : IScreen
     {
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         var pos = ImGui.GetCursorScreenPos();
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y), Palette.TextSecondary.U32(), title.ToUpperInvariant());
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y), Palette.TextSecondary.U32(), Loc.Upper(title));
         ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(12f)));
     }
 
@@ -182,7 +182,7 @@ internal sealed class FilterScreen : IScreen
     // Three bordered segments sharing internal hairlines; the active one fills with ink.
     private void DrawScope(float pad, float contentWidth)
     {
-        var labels = new[] { "WORLD", "DC", "REGION" };
+        var labels = new[] { Loc.T("tier.world"), Loc.T("tier.dc"), Loc.T("tier.region") };
         var height = Ui.Px(40f);
         var origin = ImGui.GetCursorScreenPos();
         var left = origin.X + pad;
@@ -203,8 +203,7 @@ internal sealed class FilterScreen : IScreen
             if (this.tier == i)
                 dl.AddRectFilled(pos, pos + new Vector2(segWidth, height), Palette.TextPrimary.U32(), 0f);
             var textColor = this.tier == i ? Palette.Paper : (hovered ? Palette.TextPrimary : Palette.TextMuted);
-            var textSize = Ui.Measure(this.fonts.Eyebrow, labels[i]);
-            Ui.TextAt(dl, this.fonts.Eyebrow, pos + ((new Vector2(segWidth, height) - textSize) * 0.5f), textColor.U32(), labels[i]);
+            Ui.TextFitCentered(dl, this.fonts.Eyebrow, pos, new Vector2(segWidth, height), textColor.U32(), labels[i], Ui.Px(6f));
             if (i > 0)
                 dl.AddLine(pos, new Vector2(pos.X, pos.Y + height), Palette.Border.U32(), 1f);
         }
@@ -232,7 +231,7 @@ internal sealed class FilterScreen : IScreen
 
         var midY = origin.Y + (height * 0.5f);
         dl.AddCircleFilled(new Vector2(origin.X + pad + Ui.Px(3f), midY), Ui.Px(3f), Palette.Online.U32(), 12);
-        const string label = "Online now only";
+        var label = Loc.T("filter.onlineOnly");
         var labelSize = Ui.Measure(this.fonts.Caption, label);
         Ui.TextAt(dl, this.fonts.Caption, new Vector2(origin.X + pad + Ui.Px(14f), midY - (labelSize.Y * 0.5f)), Palette.TextPrimary.U32(), label);
 
@@ -264,7 +263,7 @@ internal sealed class FilterScreen : IScreen
     private int ChipCloud(string id, string[] labels, bool[] flags, float pad, float contentWidth)
     {
         ImGui.Indent(pad);
-        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth);
+        var hit = this.kit.ChipFlow(id, Options.Labels(labels), i => flags[i], contentWidth);
         ImGui.Unindent(pad);
         return hit;
     }
@@ -278,8 +277,8 @@ internal sealed class FilterScreen : IScreen
         var origin = ImGui.GetCursorScreenPos();
         var left = origin.X + pad;
 
-        var newMin = this.AgeCell("##f_agemin", new Vector2(left, origin.Y), cellWidth, "MINIMUM", this.ageMin, 18, this.ageMax);
-        var newMax = this.AgeCell("##f_agemax", new Vector2(left + cellWidth + gap, origin.Y), cellWidth, "MAXIMUM", this.ageMax, this.ageMin, 99);
+        var newMin = this.AgeCell("##f_agemin", new Vector2(left, origin.Y), cellWidth, Loc.T("filter.age.minimum"), this.ageMin, 18, this.ageMax);
+        var newMax = this.AgeCell("##f_agemax", new Vector2(left + cellWidth + gap, origin.Y), cellWidth, Loc.T("filter.age.maximum"), this.ageMax, this.ageMin, 99);
         if (newMin != this.ageMin || newMax != this.ageMax)
         {
             this.ageMin = newMin;
@@ -328,7 +327,7 @@ internal sealed class FilterScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
         var pos = ImGui.GetCursorScreenPos();
         var dl = ImGui.GetWindowDrawList();
-        const string title = "After dark";
+        var title = Loc.T("filter.afterDark.title");
         var titleSize = Ui.Measure(this.fonts.Title, title);
         Ui.TextAt(dl, this.fonts.Title, new Vector2(pos.X + pad, pos.Y), Palette.TextPrimary.U32(), title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + pad + titleSize.X + Ui.Px(8f), (pos.Y + titleSize.Y) - Ui.Measure(this.fonts.Eyebrow, "18+").Y - Ui.Px(3f)), Palette.TextMuted.U32(), "18+");
@@ -356,7 +355,7 @@ internal sealed class FilterScreen : IScreen
         dl.AddRectFilled(pos, pos + size, fill.U32(), 0f);
 
         var count = this.discovery.PreviewCount + (this.discovery.PreviewMore ? "+" : string.Empty);
-        var label = $"SHOW RESULTS  ·  {count}";
+        var label = Loc.T("filter.apply", count);
         var labelSize = Ui.Measure(this.fonts.Eyebrow, label);
         Ui.TextAt(dl, this.fonts.Eyebrow, pos + ((size - labelSize) * 0.5f), Palette.Paper.U32(), label);
 

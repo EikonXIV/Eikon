@@ -46,6 +46,7 @@ internal sealed class SettingsScreen : IScreen
     private bool settingsLoaded;   // privacy prefs fetched from the server this session
     private int textStep;          // live Text size slider step; committed to config (and applied) on release
     private bool inDataCenter;     // the Data center picker sub-view is open over the main list
+    private bool inLanguage;
     private int pickerDc = -1;     // selected data center in the picker (its world list expands below)
 
     public SettingsScreen(ScreenRouter router, ThemeService theme, Kit kit, UiFonts fonts, AuthService auth, KeyVault keyVault, IApiClient api, Configuration config, SoundService sound, IPluginLog log, DeleteAccountFlow deleteFlow, ProfileService profiles, PhotoService photoSvc, WorldCatalog catalog, TravelService travel, Selection selection, AlbumService albums)
@@ -87,6 +88,14 @@ internal sealed class SettingsScreen : IScreen
         ImGui.Indent(pad);
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
 
+        if (this.inLanguage)
+        {
+            this.DrawLanguagePicker(contentWidth);
+            ImGui.Unindent(pad);
+            this.deleteFlow.Draw();
+            return;
+        }
+
         if (this.inDataCenter)
         {
             this.DrawDataCenterPicker(contentWidth);
@@ -98,57 +107,59 @@ internal sealed class SettingsScreen : IScreen
         this.albums.EnsureRequests();
         this.DrawHeader(contentWidth);
 
-        this.kit.SectionLabel("Appearance");
+        this.kit.SectionLabel(Loc.T("settings.section.appearance"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         if (this.DrawThemeRow("##s_appearance", contentWidth))
             this.router.Navigate(Screen.Appearance);
-        if (this.NavRow("##s_font", "Font", this.fonts.CurrentSet.Name, Palette.TextPrimary, true, contentWidth))
+        if (this.NavRow("##s_font", Loc.T("settings.font"), Loc.T("font." + this.fonts.CurrentSet.Id + ".name"), Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.Typeface);
+        if (this.NavRow("##s_language", Loc.T("settings.language"), this.LanguageSummary(), Palette.TextPrimary, true, contentWidth, this.fonts.LanguageNames))
+            this.inLanguage = true;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Browse layout");
+        this.kit.SectionLabel(Loc.T("settings.section.layout"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.DrawLayoutCards(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Text size");
+        this.kit.SectionLabel(Loc.T("settings.section.textSize"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         this.DrawTextSize(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Account");
+        this.kit.SectionLabel(Loc.T("settings.section.account"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.DrawAccountRow(contentWidth);
-        this.NavRow("##s_discord", "Discord", "Connected", Palette.TextPrimary, true, contentWidth);
+        this.NavRow("##s_discord", Loc.T("settings.discord"), Loc.T("settings.discord.connected"), Palette.TextPrimary, true, contentWidth);
 
         var verifyValue = this.auth.IsVerified
-            ? "Verified"
-            : this.auth.VerifyState is VerifyPhase.Authorizing or VerifyPhase.Failed ? this.auth.VerifyMessage : "Verify";
-        if (this.NavRow("##s_verify", "Verified character", verifyValue, Palette.TextPrimary, !this.auth.IsVerified, contentWidth)
+            ? Loc.T("settings.verified.done")
+            : this.auth.VerifyState is VerifyPhase.Authorizing or VerifyPhase.Failed ? this.auth.VerifyMessage : Loc.T("settings.verified.action");
+        if (this.NavRow("##s_verify", Loc.T("settings.verified"), verifyValue, Palette.TextPrimary, !this.auth.IsVerified, contentWidth)
             && !this.auth.IsVerified
             && this.auth.VerifyState != VerifyPhase.Authorizing)
         {
             this.auth.StartVerify();
         }
-        if (this.NavRow("##s_logout", "Log out", string.Empty, Palette.TextPrimary, true, contentWidth))
+        if (this.NavRow("##s_logout", Loc.T("settings.logout"), string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.AgeGuidelines);
-        if (this.NavRow("##s_delete", "Delete account", string.Empty, Danger, true, contentWidth))
+        if (this.NavRow("##s_delete", Loc.T("settings.delete"), string.Empty, Danger, true, contentWidth))
             this.deleteFlow.Open();
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Privacy");
+        this.kit.SectionLabel(Loc.T("settings.section.privacy"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.EnsureSettingsLoaded();
 
-        var nextDiscreet = this.ToggleRow("##s_discreet", "Discreet mode", this.discreet, contentWidth);
+        var nextDiscreet = this.ToggleRow("##s_discreet", Loc.T("settings.discreet"), this.discreet, contentWidth);
         if (nextDiscreet != this.discreet)
         {
             this.discreet = nextDiscreet;
             this.SaveSettings();
         }
-        this.Hint("Hides you from the grid; people you already talk to can still reach you.", contentWidth);
+        this.Hint(Loc.T("settings.discreet.hint"), contentWidth);
 
-        var nextOnlyVerified = this.ToggleRow("##s_onlyverif", "Only verified can message me", this.onlyVerifiedMessage, contentWidth);
+        var nextOnlyVerified = this.ToggleRow("##s_onlyverif", Loc.T("settings.onlyVerified"), this.onlyVerifiedMessage, contentWidth);
         if (nextOnlyVerified != this.onlyVerifiedMessage)
         {
             this.onlyVerifiedMessage = nextOnlyVerified;
@@ -156,28 +167,28 @@ internal sealed class SettingsScreen : IScreen
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Albums");
+        this.kit.SectionLabel(Loc.T("settings.section.albums"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         var pending = this.albums.Requests.Count;
-        var pendingValue = pending == 0 ? "None" : pending == 1 ? "1 pending" : $"{pending} pending";
-        if (this.NavRow("##s_albumreqs", "Access requests", pendingValue, Palette.TextPrimary, true, contentWidth))
+        var pendingValue = pending == 0 ? Loc.T("settings.albums.none") : Loc.N("settings.albums.pending", pending);
+        if (this.NavRow("##s_albumreqs", Loc.T("settings.albums.requests"), pendingValue, Palette.TextPrimary, true, contentWidth))
         {
             this.albums.ReloadRequests();
             this.router.Navigate(Screen.AlbumRequestsSettings);
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Notifications");
+        this.kit.SectionLabel(Loc.T("settings.section.notifications"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
 
-        var nextNotif = this.ToggleRow("##s_notif", "Notifications", this.config.NotificationsEnabled, contentWidth);
+        var nextNotif = this.ToggleRow("##s_notif", Loc.T("settings.notifications"), this.config.NotificationsEnabled, contentWidth);
         if (nextNotif != this.config.NotificationsEnabled)
         {
             this.config.NotificationsEnabled = nextNotif;
             this.config.Save();
         }
 
-        var nextSound = this.ToggleRow("##s_notifsound", "Notification sounds", this.config.NotificationSoundEnabled, contentWidth);
+        var nextSound = this.ToggleRow("##s_notifsound", Loc.T("settings.notifications.sounds"), this.config.NotificationSoundEnabled, contentWidth);
         if (nextSound != this.config.NotificationSoundEnabled)
         {
             this.config.NotificationSoundEnabled = nextSound;
@@ -185,7 +196,7 @@ internal sealed class SettingsScreen : IScreen
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.EyebrowValue("Sound volume", $"{this.config.NotificationVolume}%", contentWidth);
+        this.EyebrowValue(Loc.T("settings.notifications.volume"), $"{this.config.NotificationVolume}%", contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         var volWidth = contentWidth - Ui.Px(78f);
         var nextVolume = this.kit.Slider("##s_notifvol", this.config.NotificationVolume, 0, 100, volWidth);
@@ -195,50 +206,50 @@ internal sealed class SettingsScreen : IScreen
             this.config.Save();
         }
         ImGui.SameLine(0f, Ui.Px(10f));
-        if (this.kit.SecondaryButton("##s_notiftest", "Test", Ui.Px(68f)))
+        if (this.kit.SecondaryButton("##s_notiftest", Loc.T("settings.notifications.test"), Ui.Px(68f)))
             this.sound.Play(this.config.NotificationVolume);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        this.kit.SectionLabel("Where they appear");
+        this.kit.SectionLabel(Loc.T("settings.section.position"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.DrawNotifPosition(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Connection");
+        this.kit.SectionLabel(Loc.T("settings.section.connection"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         if (this.DrawDataCenterRow(contentWidth))
             this.OpenDataCenterPicker();
-        if (this.NavRow("##s_travel", "Data center travel", this.TravelSummary(), Palette.TextPrimary, true, contentWidth))
+        if (this.NavRow("##s_travel", Loc.T("settings.travel"), this.TravelSummary(), Palette.TextPrimary, true, contentWidth))
         {
             this.selection.TravelReturn = Screen.Settings;
             this.router.Navigate(Screen.DcTravel);
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Content & safety");
+        this.kit.SectionLabel(Loc.T("settings.section.safety"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         // After dark / NSFW is profile state (set in your profile, filtered in discovery), not a
         // device setting, so it isn't duplicated here.
-        if (this.NavRow("##s_blocked", "Blocked users", string.Empty, Palette.TextPrimary, true, contentWidth))
+        if (this.NavRow("##s_blocked", Loc.T("settings.blocked"), string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.Blocked);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("Security");
+        this.kit.SectionLabel(Loc.T("settings.section.security"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         var requirePassphrase = !this.keyVault.AutoUnlockEnabled;
-        var nextRequire = this.ToggleRow("##s_passlaunch", "Require passphrase on this PC", requirePassphrase, contentWidth);
+        var nextRequire = this.ToggleRow("##s_passlaunch", Loc.T("settings.passphrase"), requirePassphrase, contentWidth);
         if (nextRequire != requirePassphrase && this.keyVault.IsUnlocked)
             this.keyVault.SetAutoUnlock(!nextRequire);
-        this.Hint("Off unlocks automatically for your Windows account. On asks for your passphrase every launch - enable if others can use this PC under your login.", contentWidth);
+        this.Hint(Loc.T("settings.passphrase.hint"), contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        this.kit.SectionLabel("About");
+        this.kit.SectionLabel(Loc.T("settings.section.about"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        if (this.NavRow("##s_guidelines", "Community Guidelines", string.Empty, Palette.TextPrimary, true, contentWidth))
+        if (this.NavRow("##s_guidelines", Loc.T("settings.guidelines"), string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.Guidelines);
-        if (this.NavRow("##s_whatsnew", "What's new", string.Empty, Palette.TextPrimary, true, contentWidth))
+        if (this.NavRow("##s_whatsnew", Loc.T("settings.whatsNew"), string.Empty, Palette.TextPrimary, true, contentWidth))
             this.router.Navigate(Screen.WhatsNew);
-        this.NavRow("##s_version", "Version", PluginVersion.Display, Palette.TextSecondary, false, contentWidth);
+        this.NavRow("##s_version", Loc.T("settings.version"), PluginVersion.Display, Palette.TextSecondary, false, contentWidth);
 
         this.DrawFooter(contentWidth);
 
@@ -253,10 +264,10 @@ internal sealed class SettingsScreen : IScreen
         var dl = ImGui.GetWindowDrawList();
         var origin = ImGui.GetCursorScreenPos();
         var eyebrowH = Ui.Measure(this.fonts.Eyebrow, "X").Y;
-        Ui.TextAt(dl, this.fonts.Eyebrow, origin, Palette.TextSecondary.U32(), "PREFERENCES");
+        Ui.TextAt(dl, this.fonts.Eyebrow, origin, Palette.TextSecondary.U32(), Loc.T("settings.eyebrow"));
         var titleY = origin.Y + eyebrowH + Ui.Px(4f);
-        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(origin.X, titleY), Palette.TextPrimary.U32(), "Settings");
-        var titleH = Ui.Measure(this.fonts.SerifTitle, "Settings").Y;
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(origin.X, titleY), Palette.TextPrimary.U32(), Loc.T("settings.title"));
+        var titleH = Ui.Measure(this.fonts.SerifTitle, Loc.T("settings.title")).Y;
         var ruleY = titleY + titleH + Ui.Px(16f);
         dl.AddLine(new Vector2(origin.X, ruleY), new Vector2(origin.X + fullWidth, ruleY), Palette.Border.U32(), 1f);
         ImGui.Dummy(new Vector2(fullWidth, (ruleY - origin.Y) + Ui.Px(16f)));
@@ -269,8 +280,8 @@ internal sealed class SettingsScreen : IScreen
         var clicked = ImGui.InvisibleButton(id, new Vector2(contentWidth, rowHeight));
         var dl = ImGui.GetWindowDrawList();
 
-        var labelSize = Ui.Measure(this.fonts.Body, "Theme");
-        Ui.TextAt(dl, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), "Theme");
+        var labelSize = Ui.Measure(this.fonts.Body, Loc.T("settings.theme"));
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), Loc.T("settings.theme"));
 
         var chev = FontAwesomeIcon.ChevronRight.ToIconString();
         var chSize = Ui.Measure(this.fonts.Icon, chev);
@@ -278,7 +289,7 @@ internal sealed class SettingsScreen : IScreen
         Ui.TextAt(dl, this.fonts.Icon, new Vector2(rightX, pos.Y + ((rowHeight - chSize.Y) * 0.5f)), Palette.TextMuted.U32(), chev);
         rightX -= Ui.Px(8f);
 
-        var name = this.theme.CurrentThemeName;
+        var name = Loc.T(Themes.NameKey(this.theme.Current));
         var nameSize = Ui.Measure(this.fonts.Body, name);
         var nameX = rightX - nameSize.X;
         Ui.TextAt(dl, this.fonts.Body, new Vector2(nameX, pos.Y + ((rowHeight - nameSize.Y) * 0.5f)), Palette.TextSecondary.U32(), name);
@@ -344,7 +355,7 @@ internal sealed class SettingsScreen : IScreen
         dl.AddRect(avPos, avPos + avSize, Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
 
         var textX = pos.X + av + Ui.Px(12f);
-        var firstName = mine?.DisplayName is { Length: > 0 } nm ? FirstWord(nm) : "Your profile";
+        var firstName = mine?.DisplayName is { Length: > 0 } nm ? FirstWord(nm) : Loc.T("settings.profile.fallback");
         var nameSize = Ui.Measure(this.fonts.Body, firstName);
         var bioLine = BioFirstLine(mine?.Bio);
         var blockH = nameSize.Y + (bioLine.Length > 0 ? Ui.Px(3f) + Ui.Measure(this.fonts.Caption, "X").Y : 0f);
@@ -381,8 +392,8 @@ internal sealed class SettingsScreen : IScreen
         var clicked = ImGui.InvisibleButton("##s_dc", new Vector2(contentWidth, rowHeight));
         var dl = ImGui.GetWindowDrawList();
 
-        var labelSize = Ui.Measure(this.fonts.Body, "Data center");
-        Ui.TextAt(dl, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), "Data center");
+        var labelSize = Ui.Measure(this.fonts.Body, Loc.T("settings.dataCenter"));
+        Ui.TextAt(dl, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), Loc.T("settings.dataCenter"));
 
         var chev = FontAwesomeIcon.ChevronRight.ToIconString();
         var chSize = Ui.Measure(this.fonts.Icon, chev);
@@ -409,10 +420,10 @@ internal sealed class SettingsScreen : IScreen
     private string TravelSummary()
     {
         if (!this.travel.Travelling)
-            return "Home only";
+            return Loc.T("settings.travel.home");
         var names = this.travel.AwayNames();
         var summary = $"+{this.travel.AwayCount} · {names}";
-        return summary.Length > 28 ? $"+{this.travel.AwayCount} data centers" : summary;
+        return summary.Length > 28 ? Loc.T("settings.travel.count", this.travel.AwayCount) : summary;
     }
 
     private void OpenDataCenterPicker()
@@ -425,12 +436,12 @@ internal sealed class SettingsScreen : IScreen
     // it straight to the profile (same field the profile editor writes) and returns to the list.
     private void DrawDataCenterPicker(float contentWidth)
     {
-        this.DrawSubHeader("Data center", contentWidth);
+        this.DrawSubHeader(Loc.T("settings.dataCenter"), contentWidth);
 
         this.catalog.EnsureLoaded();
         if (!this.catalog.Ready)
         {
-            this.Hint("Loading worlds…", contentWidth);
+            this.Hint(Loc.T("settings.dataCenter.loading"), contentWidth);
             return;
         }
 
@@ -438,7 +449,7 @@ internal sealed class SettingsScreen : IScreen
         if (this.pickerDc < 0)
             this.pickerDc = this.CurrentPickerDc();
 
-        this.kit.SectionLabel("Data center");
+        this.kit.SectionLabel(Loc.T("settings.dataCenter"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         var dc = this.kit.ChipFlow("s_pick_dc", dcs.Select(d => d.Name).ToArray(), i => i == this.pickerDc, contentWidth);
         if (dc >= 0)
@@ -447,7 +458,7 @@ internal sealed class SettingsScreen : IScreen
         if (this.pickerDc >= 0 && this.pickerDc < dcs.Count)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-            this.kit.SectionLabel("Home world");
+            this.kit.SectionLabel(Loc.T("settings.homeWorld"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             var worlds = dcs[this.pickerDc].Worlds;
             var currentWorld = (int)(this.profiles.Mine?.WorldId ?? 0);
@@ -459,6 +470,50 @@ internal sealed class SettingsScreen : IScreen
                 this.pickerDc = -1;
             }
         }
+    }
+
+    private string LanguageSummary() =>
+        Locales.Resolve(this.config.Language).NativeName;
+
+    private void DrawLanguagePicker(float contentWidth)
+    {
+        this.DrawSubHeader(Loc.T("settings.language"), contentWidth);
+
+        foreach (var locale in Loc.Offered)
+        {
+            if (this.LanguageRow(locale.Id, locale.NativeName, Loc.Current.Id == locale.Id, contentWidth))
+                this.SetLanguage(locale.Id);
+        }
+    }
+
+    private bool LanguageRow(string id, string name, bool selected, float contentWidth)
+    {
+        var rowHeight = Ui.Px(50f);
+        var pos = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton($"##s_lang_{id}", new Vector2(contentWidth, rowHeight));
+        var dl = ImGui.GetWindowDrawList();
+
+        var color = selected || ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary;
+        var nameSize = Ui.Measure(this.fonts.LanguageNames, name);
+        Ui.TextAt(dl, this.fonts.LanguageNames, new Vector2(pos.X, pos.Y + ((rowHeight - nameSize.Y) * 0.5f)), color.U32(), name);
+
+        if (selected)
+        {
+            var glyph = FontAwesomeIcon.Check.ToIconString();
+            var glyphSize = Ui.Measure(this.fonts.Icon, glyph);
+            Ui.TextAt(dl, this.fonts.Icon, new Vector2((pos.X + contentWidth) - glyphSize.X, pos.Y + ((rowHeight - glyphSize.Y) * 0.5f)), Palette.Signal.U32(), glyph);
+        }
+
+        dl.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);
+        return clicked;
+    }
+
+    private void SetLanguage(string? id)
+    {
+        this.config.Language = id;
+        this.config.Save();
+        Loc.Apply(id);
+        this.inLanguage = false;
     }
 
     private void DrawSubHeader(string title, float contentWidth)
@@ -479,6 +534,7 @@ internal sealed class SettingsScreen : IScreen
         if (clicked)
         {
             this.inDataCenter = false;
+            this.inLanguage = false;
             this.pickerDc = -1;
         }
 
@@ -500,7 +556,7 @@ internal sealed class SettingsScreen : IScreen
             foreach (var w in dc.Worlds)
                 if (w.Id == worldId)
                     return (dc.Name, WorldCatalog.RegionCode(dc.Region));
-        return ("Not set", string.Empty);
+        return (Loc.T("settings.dataCenter.unset"), string.Empty);
     }
 
     private int CurrentPickerDc()
@@ -532,7 +588,7 @@ internal sealed class SettingsScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
         {
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-            ImGui.TextWrapped(text);
+            Ui.TextWrapped(text);
             ImGui.PopTextWrapPos();
         }
 
@@ -562,7 +618,7 @@ internal sealed class SettingsScreen : IScreen
         var dl = ImGui.GetWindowDrawList();
 
         var cellW2 = contentWidth / 2f;
-        var topLabels = new[] { "Top", "Bottom" };
+        var topLabels = new[] { Loc.T("settings.position.top"), Loc.T("settings.position.bottom") };
         var newVert = vert;
         for (var i = 0; i < 2; i++)
             if (this.SegCell($"##np_v{i}", new Vector2(pos.X + (i * cellW2), pos.Y), cellW2, rowH, topLabels[i], i == vert))
@@ -570,7 +626,7 @@ internal sealed class SettingsScreen : IScreen
 
         var row2Y = pos.Y + rowH;
         var cellW3 = contentWidth / 3f;
-        var botLabels = new[] { "Left", "Center", "Right" };
+        var botLabels = new[] { Loc.T("settings.position.left"), Loc.T("settings.position.center"), Loc.T("settings.position.right") };
         var newHoriz = horiz;
         for (var i = 0; i < 3; i++)
             if (this.SegCell($"##np_h{i}", new Vector2(pos.X + (i * cellW3), row2Y), cellW3, rowH, botLabels[i], i == horiz))
@@ -601,9 +657,8 @@ internal sealed class SettingsScreen : IScreen
         var dl = ImGui.GetWindowDrawList();
         if (active)
             dl.AddRectFilled(pos, pos + new Vector2(w, h), Palette.TextPrimary.U32());
-        var ts = Ui.Measure(this.fonts.Label, label);
         var color = active ? Palette.Paper : (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary);
-        Ui.TextAt(dl, this.fonts.Label, pos + ((new Vector2(w, h) - ts) * 0.5f), color.U32(), label);
+        Ui.TextFitCentered(dl, this.fonts.Label, pos, new Vector2(w, h), color.U32(), label, Ui.Px(6f));
         return clicked;
     }
 
@@ -686,9 +741,9 @@ internal sealed class SettingsScreen : IScreen
         var gap = Ui.Px(10f);
         var cardWidth = (contentWidth - gap) / 2f;
         var cardHeight = Ui.Px(96f);
-        this.DrawLayoutCard(0, FontAwesomeIcon.ThList, "Expanded", "Big photos, more detail", cardWidth, cardHeight);
+        this.DrawLayoutCard(0, FontAwesomeIcon.ThList, Loc.T("settings.layout.expanded"), Loc.T("settings.layout.expanded.hint"), cardWidth, cardHeight);
         ImGui.SameLine(0f, gap);
-        this.DrawLayoutCard(1, FontAwesomeIcon.Th, "Compact", "More profiles per screen", cardWidth, cardHeight);
+        this.DrawLayoutCard(1, FontAwesomeIcon.Th, Loc.T("settings.layout.compact"), Loc.T("settings.layout.compact.hint"), cardWidth, cardHeight);
     }
 
     private void DrawLayoutCard(int index, FontAwesomeIcon icon, string title, string subtitle, float width, float height)
@@ -839,12 +894,12 @@ internal sealed class SettingsScreen : IScreen
         var textX = av.X + avatar + pad;
         var textY = pos.Y + ((boxH - textH) * 0.5f);
         Ui.TextAtSized(drawList, this.fonts.Body, new Vector2(textX, textY), namePx, Palette.TextPrimary.U32(), "Rhys · 28");
-        Ui.TextAtSized(drawList, this.fonts.Caption, new Vector2(textX, textY + namePx + Ui.Px(4f)), bioPx, Palette.TextSecondary.U32(), "Warm, quiet, here for real.");
+        Ui.TextAtSized(drawList, this.fonts.Caption, new Vector2(textX, textY + namePx + Ui.Px(4f)), bioPx, Palette.TextSecondary.U32(), Loc.T("settings.textSize.sample"));
 
         ImGui.Dummy(new Vector2(contentWidth, boxH));
     }
 
-    private bool NavRow(string id, string label, string value, Vector4 labelColor, bool chevron, float contentWidth)
+    private bool NavRow(string id, string label, string value, Vector4 labelColor, bool chevron, float contentWidth, IFontHandle? valueFont = null)
     {
         var rowHeight = Ui.Px(50f);
         var pos = ImGui.GetCursorScreenPos();
@@ -866,8 +921,9 @@ internal sealed class SettingsScreen : IScreen
 
         if (value.Length > 0)
         {
-            var valueSize = Ui.Measure(this.fonts.Body, value);
-            Ui.TextAt(drawList, this.fonts.Body, new Vector2(rightX - valueSize.X, pos.Y + ((rowHeight - valueSize.Y) * 0.5f)), Palette.TextSecondary.U32(), value);
+            var face = valueFont ?? this.fonts.Body;
+            var valueSize = Ui.Measure(face, value);
+            Ui.TextAt(drawList, face, new Vector2(rightX - valueSize.X, pos.Y + ((rowHeight - valueSize.Y) * 0.5f)), Palette.TextSecondary.U32(), value);
         }
 
         drawList.AddLine(new Vector2(pos.X, pos.Y + rowHeight), new Vector2(pos.X + contentWidth, pos.Y + rowHeight), Palette.Border.U32(), 1f);

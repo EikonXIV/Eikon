@@ -41,7 +41,7 @@ internal sealed class RestoreAccountScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
         Ui.CenteredText(avail.X, this.fonts.Icon, this.theme.Accent, FontAwesomeIcon.Undo.ToIconString());
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, "Welcome back");
+        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, Loc.T("restore.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
         ImGui.SetCursorPosX(pad);
@@ -49,7 +49,7 @@ internal sealed class RestoreAccountScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
         {
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-            ImGui.TextWrapped(this.BodyText());
+            Ui.TextWrapped(this.BodyText());
             ImGui.PopTextWrapPos();
         }
 
@@ -57,16 +57,16 @@ internal sealed class RestoreAccountScreen : IScreen
         ImGui.SetCursorPosX(pad);
         if (this.busy)
         {
-            this.kit.SecondaryButton("##restore_busy", "Working...", contentWidth);
+            this.kit.SecondaryButton("##restore_busy", Loc.T("restore.working"), contentWidth);
             return;
         }
 
-        if (this.kit.PrimaryButton("##restore_yes", "Restore my account", contentWidth))
+        if (this.kit.PrimaryButton("##restore_yes", Loc.T("restore.confirm"), contentWidth))
             this.Run(restore: true);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         ImGui.SetCursorPosX(pad);
-        if (this.kit.DangerButton("##restore_deletenow", "Delete now instead", contentWidth))
+        if (this.kit.DangerButton("##restore_deletenow", Loc.T("restore.deleteNow"), contentWidth))
             this.Run(restore: false);
 
         if (this.error.Length > 0)
@@ -77,7 +77,7 @@ internal sealed class RestoreAccountScreen : IScreen
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
             {
                 ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-                ImGui.TextWrapped(this.error);
+                Ui.TextWrapped(Loc.T(this.error));
                 ImGui.PopTextWrapPos();
             }
         }
@@ -86,8 +86,7 @@ internal sealed class RestoreAccountScreen : IScreen
     private string BodyText()
     {
         var days = this.DaysLeft();
-        var window = days <= 0 ? "soon" : days == 1 ? "in 1 day" : $"in {days} days";
-        return $"Your account is set to delete {window}. Restore it and pick up where you left off?";
+        return days <= 0 ? Loc.T("restore.body.soon") : Loc.N("restore.body.days", days);
     }
 
     private int DaysLeft()
@@ -109,8 +108,8 @@ internal sealed class RestoreAccountScreen : IScreen
             if (!ok)
             {
                 this.error = restore
-                    ? "Couldn't restore your account. Try signing in again."
-                    : "Couldn't complete deletion. Try again.";
+                    ? "restore.error.restore"
+                    : "restore.error.delete";
                 this.busy = false;
             }
             // On success AuthService navigates away from this screen.

@@ -19,7 +19,7 @@ namespace Eikon.Screens;
 // builds a CreateEventRequest (or UpdateEventRequest in edit mode) and opens the new event's detail.
 internal sealed class EventCreateScreen : IScreen, IDisposable
 {
-    private static readonly string[] Steps = { "BASICS", "TIMING", "PLACE", "ACCESS" };
+    private static readonly string[] Steps = { "eventCreate.step.basics", "eventCreate.step.timing", "eventCreate.step.place", "eventCreate.step.access" };
 
     // Section heights: control content plus the gap to the next section. A labelled field is a 22px label
     // over a 44px box; a stepper box is 64px. Both sit above a 24px gap.
@@ -67,6 +67,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     };
 
     private static readonly int DefaultTz = Math.Max(0, Array.FindIndex(Timezones, t => t.Iana == "America/New_York"));
+
+    private static string TimezoneLabel(int index) => Loc.T("eventCreate.tz." + Timezones[index].Short);
 
     private static readonly (EventKindElement Kind, string Label)[] Kinds =
     {
@@ -175,7 +177,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     internal void SetPrivateForTest() => this.visibility = Visibility.Private;
 
     // Harness seam (Vitrine): show the publish-error footer for a screenshot.
-    internal void SetErrorForTest() => this.submitError = "Couldn't publish. Check your connection and try again.";
+    internal void SetErrorForTest() => this.submitError = "eventCreate.error.publish";
 
     private string? pendingPopup;
     private bool publishing;
@@ -334,7 +336,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var dl = ImGui.GetWindowDrawList();
         var midY = origin.Y + (height * 0.5f);
 
-        var title = this.editId != null ? "EDIT EVENT" : "NEW EVENT";
+        var title = Loc.T(this.editId != null ? "eventCreate.header.edit" : "eventCreate.header.new");
         var ts = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((width - ts.X) * 0.5f), midY - (ts.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -362,7 +364,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             var filled = i <= this.step;
             dl.AddLine(new Vector2(sx, y), new Vector2(sx + segW - Ui.Px(4f), y), (filled ? Palette.TextPrimary : Palette.Border).U32(), 1f);
             var col = (i == this.step ? Palette.TextPrimary : Palette.TextSecondary).U32();
-            Ui.TextAt(dl, this.fonts.Mono, new Vector2(sx, y + Ui.Px(8f)), col, Steps[i]);
+            Ui.TextAt(dl, this.fonts.Mono, new Vector2(sx, y + Ui.Px(8f)), col, Loc.T(Steps[i]));
         }
 
         dl.AddLine(new Vector2(origin.X, origin.Y + height), new Vector2(origin.X + width, origin.Y + height), Palette.Border.U32(), 1f);
@@ -380,13 +382,13 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (this.submitError is { } err)
         {
             errH = Ui.Px(26f);
-            Ui.TextAt(dl, this.fonts.Caption, new Vector2(wp.X + pad, y + Ui.Px(7f)), Palette.Danger.U32(), err);
+            Ui.TextAt(dl, this.fonts.Caption, new Vector2(wp.X + pad, y + Ui.Px(7f)), Palette.Danger.U32(), Loc.T(err));
         }
 
         var btnH = Ui.Px(44f);
         var by = y + errH + ((Ui.Px(64f) - btnH) * 0.5f);
         var backW = Ui.Px(96f);
-        var backLabel = this.step == 0 ? "CANCEL" : "BACK";
+        var backLabel = Loc.T(this.step == 0 ? "eventCreate.footer.cancel" : "eventCreate.footer.back");
         if (this.OutlineButton(dl, "##ec_back", backLabel, wp.X + pad, by, backW, btnH))
         {
             this.submitError = null;
@@ -399,9 +401,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var nextX = wp.X + pad + backW + Ui.Px(10f);
         var nextW = (wp.X + width - pad) - nextX;
         var last = this.step == Steps.Length - 1;
-        var nextLabel = last
-            ? (this.publishing ? (this.editId != null ? "SAVING" : "PUBLISHING") : this.editId != null ? "SAVE CHANGES" : "PUBLISH EVENT")
-            : "CONTINUE";
+        var nextLabel = Loc.T(last
+            ? (this.publishing ? (this.editId != null ? "eventCreate.footer.saving" : "eventCreate.footer.publishing") : this.editId != null ? "eventCreate.footer.save" : "eventCreate.footer.publish")
+            : "eventCreate.footer.continue");
         var enabled = this.StepValid() && !this.publishing;
         if (this.FilledButton(dl, "##ec_next", nextLabel, nextX, by, nextW, btnH, enabled) && enabled)
         {
@@ -423,7 +425,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         // Banner label row.
         var lp = ImGui.GetCursorScreenPos();
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lp.X + x, lp.Y), Palette.TextSecondary.U32(), "BANNER");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lp.X + x, lp.Y), Palette.TextSecondary.U32(), Loc.T("eventCreate.banner.label"));
         var hint = "3:1 · 1536×512";
         Ui.TextAt(dl, this.fonts.Mono, new Vector2(lp.X + x + w - Ui.Measure(this.fonts.Mono, hint).X, lp.Y + Ui.Px(1f)), Palette.TextMuted.U32(), hint);
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
@@ -431,23 +433,23 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         // Banner preview + filmstrip.
         this.DrawBannerPicker(dl, x, w);
 
-        this.Field(dl, "Title", x, w, () => { var t = this.title; this.kit.TextField("##ec_title", ref t, "The Velvet Hour", w, Limits.EventTitleMax); this.title = t; });
+        this.Field(dl, Loc.T("eventCreate.title.label"), x, w, () => { var t = this.title; this.kit.TextField("##ec_title", ref t, Loc.T("eventCreate.title.placeholder"), w, Limits.EventTitleMax); this.title = t; });
 
         // Kind chips.
-        this.Label(dl, "KIND", x);
+        this.Label(dl, Loc.T("eventCreate.kind.label"), x);
         this.DrawKindChips(dl, x, w);
 
-        this.Field(dl, "Description", x, w, () =>
+        this.Field(dl, Loc.T("eventCreate.description.label"), x, w, () =>
         {
             var d = this.description;
-            this.kit.TextField("##ec_desc", ref d, "What happens, who it's for, house rules.", w, Limits.EventDescriptionMax);
+            this.kit.TextField("##ec_desc", ref d, Loc.T("eventCreate.description.placeholder"), w, Limits.EventDescriptionMax);
             this.description = d;
         });
 
-        this.Field(dl, $"Tags (comma separated, up to {Limits.EventTagsMax})", x, w, () =>
+        this.Field(dl, Loc.T("eventCreate.tags.label", Limits.EventTagsMax), x, w, () =>
         {
             var t = this.tagsText;
-            this.kit.TextField("##ec_tags", ref t, "DJ, Lounge, 18+", w);
+            this.kit.TextField("##ec_tags", ref t, Loc.T("eventCreate.tags.placeholder"), w);
             this.tagsText = t;
         });
 
@@ -513,7 +515,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var us = Ui.Measure(this.fonts.Icon, up);
         Ui.TextAt(dl, this.fonts.Icon, (umin + umax) * 0.5f - (us * 0.5f), Palette.TextMuted.U32(), up);
 
-        var note = "Wide crops read best. The banner is trimmed to 3:1 on the board and in chat shares.";
+        var note = Loc.T("eventCreate.banner.note");
         var noteY = stripY + cellH + Ui.Px(12f);
         Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(pos.X + x, noteY), Palette.TextMuted.U32(), note, w);
         var total = (noteY + Ui.MeasureWrapped(this.fonts.Caption, note, w).Y + Ui.Px(12f)) - pos.Y;
@@ -528,8 +530,9 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var cx = pos.X + x;
         var cy = pos.Y;
         var rows = 1;
-        foreach (var (k, label) in Kinds)
+        foreach (var (k, id) in Kinds)
         {
+            var label = Loc.T("eventCreate.kind." + k.ToString().ToLowerInvariant());
             var ts = Ui.Measure(this.fonts.Label, label);
             var cw = ts.X + (Ui.Px(14f) * 2f);
             if (cx + cw > pos.X + x + w)
@@ -540,7 +543,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             }
 
             ImGui.SetCursorScreenPos(new Vector2(cx, cy));
-            if (ImGui.InvisibleButton("##ec_kind_" + label, new Vector2(cw, chipH)))
+            if (ImGui.InvisibleButton("##ec_kind_" + id, new Vector2(cw, chipH)))
                 this.kind = k;
             var active = this.kind == k;
             var min = new Vector2(cx, cy);
@@ -570,12 +573,12 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         // Date + Start fields, side by side.
         var rp = ImGui.GetCursorScreenPos();
-        if (this.FieldBox(dl, "date", "Date", rp.X + x, rp.Y, half, this.date.ToString("dd MMM yyyy"), FontAwesomeIcon.CalendarAlt))
+        if (this.FieldBox(dl, "date", Loc.T("eventCreate.date.label"), rp.X + x, rp.Y, half, this.date.ToString(Loc.T("eventCreate.date.format"), Loc.Culture), FontAwesomeIcon.CalendarAlt))
         {
             this.calView = new DateTime(this.date.Year, this.date.Month, 1);
             ImGui.OpenPopup("##ec_datepop");
         }
-        if (this.FieldBox(dl, "start", "Start", rp.X + x + half + Ui.Px(12f), rp.Y, half, EventFormat.Clock12(this.hour, this.minute), FontAwesomeIcon.Clock))
+        if (this.FieldBox(dl, "start", Loc.T("eventCreate.start.label"), rp.X + x + half + Ui.Px(12f), rp.Y, half, EventFormat.Clock12(this.hour, this.minute), FontAwesomeIcon.Clock))
             ImGui.OpenPopup("##ec_timepop");
         Block(rp, w, FieldBlock);
 
@@ -601,20 +604,20 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         // Timezone.
         var tp = ImGui.GetCursorScreenPos();
-        if (this.FieldBox(dl, "tz", "Timezone", tp.X + x, tp.Y, w, $"{Timezones[this.tz].Short} — {Timezones[this.tz].Label.Split('—').Last().Trim()}", FontAwesomeIcon.ChevronDown))
+        if (this.FieldBox(dl, "tz", Loc.T("eventCreate.timezone.label"), tp.X + x, tp.Y, w, Loc.T("eventCreate.timezone.value", Timezones[this.tz].Short, TimezoneLabel(this.tz).Split('—').Last().Trim()), FontAwesomeIcon.ChevronDown))
             ImGui.OpenPopup("##ec_tzpop");
         Block(tp, w, FieldBlock);
 
         // Hours / Minutes steppers.
         var sp = ImGui.GetCursorScreenPos();
-        this.durHours = this.StepperBox(dl, "HOURS", sp.X + x, sp.Y, half, this.durHours, 0, 12);
-        this.durMins = this.StepperBox(dl, "MINUTES", sp.X + x + half + Ui.Px(12f), sp.Y, half, this.durMins, 0, 45, step: 15);
+        this.durHours = this.StepperBox(dl, Loc.T("eventCreate.duration.hours"), sp.X + x, sp.Y, half, this.durHours, 0, 12);
+        this.durMins = this.StepperBox(dl, Loc.T("eventCreate.duration.minutes"), sp.X + x + half + Ui.Px(12f), sp.Y, half, this.durMins, 0, 45, step: 15);
         Block(sp, w, StepperBlock);
 
         // Repeats (only Once enabled for v1).
-        this.Label(dl, "REPEATS", x);
+        this.Label(dl, Loc.T("eventCreate.repeats.label"), x);
         var qp = ImGui.GetCursorScreenPos();
-        var opts = new[] { "ONCE", "WEEKLY", "2WK", "MONTHLY" };
+        var opts = new[] { Loc.T("eventCreate.repeats.once"), Loc.T("eventCreate.repeats.weekly"), Loc.T("eventCreate.repeats.biweekly"), Loc.T("eventCreate.repeats.monthly") };
         var enabled = new[] { true, false, false, false };
         var sel = this.Segmented(dl, "##ec_repeats", opts, 0, qp.X + x, qp.Y, w, Ui.Px(42f), enabled);
         if (sel == 0)
@@ -644,10 +647,10 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             this.pendingPopup = null;
         }
 
-        this.Label(dl, "VENUE", x);
+        this.Label(dl, Loc.T("eventCreate.venue.label"), x);
         var vp = ImGui.GetCursorScreenPos();
         var venueIdx = this.venue == EventVenueEnum.Housing ? 0 : this.venue == EventVenueEnum.OpenWorld ? 1 : 2;
-        var vsel = this.Segmented(dl, "##ec_venue", new[] { "HOUSE", "OPEN", "DISCORD" }, venueIdx, vp.X + x, vp.Y, w, Ui.Px(42f), null);
+        var vsel = this.Segmented(dl, "##ec_venue", new[] { Loc.T("eventCreate.venue.house"), Loc.T("eventCreate.venue.open"), Loc.T("eventCreate.venue.discord") }, venueIdx, vp.X + x, vp.Y, w, Ui.Px(42f), null);
         this.venue = vsel == 0 ? EventVenueEnum.Housing : vsel == 1 ? EventVenueEnum.OpenWorld : EventVenueEnum.Discord;
         Block(vp, w, Ui.Px(42f) + Ui.Px(24f));
 
@@ -656,7 +659,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             if (this.venueWorldId == 0 && this.profile.Mine?.WorldId is { } wid)
                 this.venueWorldId = (int)wid;
             var wfp = ImGui.GetCursorScreenPos();
-            this.Field(dl, "World", x, w, () =>
+            this.Field(dl, Loc.T("eventCreate.world.label"), x, w, () =>
             {
                 var wp = ImGui.GetCursorScreenPos();
                 if (this.FieldBox(dl, "world", string.Empty, wp.X, wp.Y, w, this.WorldLabel(), FontAwesomeIcon.ChevronDown, labelAbove: false))
@@ -674,18 +677,18 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         if (this.venue == EventVenueEnum.Housing)
         {
-            this.Field(dl, "District", x, w, () =>
+            this.Field(dl, Loc.T("eventCreate.housing.district"), x, w, () =>
             {
                 var dp = ImGui.GetCursorScreenPos();
-                if (this.FieldBox(dl, "district", string.Empty, dp.X, dp.Y, w, DistrictOptions[this.district].Label, FontAwesomeIcon.ChevronDown, labelAbove: false))
+                if (this.FieldBox(dl, "district", string.Empty, dp.X, dp.Y, w, EventCatalog.DistrictLabel(DistrictOptions[this.district].Value), FontAwesomeIcon.ChevronDown, labelAbove: false))
                     ImGui.OpenPopup("##ec_districtpop");
                 Block(dp, w, Ui.Px(44f));
             });
 
             var gp = ImGui.GetCursorScreenPos();
-            this.NumberField(dl, "ward", "WARD", gp.X + x, gp.Y, third, this.ward, "##ec_wardpop");
-            this.NumberField(dl, "plot", "PLOT", gp.X + x + third + Ui.Px(10f), gp.Y, third, this.plot, "##ec_plotpop");
-            this.NumberField(dl, "room", "ROOM", gp.X + x + (2f * (third + Ui.Px(10f))), gp.Y, third, this.room, "##ec_roompop");
+            this.NumberField(dl, "ward", Loc.T("eventCreate.housing.ward"), gp.X + x, gp.Y, third, this.ward, "##ec_wardpop");
+            this.NumberField(dl, "plot", Loc.T("eventCreate.housing.plot"), gp.X + x + third + Ui.Px(10f), gp.Y, third, this.plot, "##ec_plotpop");
+            this.NumberField(dl, "room", Loc.T("eventCreate.housing.room"), gp.X + x + (2f * (third + Ui.Px(10f))), gp.Y, third, this.room, "##ec_roompop");
             Block(gp, w, Ui.Px(22f) + Ui.Px(44f) + Ui.Px(16f));
             if (this.pendingPopup is "##ec_wardpop" or "##ec_plotpop" or "##ec_roompop")
             {
@@ -697,25 +700,25 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             }
 
             var hp = ImGui.GetCursorScreenPos();
-            Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y), Palette.TextMuted.U32(), "Room 0 means the yard or main hall, no apartment number shown.", w);
+            Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y), Palette.TextMuted.U32(), Loc.T("eventCreate.housing.roomNote"), w);
             ImGui.Dummy(new Vector2(0f, Ui.Px(28f)));
         }
         else if (this.venue == EventVenueEnum.OpenWorld)
         {
-            this.Field(dl, "Zone", x, w, () =>
+            this.Field(dl, Loc.T("eventCreate.zone.label"), x, w, () =>
             {
                 var zp = ImGui.GetCursorScreenPos();
-                var zoneName = this.catalog.Zones.Count > this.zoneIdx && this.zoneIdx >= 0 ? this.catalog.Zones[this.zoneIdx].Name : "Pick a zone";
+                var zoneName = this.catalog.Zones.Count > this.zoneIdx && this.zoneIdx >= 0 ? this.catalog.Zones[this.zoneIdx].Name : Loc.T("eventCreate.zone.pick");
                 if (this.FieldBox(dl, "zone", string.Empty, zp.X, zp.Y, w, zoneName, FontAwesomeIcon.ChevronDown, labelAbove: false))
                     ImGui.OpenPopup("##ec_zonepop");
                 Block(zp, w, Ui.Px(44f));
             });
 
-            this.Field(dl, "Landmark (optional)", x, w, () =>
+            this.Field(dl, Loc.T("eventCreate.landmark.label"), x, w, () =>
             {
                 var ap = ImGui.GetCursorScreenPos();
                 var aList = this.AetherytesForZone();
-                var aName = aList.Count > this.aetheryteIdx && this.aetheryteIdx >= 0 ? aList[this.aetheryteIdx].Name : "None";
+                var aName = aList.Count > this.aetheryteIdx && this.aetheryteIdx >= 0 ? aList[this.aetheryteIdx].Name : Loc.T("eventCreate.landmark.none");
                 if (this.FieldBox(dl, "aeth", string.Empty, ap.X, ap.Y, w, aName, FontAwesomeIcon.ChevronDown, labelAbove: false))
                     ImGui.OpenPopup("##ec_aethpop");
                 Block(ap, w, Ui.Px(44f));
@@ -723,8 +726,8 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         }
         else
         {
-            this.Field(dl, "Invite link", x, w, () => { var u = this.discordUrl; this.kit.TextField("##ec_durl", ref u, "https://discord.gg/…", w); this.discordUrl = u; });
-            this.Field(dl, "Channel note (optional)", x, w, () => { var n = this.discordNote; this.kit.TextField("##ec_dnote", ref n, "Prog voice", w, Limits.EventDiscordNoteMax); this.discordNote = n; });
+            this.Field(dl, Loc.T("eventCreate.discord.link"), x, w, () => { var u = this.discordUrl; this.kit.TextField("##ec_durl", ref u, "https://discord.gg/…", w); this.discordUrl = u; });
+            this.Field(dl, Loc.T("eventCreate.discord.note"), x, w, () => { var n = this.discordNote; this.kit.TextField("##ec_dnote", ref n, Loc.T("eventCreate.discord.notePlaceholder"), w, Limits.EventDiscordNoteMax); this.discordNote = n; });
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
@@ -741,14 +744,14 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
         // Scope is no longer host-chosen: an event is anchored on its venue world and the board's own
         // World/DC/Region tabs filter by proximity (like people discovery), so there is no picker here.
-        this.Label(dl, "RATING", x);
+        this.Label(dl, Loc.T("eventCreate.rating.label"), x);
         var rp = ImGui.GetCursorScreenPos();
-        var rsel = this.Segmented(dl, "##ec_rating", new[] { "SFW", "AFTER DARK 18+" }, this.rating == EventRatingEnum.Sfw ? 0 : 1, rp.X + x, rp.Y, w, Ui.Px(42f), null);
+        var rsel = this.Segmented(dl, "##ec_rating", new[] { Loc.T("eventCreate.rating.sfw"), Loc.T("eventCreate.rating.afterDark") }, this.rating == EventRatingEnum.Sfw ? 0 : 1, rp.X + x, rp.Y, w, Ui.Px(42f), null);
         this.rating = rsel == 0 ? EventRatingEnum.Sfw : EventRatingEnum.Ad;
         Block(rp, w, Ui.Px(42f));
         if (this.rating == EventRatingEnum.Ad)
         {
-            var note = "After dark events are hidden from anyone with 18+ content switched off.";
+            var note = Loc.T("eventCreate.rating.afterDarkNote");
             var hp = ImGui.GetCursorScreenPos();
             Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(hp.X + x, hp.Y + Ui.Px(8f)), Palette.TextMuted.U32(), note, w);
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f) + Ui.MeasureWrapped(this.fonts.Caption, note, w).Y + Ui.Px(20f)));
@@ -758,15 +761,15 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
         }
 
-        this.Label(dl, "VISIBILITY", x);
+        this.Label(dl, Loc.T("eventCreate.visibility.label"), x);
         var pp = ImGui.GetCursorScreenPos();
-        var vsel = this.Segmented(dl, "##ec_vis", new[] { "PUBLIC", "PRIVATE" }, this.visibility == Visibility.Public ? 0 : 1, pp.X + x, pp.Y, w, Ui.Px(42f), null);
+        var vsel = this.Segmented(dl, "##ec_vis", new[] { Loc.T("eventCreate.visibility.public"), Loc.T("eventCreate.visibility.private") }, this.visibility == Visibility.Public ? 0 : 1, pp.X + x, pp.Y, w, Ui.Px(42f), null);
         this.visibility = vsel == 0 ? Visibility.Public : Visibility.Private;
         Block(pp, w, Ui.Px(42f) + Ui.Px(24f));
 
         if (this.visibility == Visibility.Private)
         {
-            this.Label(dl, "ENTRY CODE", x);
+            this.Label(dl, Loc.T("eventCreate.code.label"), x);
             var cp = ImGui.GetCursorScreenPos();
             var boxH = Ui.Px(46f);
             var bx = cp.X + x;
@@ -774,16 +777,17 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(bx + Ui.Px(14f), cp.Y + ((boxH - Ui.Measure(this.fonts.EventTitle, this.code).Y) * 0.5f)), Palette.TextPrimary.U32(), this.code);
 
             // NEW regenerates; COPY puts the code on the clipboard and confirms briefly.
-            var newSz = Ui.Measure(this.fonts.Eyebrow, "NEW");
+            var newLabel = Loc.T("eventCreate.code.new");
+            var newSz = Ui.Measure(this.fonts.Eyebrow, newLabel);
             var newX = bx + w - newSz.X - Ui.Px(14f);
             var actY = cp.Y + ((boxH - newSz.Y) * 0.5f);
             ImGui.SetCursorScreenPos(new Vector2(newX, actY));
             if (ImGui.InvisibleButton("##ec_newcode", newSz))
                 this.code = EventFormat.GenerateCode();
-            Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), "NEW");
+            Ui.TextAt(dl, this.fonts.Eyebrow, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), newLabel);
 
             var copied = (DateTime.UtcNow - this.codeCopiedAt).TotalSeconds < 1.5;
-            var copyLabel = copied ? "COPIED" : "COPY";
+            var copyLabel = Loc.T(copied ? "eventCreate.code.copied" : "eventCreate.code.copy");
             var copySz = Ui.Measure(this.fonts.Eyebrow, copyLabel);
             ImGui.SetCursorScreenPos(new Vector2(newX - Ui.Px(16f) - copySz.X, actY));
             if (ImGui.InvisibleButton("##ec_copycode", copySz))
@@ -803,10 +807,11 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
     private void DrawCapacity(ImDrawListPtr dl, float x, float w)
     {
         var lp = ImGui.GetCursorScreenPos();
-        var readout = this.capacity > 0 ? this.capacity.ToString() : "No cap";
+        var readout = this.capacity > 0 ? this.capacity.ToString() : Loc.T("eventCreate.capacity.none");
         var rSz = Ui.Measure(this.fonts.SerifName, readout);
-        var eSz = Ui.Measure(this.fonts.Eyebrow, "CAPACITY");
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lp.X + x, lp.Y + ((rSz.Y - eSz.Y) * 0.5f)), Palette.TextSecondary.U32(), "CAPACITY");
+        var capacityLabel = Loc.T("eventCreate.capacity.label");
+        var eSz = Ui.Measure(this.fonts.Eyebrow, capacityLabel);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lp.X + x, lp.Y + ((rSz.Y - eSz.Y) * 0.5f)), Palette.TextSecondary.U32(), capacityLabel);
         Ui.TextAt(dl, this.fonts.SerifName, new Vector2(lp.X + x + w - rSz.X, lp.Y), Palette.TextPrimary.U32(), readout);
         ImGui.Dummy(new Vector2(0f, rSz.Y + Ui.Px(12f)));
 
@@ -818,7 +823,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var rows = 1;
         foreach (var val in presets)
         {
-            var label = val == 0 ? "No cap" : val.ToString();
+            var label = val == 0 ? Loc.T("eventCreate.capacity.none") : val.ToString();
             var ts = Ui.Measure(this.fonts.Label, label);
             var cw = ts.X + (Ui.Px(14f) * 2f);
             if (cx + cw > cp.X + x + w)
@@ -981,8 +986,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             else if (i > 0)
                 dl.AddLine(new Vector2(cx, y + Ui.Px(9f)), new Vector2(cx, y + h - Ui.Px(9f)), Palette.Border.U32(), 1f);
             var col = active ? Palette.Paper : (on ? Palette.TextSecondary : Palette.TextMuted);
-            var ts = Ui.Measure(this.fonts.Eyebrow, options[i]);
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + ((cellW - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), col.U32(), options[i]);
+            Ui.TextFitCentered(dl, this.fonts.Eyebrow, new Vector2(cx, y), new Vector2(cellW, h), col.U32(), options[i], Ui.Px(6f));
         }
 
         return result;
@@ -994,8 +998,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         var clicked = ImGui.InvisibleButton(id, new Vector2(w, h));
         var hovered = ImGui.IsItemHovered();
         dl.AddRect(new Vector2(x, y), new Vector2(x + w, y + h), (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
-        var ts = Ui.Measure(this.fonts.Eyebrow, label);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(x + ((w - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32(), label);
+        Ui.TextFitCentered(dl, this.fonts.Eyebrow, new Vector2(x, y), new Vector2(w, h), (hovered ? Palette.TextPrimary : Palette.TextSecondary).U32(), label, Ui.Px(8f));
         return clicked;
     }
 
@@ -1004,8 +1007,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         ImGui.SetCursorScreenPos(new Vector2(x, y));
         var clicked = ImGui.InvisibleButton(id, new Vector2(w, h));
         dl.AddRectFilled(new Vector2(x, y), new Vector2(x + w, y + h), (enabled ? Palette.TextPrimary : Palette.WithAlpha(Palette.TextPrimary, 0.3f)).U32());
-        var ts = Ui.Measure(this.fonts.Eyebrow, label);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(x + ((w - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), Palette.Paper.U32(), label);
+        Ui.TextFitCentered(dl, this.fonts.Eyebrow, new Vector2(x, y), new Vector2(w, h), Palette.Paper.U32(), label, Ui.Px(8f));
         return clicked;
     }
 
@@ -1024,8 +1026,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
         if (border && !selected)
             dl.AddRect(min, max, (hovered ? Palette.BorderStrong : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
         var col = selected ? Palette.Paper : (enabled ? Palette.TextPrimary : Palette.TextMuted);
-        var ts = Ui.Measure(font, text);
-        Ui.TextAt(dl, font, new Vector2(x + ((w - ts.X) * 0.5f), y + ((h - ts.Y) * 0.5f)), col.U32(), text);
+        Ui.TextFitCentered(dl, font, new Vector2(x, y), new Vector2(w, h), col.U32(), text, Ui.Px(4f));
         return clicked;
     }
 
@@ -1046,14 +1047,14 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
     private void DrawPopups(float pad)
     {
-        this.ListPopup("##ec_tzpop", Timezones.Select(t => $"{t.Short}  {t.Label}").ToArray(), this.tz, i => this.tz = i);
-        this.ListPopup("##ec_districtpop", DistrictOptions.Select(d => d.Label).ToArray(), this.district, i => this.district = i);
+        this.ListPopup("##ec_tzpop", Timezones.Select((t, i) => $"{t.Short}  {TimezoneLabel(i)}").ToArray(), this.tz, i => this.tz = i);
+        this.ListPopup("##ec_districtpop", DistrictOptions.Select(d => EventCatalog.DistrictLabel(d.Value)).ToArray(), this.district, i => this.district = i);
         this.ListPopup("##ec_wardpop", WardNums, this.ward - 1, i => this.ward = i + 1);
         this.ListPopup("##ec_plotpop", PlotNums, this.plot - 1, i => this.plot = i + 1);
         this.ListPopup("##ec_roompop", RoomNums, this.room, i => this.room = i);
         this.ListPopup("##ec_zonepop", this.catalog.Zones.Select(z => z.Name).ToArray(), this.zoneIdx, i => { this.zoneIdx = i; this.aetheryteIdx = 0; });
         var aeth = this.AetherytesForZone();
-        this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend("None").ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
+        this.ListPopup("##ec_aethpop", aeth.Select(a => a.Name).Prepend(Loc.T("eventCreate.landmark.none")).ToArray(), this.aetheryteIdx + 1, i => this.aetheryteIdx = i - 1);
         this.WorldPopup();
         this.DatePopup();
         this.TimePopup();
@@ -1077,7 +1078,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
                 {
                     var hp = ImGui.GetCursorScreenPos();
                     var headerH = Ui.Px(24f);
-                    var header = $"{RegionLabel(region)} · {dc.Name.ToUpperInvariant()}";
+                    var header = $"{RegionLabel(region)} · {Loc.Upper(dc.Name)}";
                     Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(hp.X + Ui.Px(10f), hp.Y + ((headerH - Ui.Measure(this.fonts.Eyebrow, header).Y) * 0.5f)), Palette.TextMuted.U32(), header);
                     ImGui.Dummy(new Vector2(rowW, headerH));
                     foreach (var wld in dc.Worlds)
@@ -1153,8 +1154,10 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
                 this.calView = this.calView.AddMonths(-1);
             if (this.NavButton(dl, "##cal_next", FontAwesomeIcon.ChevronRight, p.X + inner - navW, p.Y, navW, headerH))
                 this.calView = this.calView.AddMonths(1);
-            var monthStr = this.calView.ToString("MMMM", System.Globalization.CultureInfo.InvariantCulture);
-            var yearStr = " " + this.calView.Year;
+            var calHeader = this.calView.ToString(Loc.T("eventCreate.calendar.header"), Loc.Culture);
+            var calBreak = calHeader.IndexOf(LocBook.ToneBreak);
+            var monthStr = calBreak < 0 ? calHeader : calHeader[..calBreak];
+            var yearStr = calBreak < 0 ? string.Empty : calHeader[(calBreak + 1)..];
             var mSz = Ui.Measure(this.fonts.SerifName, monthStr);
             var ySz = Ui.Measure(this.fonts.SerifName, yearStr);
             var hx = p.X + ((inner - (mSz.X + ySz.X)) * 0.5f);
@@ -1165,7 +1168,12 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             var cellW = inner / 7f;
             var wdY = p.Y + headerH;
             var wdH = Ui.Px(22f);
-            var wd = new[] { "M", "T", "W", "T", "F", "S", "S" };
+            var wd = new[]
+            {
+                Loc.T("eventCreate.calendar.weekday.mon"), Loc.T("eventCreate.calendar.weekday.tue"), Loc.T("eventCreate.calendar.weekday.wed"),
+                Loc.T("eventCreate.calendar.weekday.thu"), Loc.T("eventCreate.calendar.weekday.fri"), Loc.T("eventCreate.calendar.weekday.sat"),
+                Loc.T("eventCreate.calendar.weekday.sun"),
+            };
             for (var i = 0; i < 7; i++)
             {
                 var ts = Ui.Measure(this.fonts.Eyebrow, wd[i]);
@@ -1199,7 +1207,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
 
             var footY = gridTop + (rows * cellH) + Ui.Px(10f);
             var chipH = Ui.Px(26f);
-            if (this.OutlineButton(dl, "##cal_today", "TODAY", p.X, footY, Ui.Px(76f), chipH))
+            if (this.OutlineButton(dl, "##cal_today", Loc.T("eventCreate.calendar.today"), p.X, footY, Ui.Px(76f), chipH))
             {
                 this.date = today;
                 this.calView = new DateTime(today.Year, today.Month, 1);
@@ -1231,19 +1239,23 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             var quarter = (inner - (gap * 3f)) / 4f;
 
             var y = p.Y;
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), "HOUR");
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), Loc.T("eventCreate.time.hour"));
             y += Ui.Px(20f);
-            for (var i = 0; i < 12; i++)
+            var fullDay = EventFormat.Uses24HourClock;
+            var hourCols = fullDay ? 6 : 4;
+            var hourCount = fullDay ? 24 : 12;
+            var hourW = (inner - (gap * (hourCols - 1))) / hourCols;
+            for (var i = 0; i < hourCount; i++)
             {
-                var hh = i + 1;
-                var cx = p.X + ((i % 4) * (quarter + gap));
-                var cy = y + ((i / 4) * (cellH + gap));
-                if (this.Cell(dl, $"##th_{hh}", hh.ToString(), cx, cy, quarter, cellH, hh == h12, this.fonts.SerifName))
-                    this.hour = (hh % 12) + (isPm ? 12 : 0);
+                var hh = fullDay ? i : i + 1;
+                var cx = p.X + ((i % hourCols) * (hourW + gap));
+                var cy = y + ((i / hourCols) * (cellH + gap));
+                if (this.Cell(dl, $"##th_{hh}", hh.ToString(), cx, cy, hourW, cellH, fullDay ? hh == this.hour : hh == h12, this.fonts.SerifName))
+                    this.hour = fullDay ? hh : (hh % 12) + (isPm ? 12 : 0);
             }
 
-            y += (3 * (cellH + gap)) + Ui.Px(12f);
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), "MINUTE");
+            y += ((hourCount / hourCols) * (cellH + gap)) + Ui.Px(12f);
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), Loc.T("eventCreate.time.minute"));
             y += Ui.Px(20f);
             var mins = new[] { 0, 15, 30, 45 };
             for (var i = 0; i < 4; i++)
@@ -1253,15 +1265,19 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
                     this.minute = mins[i];
             }
 
-            y += cellH + Ui.Px(12f);
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), "AM / PM");
-            y += Ui.Px(20f);
-            var apW = (inner - gap) * 0.5f;
-            if (this.Cell(dl, "##t_am", "AM", p.X, y, apW, cellH, !isPm, this.fonts.SerifName))
-                this.hour = h12 % 12;
-            if (this.Cell(dl, "##t_pm", "PM", p.X + apW + gap, y, apW, cellH, isPm, this.fonts.SerifName))
-                this.hour = (h12 % 12) + 12;
             y += cellH;
+            if (!fullDay)
+            {
+                y += Ui.Px(12f);
+                Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(p.X, y), Palette.TextSecondary.U32(), Loc.T("eventCreate.time.period"));
+                y += Ui.Px(20f);
+                var apW = (inner - gap) * 0.5f;
+                if (this.Cell(dl, "##t_am", Loc.T("eventCreate.time.am"), p.X, y, apW, cellH, !isPm, this.fonts.SerifName))
+                    this.hour = h12 % 12;
+                if (this.Cell(dl, "##t_pm", Loc.T("eventCreate.time.pm"), p.X + apW + gap, y, apW, cellH, isPm, this.fonts.SerifName))
+                    this.hour = (h12 % 12) + 12;
+                y += cellH;
+            }
 
             Block(p, inner, y - p.Y);
             ImGui.EndPopup();
@@ -1382,7 +1398,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             }
             else
             {
-                this.submitError = "Couldn't publish. Check your connection and try again.";
+                this.submitError = "eventCreate.error.publish";
             }
         }
         finally
@@ -1398,7 +1414,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             if (await this.events.UpdateAsync(id, req))
                 this.Leave(this.selection.EventReturn);
             else
-                this.submitError = "Couldn't save changes. Try again.";
+                this.submitError = "eventCreate.error.save";
         }
         finally
         {
@@ -1445,7 +1461,7 @@ internal sealed class EventCreateScreen : IScreen, IDisposable
             foreach (var w in dc.Worlds)
                 if ((int)w.Id == this.venueWorldId)
                     return $"{w.Name} · {dc.Name}";
-        return "Pick a world";
+        return Loc.T("eventCreate.world.pick");
     }
 
     private static string RegionLabel(RegionEnum region) => region switch

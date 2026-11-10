@@ -60,6 +60,7 @@
   <!-- The notification chime, bundled into the assembly. Stripped to fmt+data only (no metadata). -->
   <ItemGroup>
     <EmbeddedResource Include="Assets\message-chime.wav" LogicalName="Eikon.message-chime.wav" />
+    <EmbeddedResource Include="Assets\Loc\*.json" LogicalName="Eikon.Loc.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets\Events\club.jpg" LogicalName="Eikon.Events.club.jpg" />
     <EmbeddedResource Include="Assets\Events\hearth.jpg" LogicalName="Eikon.Events.hearth.jpg" />
     <EmbeddedResource Include="Assets\Events\shores.jpg" LogicalName="Eikon.Events.shores.jpg" />

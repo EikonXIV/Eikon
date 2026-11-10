@@ -65,15 +65,15 @@ internal sealed class MessagesScreen : IScreen
             if (!this.inbox.Loaded)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, "Loading…");
+                Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("messages.loading"));
                 return;
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(48f)));
-            this.kit.EmptyState(FontAwesomeIcon.CommentDots.ToIconString(), "No messages yet", "Say hi to someone from the grid.", fullWidth);
+            this.kit.EmptyState(FontAwesomeIcon.CommentDots.ToIconString(), Loc.T("messages.empty.title"), Loc.T("messages.empty.body"), fullWidth);
             var buttonWidth = Ui.Px(180f);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((fullWidth - buttonWidth) * 0.5f));
-            if (this.kit.PrimaryButton("##empty_browse", "Browse the grid", buttonWidth))
+            if (this.kit.PrimaryButton("##empty_browse", Loc.T("messages.empty.action"), buttonWidth))
                 this.router.Navigate(Screen.Grid);
             return;
         }
@@ -97,9 +97,9 @@ internal sealed class MessagesScreen : IScreen
         {
             var empty = this.tab switch
             {
-                Tab.Requests => "No requests right now.",
-                Tab.Deleted => "Nothing deleted.",
-                _ => "No messages yet.",
+                Tab.Requests => Loc.T("messages.empty.requests"),
+                Tab.Deleted => Loc.T("messages.empty.deleted"),
+                _ => Loc.T("messages.empty.messages"),
             };
             ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
             Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, empty);
@@ -118,11 +118,12 @@ internal sealed class MessagesScreen : IScreen
         var dl = ImGui.GetWindowDrawList();
 
         var y = origin.Y + Ui.Px(18f);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, y), Palette.TextSecondary.U32(), "INBOX");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, y), Palette.TextSecondary.U32(), Loc.T("messages.eyebrow"));
         y += Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(4f);
 
-        var titleSize = Ui.Measure(this.fonts.SerifTitle, "Messages");
-        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(origin.X + pad, y), Palette.TextPrimary.U32(), "Messages");
+        var title = Loc.T("messages.title");
+        var titleSize = Ui.Measure(this.fonts.SerifTitle, title);
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(origin.X + pad, y), Palette.TextPrimary.U32(), title);
         var countStr = count.ToString("D2");
         var countSize = Ui.Measure(this.fonts.Mono, countStr);
         Ui.TextAt(dl, this.fonts.Mono, new Vector2((origin.X + fullWidth - pad) - countSize.X, (y + titleSize.Y) - countSize.Y), Palette.TextMuted.U32(), countStr);
@@ -145,11 +146,11 @@ internal sealed class MessagesScreen : IScreen
         var segWidth = barWidth / 3f;
         var dl = ImGui.GetWindowDrawList();
 
-        if (this.Segment(dl, "##tab_messages", new Vector2(left, origin.Y), new Vector2(segWidth, height), "MESSAGES", messageCount, this.tab == Tab.Messages, false))
+        if (this.Segment(dl, "##tab_messages", new Vector2(left, origin.Y), new Vector2(segWidth, height), Loc.T("messages.tab.messages", messageCount), this.tab == Tab.Messages, false))
             this.tab = Tab.Messages;
-        if (this.Segment(dl, "##tab_requests", new Vector2(left + segWidth, origin.Y), new Vector2(segWidth, height), "REQUESTS", requestCount, this.tab == Tab.Requests, requestCount > 0))
+        if (this.Segment(dl, "##tab_requests", new Vector2(left + segWidth, origin.Y), new Vector2(segWidth, height), Loc.T("messages.tab.requests", requestCount), this.tab == Tab.Requests, requestCount > 0))
             this.tab = Tab.Requests;
-        if (this.Segment(dl, "##tab_deleted", new Vector2(left + (segWidth * 2f), origin.Y), new Vector2(segWidth, height), "DELETED", deletedCount, this.tab == Tab.Deleted, false))
+        if (this.Segment(dl, "##tab_deleted", new Vector2(left + (segWidth * 2f), origin.Y), new Vector2(segWidth, height), Loc.T("messages.tab.deleted", deletedCount), this.tab == Tab.Deleted, false))
             this.tab = Tab.Deleted;
 
         dl.AddRect(new Vector2(left, origin.Y), new Vector2(left + barWidth, origin.Y + height), Palette.Border.U32(), 0f, ImDrawFlags.None, 1f);
@@ -157,7 +158,7 @@ internal sealed class MessagesScreen : IScreen
         ImGui.SetCursorScreenPos(new Vector2(origin.X, origin.Y + height + Ui.Px(14f)));
     }
 
-    private bool Segment(ImDrawListPtr dl, string id, Vector2 pos, Vector2 size, string label, int count, bool active, bool dot)
+    private bool Segment(ImDrawListPtr dl, string id, Vector2 pos, Vector2 size, string text, bool active, bool dot)
     {
         ImGui.SetCursorScreenPos(pos);
         var clicked = ImGui.InvisibleButton(id, size);
@@ -169,12 +170,11 @@ internal sealed class MessagesScreen : IScreen
             dl.AddRectFilled(pos + new Vector2(inset, inset), (pos + size) - new Vector2(inset, inset), Palette.TextPrimary.U32(), 0f);
         }
 
-        var text = $"{label} {count:D2}";
         var textColor = active ? Palette.Paper : (hovered ? Palette.TextSecondary : Palette.TextMuted);
-        var textSize = Ui.Measure(this.fonts.Eyebrow, text);
         var dotSpace = dot ? Ui.Px(12f) : 0f;
+        var (fit, _, textSize) = Ui.Fit(this.fonts.Eyebrow, text, size.X - dotSpace - Ui.Px(12f));
         var textX = pos.X + ((size.X - textSize.X - dotSpace) * 0.5f);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX, pos.Y + ((size.Y - textSize.Y) * 0.5f)), textColor.U32(), text);
+        Ui.TextFitAt(dl, this.fonts.Eyebrow, new Vector2(textX, pos.Y + ((size.Y - Ui.Measure(this.fonts.Eyebrow, fit).Y) * 0.5f)), size.X - dotSpace - Ui.Px(12f), textColor.U32(), text);
         if (dot)
             dl.AddCircleFilled(new Vector2(textX + textSize.X + Ui.Px(7f), pos.Y + (size.Y * 0.5f)), Ui.Px(3f), Palette.Signal.U32(), 12);
 
@@ -204,7 +204,7 @@ internal sealed class MessagesScreen : IScreen
         var dl = ImGui.GetWindowDrawList();
 
         var y = origin.Y + Ui.Px(16f);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, y), Palette.TextSecondary.U32(), "SHARING AN EVENT");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, y), Palette.TextSecondary.U32(), Loc.T("messages.share.eyebrow"));
 
         var xLabel = FontAwesomeIcon.Times.ToIconString();
         var xSize = Ui.Measure(this.fonts.Icon, xLabel);
@@ -217,7 +217,7 @@ internal sealed class MessagesScreen : IScreen
         y += Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(8f);
         Ui.TextAt(dl, this.fonts.Body, new Vector2(origin.X + pad, y), Palette.TextPrimary.U32(), this.Fit(share.Title, fullWidth - (pad * 2f), this.fonts.Body));
         y += Ui.Measure(this.fonts.Body, share.Title).Y + Ui.Px(4f);
-        Ui.TextAt(dl, this.fonts.Caption, new Vector2(origin.X + pad, y), Palette.TextMuted.U32(), "Pick a conversation to send it to.");
+        Ui.TextAt(dl, this.fonts.Caption, new Vector2(origin.X + pad, y), Palette.TextMuted.U32(), Loc.T("messages.share.prompt"));
         y += Ui.Measure(this.fonts.Caption, "X").Y + Ui.Px(14f);
 
         dl.AddLine(new Vector2(origin.X, y), new Vector2(origin.X + fullWidth, y), Palette.Border.U32(), 1f);
@@ -284,8 +284,8 @@ internal sealed class MessagesScreen : IScreen
     {
         var last = this.inbox.Preview(conversation.UserId);
         if (last is not null)
-            return last.Mine ? "You: " + OneLine(last.Text) : OneLine(last.Text);
-        return conversation.Unread > 0 ? "New message" : "Say hi";
+            return last.Mine ? Loc.T("messages.preview.mine", OneLine(last.Text)) : OneLine(last.Text);
+        return Loc.T(conversation.Unread > 0 ? "messages.preview.unread" : "messages.preview.none");
     }
 
     private static string OneLine(string text) => string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
@@ -325,10 +325,10 @@ internal sealed class MessagesScreen : IScreen
         if (at is null)
             return string.Empty;
         var d = DateTimeOffset.UtcNow - at.Value;
-        if (d.TotalMinutes < 1) return "now";
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h";
-        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d";
-        return at.Value.LocalDateTime.ToString("MMM d");
+        if (d.TotalMinutes < 1) return Loc.T("messages.ago.now");
+        if (d.TotalMinutes < 60) return Loc.T("messages.ago.minutes", (int)d.TotalMinutes);
+        if (d.TotalHours < 24) return Loc.T("messages.ago.hours", (int)d.TotalHours);
+        if (d.TotalDays < 7) return Loc.T("messages.ago.days", (int)d.TotalDays);
+        return at.Value.LocalDateTime.ToString(Loc.T("messages.ago.date"), Loc.Culture);
     }
 }

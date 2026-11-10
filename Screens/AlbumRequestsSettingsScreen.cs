@@ -60,7 +60,7 @@ internal sealed class AlbumRequestsSettingsScreen : IScreen
                     using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
                     {
                         ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-                        ImGui.TextWrapped("Approve to share the album with them, or deny. They aren't told when you deny.");
+                        Ui.TextWrapped(Loc.T("albumRequestsSettings.hint"));
                         ImGui.PopTextWrapPos();
                     }
                     ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
@@ -77,11 +77,11 @@ internal sealed class AlbumRequestsSettingsScreen : IScreen
         if (!this.albums.RequestsLoaded)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-            Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading...");
+            Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("albumRequestsSettings.loading"));
             return;
         }
         ImGui.Dummy(new Vector2(0f, Ui.Px(60f)));
-        this.kit.EmptyState(FontAwesomeIcon.UserCheck.ToIconString(), "No requests", "When someone asks to see one of your private albums, they show up here.", contentWidth);
+        this.kit.EmptyState(FontAwesomeIcon.UserCheck.ToIconString(), Loc.T("albumRequestsSettings.empty.title"), Loc.T("albumRequestsSettings.empty.body"), contentWidth);
     }
 
     private void DrawHeader(float fullWidth, float pad, float height)
@@ -97,7 +97,7 @@ internal sealed class AlbumRequestsSettingsScreen : IScreen
             this.router.Navigate(Screen.Settings);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), backGlyph);
 
-        const string title = "Access requests";
+        var title = Loc.T("albumRequestsSettings.title");
         var titleSize = Ui.Measure(this.fonts.Body, title);
         Ui.TextAt(drawList, this.fonts.Body,
             new Vector2(origin.X + pad + backSize.X + Ui.Px(12f), midY - (titleSize.Y * 0.5f)),
@@ -121,7 +121,7 @@ internal sealed class AlbumRequestsSettingsScreen : IScreen
 
         var textX = center.X + radius + Ui.Px(11f);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + pad), Palette.TextPrimary.U32(), request.Requester.DisplayName);
-        var sub = request.Requester.Verified ? "Verified" : "Wants access";
+        var sub = Loc.T(request.Requester.Verified ? "albumRequestsSettings.card.verified" : "albumRequestsSettings.card.wantsAccess");
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + pad + Ui.Px(19f)), Palette.TextMuted.U32(), sub);
 
         var time = Ago(request.CreatedAt);
@@ -129,21 +129,25 @@ internal sealed class AlbumRequestsSettingsScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + contentWidth - pad - timeSize.X, pos.Y + pad + Ui.Px(2f)), Palette.TextMuted.U32(), time);
 
         var lineY = pos.Y + pad + Ui.Px(42f);
-        const string prefix = "wants access to ";
+        var line = Loc.T("albumRequestsSettings.card.line");
+        var slot = line.IndexOf("{0}", StringComparison.Ordinal);
+        var prefix = slot < 0 ? line : line[..slot];
+        var suffix = slot < 0 ? string.Empty : line[(slot + 3)..];
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + pad, lineY + Ui.Px(3f)), Palette.TextSecondary.U32(), prefix);
         var prefixW = Ui.Measure(this.fonts.Caption, prefix).X;
         var chipX = pos.X + pad + prefixW;
         var chipNameW = Ui.Measure(this.fonts.Caption, request.AlbumName).X;
         drawList.AddRectFilled(new Vector2(chipX, lineY), new Vector2(chipX + chipNameW + Ui.Px(16f), lineY + Ui.Px(22f)), Palette.Surface2.U32(), Ui.Px(8f));
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(chipX + Ui.Px(8f), lineY + Ui.Px(3f)), Palette.TextPrimary.U32(), request.AlbumName);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(chipX + chipNameW + Ui.Px(16f), lineY + Ui.Px(3f)), Palette.TextSecondary.U32(), suffix);
 
         var buttonsY = pos.Y + cardH - pad - Ui.Px(38f);
         var half = (contentWidth - (pad * 2f) - Ui.Px(9f)) * 0.5f;
         ImGui.SetCursorScreenPos(new Vector2(pos.X + pad, buttonsY));
-        if (this.kit.SecondaryButton("##sreq_deny_" + request.Id, "Deny", half))
+        if (this.kit.SecondaryButton("##sreq_deny_" + request.Id, Loc.T("albumRequestsSettings.card.deny"), half))
             this.albums.Deny(request.Id);
         ImGui.SameLine(0f, Ui.Px(9f));
-        if (this.kit.PrimaryButton("##sreq_approve_" + request.Id, "Approve", half))
+        if (this.kit.PrimaryButton("##sreq_approve_" + request.Id, Loc.T("albumRequestsSettings.card.approve"), half))
             this.albums.Approve(request.Id);
 
         ImGui.SetCursorScreenPos(pos);
@@ -165,15 +169,15 @@ internal sealed class AlbumRequestsSettingsScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Body, center - (initialSize * 0.5f), Palette.TextSecondary.U32(), initial);
     }
 
-    private static string Initial(string name) => name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
+    private static string Initial(string name) => name.Length > 0 ? Loc.Upper(name[..1]) : "?";
 
     private static string Ago(DateTimeOffset at)
     {
         var d = DateTimeOffset.UtcNow - at;
-        if (d.TotalMinutes < 1) return "now";
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h";
-        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d";
-        return at.LocalDateTime.ToString("MMM d");
+        if (d.TotalMinutes < 1) return Loc.T("albumRequestsSettings.ago.now");
+        if (d.TotalMinutes < 60) return Loc.T("albumRequestsSettings.ago.minutes", (int)d.TotalMinutes);
+        if (d.TotalHours < 24) return Loc.T("albumRequestsSettings.ago.hours", (int)d.TotalHours);
+        if (d.TotalDays < 7) return Loc.T("albumRequestsSettings.ago.days", (int)d.TotalDays);
+        return at.LocalDateTime.ToString("MMM d", Loc.Culture);
     }
 }

@@ -211,7 +211,7 @@ internal sealed class MainWindow : Window, IDisposable
         var closeHovered = ImGui.IsItemHovered();
         if (closeHovered)
             using (this.fonts.Caption.Push())
-                ImGui.SetTooltip($"Close (reopen with {BuildInfo.Command})");
+                ImGui.SetTooltip(Loc.T("mainWindow.close.tooltip", BuildInfo.Command));
         DrawCloseGlyph(drawList, ImGui.GetItemRectMin(), btn, closeHovered);
 
         ImGui.SetCursorScreenPos(new Vector2(minX, btnY));
@@ -254,10 +254,10 @@ internal sealed class MainWindow : Window, IDisposable
 
         var items = new (Screen Screen, string Label)[]
         {
-            (Screen.Grid, "Grid"),
-            (Screen.Messages, "Messages"),
-            (Screen.MyProfile, "Profile"),
-            (Screen.Settings, "Settings"),
+            (Screen.Grid, Loc.T("mainWindow.nav.grid")),
+            (Screen.Messages, Loc.T("mainWindow.nav.messages")),
+            (Screen.MyProfile, Loc.T("mainWindow.nav.profile")),
+            (Screen.Settings, Loc.T("mainWindow.nav.settings")),
         };
 
         long unread = 0;

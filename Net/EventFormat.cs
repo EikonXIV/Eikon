@@ -8,36 +8,35 @@ namespace Eikon.Net;
 // chat card read the same.
 internal static class EventFormat
 {
+    public static bool Uses24HourClock => !Loc.T("eventFormat.time").Contains('t');
+
     // Ambiguity-free alphabet for entry codes (no I, O, 0, 1), matching the web.
     internal const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     internal static string KindLabel(EventKindElement kind) => kind switch
     {
-        EventKindElement.Club => "Club night",
-        EventKindElement.Gathering => "Gathering",
-        EventKindElement.Performance => "Performance",
-        EventKindElement.Raid => "Raid",
-        EventKindElement.Roleplay => "Roleplay",
-        _ => "Market",
+        EventKindElement.Club => Loc.T("eventFormat.kind.club"),
+        EventKindElement.Gathering => Loc.T("eventFormat.kind.gathering"),
+        EventKindElement.Performance => Loc.T("eventFormat.kind.performance"),
+        EventKindElement.Raid => Loc.T("eventFormat.kind.raid"),
+        EventKindElement.Roleplay => Loc.T("eventFormat.kind.roleplay"),
+        _ => Loc.T("eventFormat.kind.market"),
     };
 
     internal static string Duration(long mins)
     {
         if (mins < 60)
-            return $"{mins}m";
+            return Loc.T("eventFormat.duration.minutes", mins);
         var h = mins / 60;
         var m = mins % 60;
-        return m > 0 ? $"{h}h {m}m" : $"{h}h";
+        return m > 0 ? Loc.T("eventFormat.duration.hoursMinutes", h, m) : Loc.T("eventFormat.duration.hours", h);
     }
 
     // A 24-hour hour/minute rendered as a 12-hour clock with AM/PM (20:00 -> "8:00 PM").
     internal static string Clock12(int hour, int minute)
     {
-        var ampm = hour >= 12 ? "PM" : "AM";
-        var h12 = hour % 12;
-        if (h12 == 0)
-            h12 = 12;
-        return $"{h12}:{minute:00} {ampm}";
+        var time = new DateTime(2000, 1, 1, Math.Clamp(hour, 0, 23), Math.Clamp(minute, 0, 59), 0);
+        return time.ToString(Loc.T("eventFormat.time"), Loc.Culture);
     }
 
     // A stored "HH:mm" host clock rendered in 12-hour; returns the input unchanged if it doesn't parse.
@@ -55,10 +54,22 @@ internal static class EventFormat
     internal static string DayLabel(DateTimeOffset local, DateTimeOffset now)
     {
         var diff = (local.Date - now.Date).Days;
-        return diff switch { 0 => "Today", 1 => "Tomorrow", _ => local.ToString("dddd") };
+        return diff switch
+        {
+            0 => Loc.T("eventFormat.day.today"),
+            1 => Loc.T("eventFormat.day.tomorrow"),
+            _ => local.ToString(Loc.T("eventFormat.day.weekday"), Loc.Culture),
+        };
     }
 
     internal static string DayLabel(DateTimeOffset local) => DayLabel(local, DateTimeOffset.Now);
+
+    internal static string MonthDay(DateTimeOffset local) => local.ToString(Loc.T("eventFormat.monthDay"), Loc.Culture);
+
+    internal static string HousingLine(string district, long? ward, long? plot, long? room, string world) =>
+        (room is > 0
+            ? Loc.T("eventFormat.location.housingRoom", district, ward, plot, room, world)
+            : Loc.T("eventFormat.location.housing", district, ward, plot, world)).Trim(' ', '·');
 
     // An event is over once its start plus its duration is in the past (matches the server's board cutoff).
     internal static bool IsEnded(DateTimeOffset startsAt, long durationMins, bool cancelled, DateTimeOffset now)

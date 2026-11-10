@@ -74,7 +74,7 @@ internal sealed class EikonBootstrap : IDisposable
 
         this.commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
         {
-            HelpMessage = "Open Eikon.",
+            HelpMessage = Loc.T("bootstrap.command.help"),
         });
 
         this.pluginInterface.UiBuilder.Draw += this.windowSystem.Draw;

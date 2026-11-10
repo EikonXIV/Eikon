@@ -76,7 +76,7 @@ internal sealed class PhotoManager
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted("Tap a star to set your main photo.");
+                ImGui.TextUnformatted(Loc.T("photoManager.mainHint"));
         }
     }
 
@@ -145,7 +145,7 @@ internal sealed class PhotoManager
         var photo = this.cropPhoto!;
         var rowStart = ImGui.GetCursorPosX();
         var buttonWidth = Ui.Px(96f);
-        if (this.kit.SecondaryButton("##crop_cancel", "Cancel", buttonWidth))
+        if (this.kit.SecondaryButton("##crop_cancel", Loc.T("photoManager.crop.cancel"), buttonWidth))
         {
             this.cropPhoto = null;
             return;
@@ -153,10 +153,10 @@ internal sealed class PhotoManager
 
         ImGui.SameLine();
         ImGui.SetCursorPosX(rowStart + contentWidth - buttonWidth);
-        var useClicked = this.kit.PrimaryButton("##crop_use", "Use photo", buttonWidth);
+        var useClicked = this.kit.PrimaryButton("##crop_use", Loc.T("photoManager.crop.use"), buttonWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        this.kit.SectionLabel("Crop to fit");
+        this.kit.SectionLabel(Loc.T("photoManager.crop.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
 
         // Fill the available space with the largest 10:16 frame that fits (bounded by width and the
@@ -209,7 +209,7 @@ internal sealed class PhotoManager
         ImGui.SetCursorScreenPos(new Vector2(origin.X, framePos.Y + frameHeight + Ui.Px(12f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted("Scroll to zoom  ·  drag to reposition");
+            ImGui.TextUnformatted(Loc.T("photoManager.crop.hint"));
 
         if (useClicked)
         {

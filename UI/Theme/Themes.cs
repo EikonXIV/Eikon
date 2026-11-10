@@ -54,6 +54,35 @@ internal static class Themes
 
     public static IEnumerable<ThemeDef> InGroup(string group) => All.Where(t => t.Group == group);
 
+    public static string NameKey(ThemeDef def) => "theme." + KeyId(def.Id) + ".name";
+
+    public static string TagKey(ThemeDef def) => def.Category switch
+    {
+        ThemeCategory.Editorial => "theme." + KeyId(def.Id) + ".tag",
+        ThemeCategory.Pride => "theme.tag.pride",
+        _ => def.Group == GroupBlends ? "theme.tag.blend" : GroupKey(def.Group),
+    };
+
+    public static string GroupKey(string group) => group switch
+    {
+        GroupEditorial => "theme.group.editorial",
+        GroupClassic => "theme.group.classic",
+        GroupPastels => "theme.group.pastels",
+        GroupMetallics => "theme.group.metallics",
+        GroupNeons => "theme.group.neons",
+        GroupEarth => "theme.group.earth",
+        GroupJewel => "theme.group.jewel",
+        GroupBlends => "theme.group.blends",
+        GroupPride => "theme.group.pride",
+        _ => group,
+    };
+
+    private static string KeyId(string id)
+    {
+        var parts = id.Split('-');
+        return parts[0] + string.Concat(parts.Skip(1).Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
+    }
+
     private static IReadOnlyList<ThemeDef> Build()
     {
         var list = new List<ThemeDef>

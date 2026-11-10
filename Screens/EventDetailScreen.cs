@@ -77,7 +77,7 @@ internal sealed class EventDetailScreen : IScreen
         else if (this.events.IsGated(eventId))
             this.DrawCodeGate(width, pad, eventId);
         else
-            this.DrawStatus(width, "Loading…");
+            this.DrawStatus(width, Loc.T("eventDetail.loading"));
 
         this.DrawMenu(detail, eventId);
         this.moderation.Draw();
@@ -100,7 +100,7 @@ internal sealed class EventDetailScreen : IScreen
             this.router.Navigate(this.selection.EventReturn);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        var title = detail is { Hosting: true } ? "YOUR EVENT" : "EVENT";
+        var title = Loc.T(detail is { Hosting: true } ? "eventDetail.header.hosting" : "eventDetail.header.guest");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -144,7 +144,7 @@ internal sealed class EventDetailScreen : IScreen
         // Masthead: kind eyebrow + badges, serif title, host line.
         var mp = ImGui.GetCursorScreenPos();
         var y = mp.Y + Ui.Px(18f);
-        var eyebrow = EventFormat.KindLabel(e.Kind).ToUpperInvariant();
+        var eyebrow = Loc.Upper(EventFormat.KindLabel(e.Kind));
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(mp.X + left, y), Palette.TextSecondary.U32(), eyebrow);
         var bx = mp.X + left + Ui.Measure(this.fonts.Eyebrow, eyebrow).X + Ui.Px(10f);
         void Badge(string text, uint color)
@@ -154,22 +154,24 @@ internal sealed class EventDetailScreen : IScreen
         }
 
         if (e.Rating == EventRatingEnum.Ad)
-            Badge("18+", Palette.Danger.U32());
+            Badge(Loc.T("eventDetail.badge.adult"), Palette.Danger.U32());
         if (e.Visibility == Visibility.Private)
-            Badge("PRIVATE", Palette.TextSecondary.U32());
+            Badge(Loc.T("eventDetail.badge.private"), Palette.TextSecondary.U32());
         if (e.Cancelled)
-            Badge("CANCELLED", Palette.Danger.U32());
+            Badge(Loc.T("eventDetail.badge.cancelled"), Palette.Danger.U32());
         else if (IsEnded(e))
-            Badge("ENDED", Palette.TextMuted.U32());
+            Badge(Loc.T("eventDetail.badge.ended"), Palette.TextMuted.U32());
 
         y += Ui.Measure(this.fonts.Eyebrow, eyebrow).Y + Ui.Px(10f);
         Ui.TextWrappedAt(dl, this.fonts.SerifTitle, new Vector2(mp.X + left, y), Palette.TextPrimary.U32(), e.Title, contentW);
         y += Ui.MeasureWrapped(this.fonts.SerifTitle, e.Title, contentW).Y + Ui.Px(8f);
 
-        var hosted = "Hosted by ";
+        var (hosted, hostedTail) = AroundValue(Loc.T("eventDetail.hostedBy"));
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(mp.X + left, y), Palette.TextSecondary.U32(), hosted);
         var hx = mp.X + left + Ui.Measure(this.fonts.EventMeta, hosted).X;
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(hx, y), Palette.TextPrimary.U32(), e.HostName);
+        if (hostedTail.Length > 0)
+            Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(hx + Ui.Measure(this.fonts.EventMeta, e.HostName).X, y), Palette.TextSecondary.U32(), hostedTail);
         var mastheadH = (y + Ui.Measure(this.fonts.EventMeta, hosted).Y + Ui.Px(18f)) - mp.Y;
         ImGui.Dummy(new Vector2(width, mastheadH));
 
@@ -177,11 +179,11 @@ internal sealed class EventDetailScreen : IScreen
         this.DrawDoors(dl, e, width, left, right);
 
         // Meta rows.
-        this.MetaRow(dl, width, left, right, "RUNS", EventFormat.Duration(e.DurationMins));
+        this.MetaRow(dl, width, left, right, Loc.T("eventDetail.meta.runs"), EventFormat.Duration(e.DurationMins));
         this.YourTimeRow(dl, width, left, right, e);
         this.MetaRow(dl, width, left, right, VenueLabel(e.Venue.Type), this.LocationLine(e));
         if (e.Hosting && e.Visibility == Visibility.Private && !string.IsNullOrEmpty(e.EntryCode))
-            this.MetaRow(dl, width, left, right, "ENTRY CODE", e.EntryCode, mono: true);
+            this.MetaRow(dl, width, left, right, Loc.T("eventDetail.meta.entryCode"), e.EntryCode, mono: true);
 
         // Details + tags.
         this.DrawDetails(dl, e, width, left, right, contentW);
@@ -197,8 +199,8 @@ internal sealed class EventDetailScreen : IScreen
         var lx = pos.X + left;
         var rx = pos.X + right;
 
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lx, y), Palette.TextSecondary.U32(), "DOORS");
-        var attend = "ATTENDING";
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lx, y), Palette.TextSecondary.U32(), Loc.T("eventDetail.doors"));
+        var attend = Loc.T("eventDetail.attending");
         var attW = Ui.Measure(this.fonts.Eyebrow, attend).X;
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(rx - attW, y), Palette.TextSecondary.U32(), attend);
 
@@ -206,7 +208,7 @@ internal sealed class EventDetailScreen : IScreen
         var clock = EventFormat.Clock12(e.HostClock);
         Ui.TextAt(dl, this.fonts.EventTitle, new Vector2(lx, ry), Palette.TextPrimary.U32(), clock);
         var clockW = Ui.Measure(this.fonts.EventTitle, clock).X;
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lx + clockW + Ui.Px(6f), ry + Ui.Px(6f)), Palette.TextSecondary.U32(), e.HostTzLabel.ToUpperInvariant());
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(lx + clockW + Ui.Px(6f), ry + Ui.Px(6f)), Palette.TextSecondary.U32(), Loc.Upper(e.HostTzLabel));
 
         // Attending count, right-aligned: count in ink, /capacity muted.
         var count = e.Attending.ToString();
@@ -218,7 +220,7 @@ internal sealed class EventDetailScreen : IScreen
             Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(rx - capW, ry + Ui.Px(6f)), Palette.TextMuted.U32(), cap);
 
         var dayY = ry + Ui.Measure(this.fonts.EventTitle, clock).Y + Ui.Px(2f);
-        var stamp = $"{EventFormat.DayLabel(e.StartsAt.ToLocalTime())} · {e.StartsAt.ToLocalTime():MMM dd}".ToUpperInvariant();
+        var stamp = Loc.Upper(Loc.T("eventDetail.dateStamp", EventFormat.DayLabel(e.StartsAt.ToLocalTime()), EventFormat.MonthDay(e.StartsAt.ToLocalTime())));
         Ui.TextAt(dl, this.fonts.Mono, new Vector2(lx, dayY), Palette.TextMuted.U32(), stamp);
 
         var h = (dayY + Ui.Measure(this.fonts.Mono, stamp).Y + Ui.Px(16f)) - pos.Y;
@@ -244,12 +246,16 @@ internal sealed class EventDetailScreen : IScreen
         var pos = ImGui.GetCursorScreenPos();
         var rowH = Ui.Px(50f);
         var cy = pos.Y + (rowH * 0.5f);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + left, cy - (Ui.Measure(this.fonts.Eyebrow, "YOUR TIME").Y * 0.5f)), Palette.TextSecondary.U32(), "YOUR TIME");
+        var yourTime = Loc.T("eventDetail.yourTime");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + left, cy - (Ui.Measure(this.fonts.Eyebrow, yourTime).Y * 0.5f)), Palette.TextSecondary.U32(), yourTime);
         var local = EventFormat.Clock12(e.StartsAt.ToLocalTime());
-        var suffix = " local";
+        var (prefix, suffix) = AroundValue(Loc.T("eventDetail.yourTime.local"));
+        var prefixW = Ui.Measure(this.fonts.EventMeta, prefix).X;
         var localW = Ui.Measure(this.fonts.EventMeta, local).X;
         var suffixW = Ui.Measure(this.fonts.EventMeta, suffix).X;
         var vy = cy - (Ui.Measure(this.fonts.EventMeta, local).Y * 0.5f);
+        if (prefix.Length > 0)
+            Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + right - suffixW - localW - prefixW, vy), Palette.TextMuted.U32(), prefix);
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + right - suffixW - localW, vy), Palette.TextPrimary.U32(), local);
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + right - suffixW, vy), Palette.TextMuted.U32(), suffix);
         dl.AddLine(new Vector2(pos.X, pos.Y + rowH), new Vector2(pos.X + width, pos.Y + rowH), Palette.Border.U32(), 1f);
@@ -260,10 +266,10 @@ internal sealed class EventDetailScreen : IScreen
     {
         var pos = ImGui.GetCursorScreenPos();
         var y = pos.Y + Ui.Px(16f);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + left, y), Palette.TextSecondary.U32(), "DETAILS");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + left, y), Palette.TextSecondary.U32(), Loc.T("eventDetail.details"));
         y += Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(10f);
 
-        var desc = string.IsNullOrWhiteSpace(e.Description) ? "No details yet." : e.Description;
+        var desc = string.IsNullOrWhiteSpace(e.Description) ? Loc.T("eventDetail.details.empty") : e.Description;
         Ui.TextWrappedAt(dl, this.fonts.EventMeta, new Vector2(pos.X + left, y), Palette.TextPrimary.U32(), desc, contentW);
         y += Ui.MeasureWrapped(this.fonts.EventMeta, desc, contentW).Y + Ui.Px(14f);
 
@@ -304,23 +310,23 @@ internal sealed class EventDetailScreen : IScreen
         var btnH = Ui.Px(44f);
 
         // Save event (cream fill when saved, else outlined).
-        if (this.FooterButton(dl, "##ed_save", FontAwesomeIcon.Bookmark, e.SavedByMe ? "SAVED" : "SAVE EVENT", pos.X + left, y, contentW, btnH, e.SavedByMe))
+        if (this.FooterButton(dl, "##ed_save", FontAwesomeIcon.Bookmark, Loc.T(e.SavedByMe ? "eventDetail.action.saved" : "eventDetail.action.save"), pos.X + left, y, contentW, btnH, e.SavedByMe))
             this.events.Save(eventId, !e.SavedByMe);
         y += btnH + Ui.Px(10f);
 
         var half = (contentW - Ui.Px(10f)) * 0.5f;
-        if (this.FooterButton(dl, "##ed_share", FontAwesomeIcon.Share, "SHARE", pos.X + left, y, half, btnH, false))
+        if (this.FooterButton(dl, "##ed_share", FontAwesomeIcon.Share, Loc.T("eventDetail.action.share"), pos.X + left, y, half, btnH, false))
             this.ShareToChat(e);
-        if (this.FooterButton(dl, "##ed_loc", FontAwesomeIcon.Copy, "LOCATION", pos.X + left + half + Ui.Px(10f), y, half, btnH, false))
+        if (this.FooterButton(dl, "##ed_loc", FontAwesomeIcon.Copy, Loc.T("eventDetail.action.location"), pos.X + left + half + Ui.Px(10f), y, half, btnH, false))
             ImGui.SetClipboardText(this.LocationLine(e));
         y += btnH + Ui.Px(12f);
 
         // Status line: cancelled / ended take over, else spots left / no cap.
         string line;
         FontAwesomeIcon lineIcon;
-        if (e.Cancelled) { line = "This event was cancelled."; lineIcon = FontAwesomeIcon.Ban; }
-        else if (IsEnded(e)) { line = "This event has ended."; lineIcon = FontAwesomeIcon.CheckCircle; }
-        else { line = e.Capacity is { } cap ? $"{Math.Max(0, cap - e.Attending)} spots left" : "No cap, walk-ups welcome"; lineIcon = FontAwesomeIcon.User; }
+        if (e.Cancelled) { line = Loc.T("eventDetail.status.cancelled"); lineIcon = FontAwesomeIcon.Ban; }
+        else if (IsEnded(e)) { line = Loc.T("eventDetail.status.ended"); lineIcon = FontAwesomeIcon.CheckCircle; }
+        else { line = e.Capacity is { } cap ? Loc.N("eventDetail.status.spotsLeft", (int)Math.Max(0, cap - e.Attending)) : Loc.T("eventDetail.status.noCap"); lineIcon = FontAwesomeIcon.User; }
         var glyph = lineIcon.ToIconString();
         Ui.TextAt(dl, this.fonts.Icon, new Vector2(pos.X + left, y), Palette.TextMuted.U32(), glyph);
         Ui.TextAt(dl, this.fonts.EventMeta, new Vector2(pos.X + left + Ui.Measure(this.fonts.Icon, glyph).X + Ui.Px(8f), y), Palette.TextMuted.U32(), line);
@@ -359,7 +365,7 @@ internal sealed class EventDetailScreen : IScreen
         var locked = DateTime.UtcNow < this.lockoutUntil;
         ImGui.Dummy(new Vector2(0f, Ui.Px(56f)));
 
-        this.kit.EmptyState(FontAwesomeIcon.Lock.ToIconString(), "By invitation only", "Enter the code the host gave you. Nothing is shown until it matches.", width);
+        this.kit.EmptyState(FontAwesomeIcon.Lock.ToIconString(), Loc.T("eventDetail.gate.title"), Loc.T("eventDetail.gate.body"), width);
 
         var fieldW = Ui.Px(220f);
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - fieldW) * 0.5f));
@@ -371,13 +377,13 @@ internal sealed class EventDetailScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
         if (this.codeTries > 0 && !locked)
-            Ui.CenteredText(width, this.fonts.Caption, Palette.Danger, "No event matches that code.");
+            Ui.CenteredText(width, this.fonts.Caption, Palette.Danger, Loc.T("eventDetail.gate.noMatch"));
         if (locked)
-            Ui.CenteredText(width, this.fonts.Caption, Palette.TextMuted, $"Too many attempts. Wait {Math.Ceiling((this.lockoutUntil - DateTime.UtcNow).TotalSeconds)}s.");
+            Ui.CenteredText(width, this.fonts.Caption, Palette.TextMuted, Loc.T("eventDetail.gate.lockout", Math.Ceiling((this.lockoutUntil - DateTime.UtcNow).TotalSeconds)));
 
         var btnW = Ui.Px(160f);
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - btnW) * 0.5f));
-        if (this.kit.PrimaryButton("##ed_unlock", "Unlock", btnW) && !locked && this.codeInput.Length >= 4)
+        if (this.kit.PrimaryButton("##ed_unlock", Loc.T("eventDetail.gate.unlock"), btnW) && !locked && this.codeInput.Length >= 4)
             this.TryUnlock();
     }
 
@@ -415,7 +421,7 @@ internal sealed class EventDetailScreen : IScreen
 
             if (e is { Hosting: true })
             {
-                if (this.MenuRow(FontAwesomeIcon.Pen, "Edit event", false))
+                if (this.MenuRow(FontAwesomeIcon.Pen, Loc.T("eventDetail.menu.edit"), false))
                 {
                     this.selection.EventId = eventId;
                     this.selection.EventReturn = Screen.EventDetail;
@@ -423,13 +429,13 @@ internal sealed class EventDetailScreen : IScreen
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (e.Visibility == Visibility.Private && this.MenuRow(FontAwesomeIcon.Sync, "Regenerate code", false))
+                if (e.Visibility == Visibility.Private && this.MenuRow(FontAwesomeIcon.Sync, Loc.T("eventDetail.menu.regenerateCode"), false))
                 {
                     _ = this.events.RegenerateCodeAsync(eventId);
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (this.MenuRow(FontAwesomeIcon.Share, "Share to chat", false))
+                if (this.MenuRow(FontAwesomeIcon.Share, Loc.T("eventDetail.menu.share"), false))
                 {
                     this.ShareToChat(e);
                     ImGui.CloseCurrentPopup();
@@ -437,19 +443,19 @@ internal sealed class EventDetailScreen : IScreen
 
                 if (e.Cancelled)
                 {
-                    if (this.MenuRow(FontAwesomeIcon.Undo, "Restore event", true))
+                    if (this.MenuRow(FontAwesomeIcon.Undo, Loc.T("eventDetail.menu.restore"), true))
                     {
                         this.events.Restore(eventId);
                         ImGui.CloseCurrentPopup();
                     }
                 }
-                else if (this.MenuRow(FontAwesomeIcon.Ban, "Cancel event", true))
+                else if (this.MenuRow(FontAwesomeIcon.Ban, Loc.T("eventDetail.menu.cancel"), true))
                 {
                     this.events.Cancel(eventId);
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (this.MenuRow(FontAwesomeIcon.TrashAlt, "Delete event", true))
+                if (this.MenuRow(FontAwesomeIcon.TrashAlt, Loc.T("eventDetail.menu.delete"), true))
                 {
                     this.confirmDelete = true;
                     ImGui.CloseCurrentPopup();
@@ -457,19 +463,19 @@ internal sealed class EventDetailScreen : IScreen
             }
             else
             {
-                if (e != null && this.MenuRow(FontAwesomeIcon.Share, "Share to chat", false))
+                if (e != null && this.MenuRow(FontAwesomeIcon.Share, Loc.T("eventDetail.menu.share"), false))
                 {
                     this.ShareToChat(e);
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (e != null && this.MenuRow(FontAwesomeIcon.Bookmark, e.SavedByMe ? "Remove from saved" : "Save event", false))
+                if (e != null && this.MenuRow(FontAwesomeIcon.Bookmark, Loc.T(e.SavedByMe ? "eventDetail.menu.unsave" : "eventDetail.menu.save"), false))
                 {
                     this.events.Save(eventId, e is not { SavedByMe: true });
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (e != null && this.MenuRow(FontAwesomeIcon.Flag, "Report event", true))
+                if (e != null && this.MenuRow(FontAwesomeIcon.Flag, Loc.T("eventDetail.menu.report"), true))
                 {
                     this.moderation.OpenReportEvent(e.HostId, eventId, e.Title);
                     ImGui.CloseCurrentPopup();
@@ -496,16 +502,16 @@ internal sealed class EventDetailScreen : IScreen
             if (!ImGui.BeginPopupModal("##ed_delete", ref open, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize))
                 return;
 
-            Ui.CenteredText(Ui.Px(240f), this.fonts.SerifName, Palette.TextPrimary, "Delete this event?");
+            Ui.CenteredText(Ui.Px(240f), this.fonts.SerifName, Palette.TextPrimary, Loc.T("eventDetail.delete.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-            Ui.CenteredText(Ui.Px(240f), this.fonts.Caption, Palette.TextMuted, "This can't be undone.");
+            Ui.CenteredText(Ui.Px(240f), this.fonts.Caption, Palette.TextMuted, Loc.T("eventDetail.delete.body"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
 
             var half = (Ui.Px(240f) - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##ed_del_cancel", "Cancel", half))
+            if (this.kit.SecondaryButton("##ed_del_cancel", Loc.T("eventDetail.delete.cancel"), half))
                 ImGui.CloseCurrentPopup();
             ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.DangerButton("##ed_del_ok", "Delete", half))
+            if (this.kit.DangerButton("##ed_del_ok", Loc.T("eventDetail.delete.confirm"), half))
             {
                 this.events.Delete(eventId);
                 ImGui.CloseCurrentPopup();
@@ -539,9 +545,8 @@ internal sealed class EventDetailScreen : IScreen
         {
             case EventVenueEnum.Housing:
             {
-                var room = v.Room is > 0 ? $" · Room {v.Room}" : string.Empty;
                 var world = v.WorldId is { } w ? this.WorldOnly((int)w) : string.Empty;
-                return $"{EventCatalog.DistrictLabel(v.District ?? HousingDistrictEnum.Mist)} W{v.Ward} P{v.Plot}{room} · {world}".Trim(' ', '·');
+                return EventFormat.HousingLine(EventCatalog.DistrictLabel(v.District ?? HousingDistrictEnum.Mist), v.Ward, v.Plot, v.Room, world);
             }
 
             case EventVenueEnum.OpenWorld:
@@ -569,10 +574,16 @@ internal sealed class EventDetailScreen : IScreen
 
     private static string VenueLabel(EventVenueEnum venue) => venue switch
     {
-        EventVenueEnum.Housing => "HOUSING",
-        EventVenueEnum.OpenWorld => "OPEN WORLD",
-        _ => "DISCORD",
+        EventVenueEnum.Housing => Loc.T("eventDetail.venue.housing"),
+        EventVenueEnum.OpenWorld => Loc.T("eventDetail.venue.openWorld"),
+        _ => Loc.T("eventDetail.venue.discord"),
     };
+
+    private static (string Lead, string Tail) AroundValue(string template)
+    {
+        var at = template.IndexOf("{0}", StringComparison.Ordinal);
+        return at < 0 ? (template, string.Empty) : (template[..at], template[(at + 3)..]);
+    }
 
     private static bool IsEnded(EventDto e) => EventFormat.IsEnded(e.StartsAt, e.DurationMins, e.Cancelled);
 

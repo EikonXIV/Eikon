@@ -67,7 +67,7 @@ internal sealed class BlockedUsersScreen : IScreen
                     using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
                     {
                         ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
-                        ImGui.TextWrapped("People you block can't see your profile or message you. Unblock to allow contact again.");
+                        Ui.TextWrapped(Loc.T("blocked.intro"));
                         ImGui.PopTextWrapPos();
                     }
                     ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
@@ -86,11 +86,11 @@ internal sealed class BlockedUsersScreen : IScreen
         if (!this.blocked.Loaded)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-            Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading...");
+            Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("blocked.loading"));
             return;
         }
         ImGui.Dummy(new Vector2(0f, Ui.Px(60f)));
-        this.kit.EmptyState(FontAwesomeIcon.ShieldAlt.ToIconString(), "No one blocked", "People you block from a profile or chat show up here so you can unblock them.", contentWidth);
+        this.kit.EmptyState(FontAwesomeIcon.ShieldAlt.ToIconString(), Loc.T("blocked.empty.title"), Loc.T("blocked.empty.body"), contentWidth);
     }
 
     private void DrawRow(User u, float width)
@@ -108,7 +108,7 @@ internal sealed class BlockedUsersScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, center.Y - (nameSize.Y * 0.5f)), Palette.TextPrimary.U32(), u.DisplayName);
 
         // Right-aligned Unblock pill. Neutral styling: unblocking is a restore, not a destructive action.
-        const string label = "Unblock";
+        var label = Loc.T("blocked.unblock");
         var labelSize = Ui.Measure(this.fonts.Caption, label);
         var btnW = labelSize.X + Ui.Px(24f);
         var btnH = Ui.Px(30f);
@@ -153,18 +153,18 @@ internal sealed class BlockedUsersScreen : IScreen
 
             var width = Ui.Px(264f);
             ImGui.Dummy(new Vector2(width, 0f));
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, $"Unblock {this.pendingName}?");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("blocked.confirm.title", this.pendingName));
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-                ImGui.TextWrapped("They'll be able to see your profile and message you again. You can block them again any time.");
+                Ui.TextWrapped(Loc.T("blocked.confirm.body"));
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
             var half = (width - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##unbl_cancel", "Cancel", half))
+            if (this.kit.SecondaryButton("##unbl_cancel", Loc.T("blocked.confirm.cancel"), half))
                 ImGui.CloseCurrentPopup();
             ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.PrimaryButton("##unbl_ok", "Unblock", half))
+            if (this.kit.PrimaryButton("##unbl_ok", Loc.T("blocked.confirm.unblock"), half))
             {
                 this.safety.Unblock(this.pendingId);
                 ImGui.CloseCurrentPopup();
@@ -187,7 +187,7 @@ internal sealed class BlockedUsersScreen : IScreen
             this.router.Navigate(Screen.Settings);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), backGlyph);
 
-        const string title = "Blocked users";
+        var title = Loc.T("blocked.title");
         var titleSize = Ui.Measure(this.fonts.Body, title);
         Ui.TextAt(drawList, this.fonts.Body,
             new Vector2(origin.X + pad + backSize.X + Ui.Px(12f), midY - (titleSize.Y * 0.5f)),

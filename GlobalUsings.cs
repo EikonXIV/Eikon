@@ -4,6 +4,7 @@ global using System.Linq;
 global using System.Numerics;
 global using System.Threading.Tasks;
 global using Dalamud.Bindings.ImGui;
+global using Eikon.I18n;
 global using OtterGui.Raii;
 global using OtterGui.Widgets;
 

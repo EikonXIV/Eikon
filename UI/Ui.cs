@@ -42,6 +42,156 @@ internal static class Ui
             drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize() * TextRenderScale, pos, color, text);
     }
 
+    private const float MinFit = 0.8f;
+
+    public static (string Text, float Scale, Vector2 Size) Fit(IFontHandle? font, string text, float maxWidth)
+    {
+        var size = Measure(font, text);
+        if (maxWidth <= 0f || size.X <= maxWidth)
+            return (text, 1f, size);
+
+        var scale = MathF.Max(MinFit, maxWidth / size.X);
+        if (size.X * scale > maxWidth)
+        {
+            while (text.Length > 1 && Measure(font, text + "…").X * scale > maxWidth)
+                text = text[..^1];
+            text = text.TrimEnd() + "…";
+            size = Measure(font, text);
+        }
+
+        return (text, scale, size * scale);
+    }
+
+    public static float TextFitAt(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, float maxWidth, uint color, string text)
+    {
+        var (fit, scale, size) = Fit(font, text, maxWidth);
+        var lineHeight = scale < 1f ? size.Y / scale : size.Y;
+        using (font?.Push())
+            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize() * TextRenderScale * scale, new Vector2(pos.X, pos.Y + ((lineHeight - size.Y) * 0.5f)), color, fit);
+        return size.X;
+    }
+
+    public static void TextFitCentered(ImDrawListPtr drawList, IFontHandle? font, Vector2 min, Vector2 box, uint color, string text, float padX)
+    {
+        var (fit, scale, size) = Fit(font, text, box.X - (padX * 2f));
+        using (font?.Push())
+            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize() * TextRenderScale * scale, min + ((box - size) * 0.5f), color, fit);
+    }
+
+    public static List<string> WrapLines(IFontHandle? font, string text, float width) =>
+        WrapLines(text, width, candidate => Measure(font, candidate).X);
+
+    private static List<string> WrapLines(string text, float width, Func<string, float> measure)
+    {
+        var lines = new List<string>();
+        foreach (var paragraph in text.Split('\n'))
+        {
+            var line = string.Empty;
+            foreach (var unit in BreakUnits(paragraph))
+            {
+                var candidate = line + unit;
+                if (line.Length > 0 && measure(candidate.TrimEnd()) > width)
+                {
+                    lines.Add(line.TrimEnd());
+                    line = unit.TrimStart();
+                }
+                else
+                {
+                    line = candidate;
+                }
+            }
+
+            lines.Add(line.TrimEnd());
+        }
+
+        return lines;
+    }
+
+    // Japanese and Chinese line breaking: characters that may not begin a line, and ones that may not end it.
+    private const string NoLineStart =
+        "、。，．・：；？！ー）］｝〕〉》」』】〙〗’”" +
+        "ゝゞ々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" +
+        "…‥,.!?:;)]}%";
+
+    private const string NoLineEnd = "（［｛〔〈《「『【〘〖‘“([{";
+
+    // Hangul is left out on purpose: Korean is written with spaces and breaks at them.
+    private static bool BreaksAnywhere(char c) =>
+        (c >= 0x2E80 && c <= 0x312F) || (c >= 0x3190 && c <= 0xA4CF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF);
+
+    public static bool NeedsCjkBreaks(string text)
+    {
+        foreach (var c in text)
+        {
+            if (BreaksAnywhere(c))
+                return true;
+        }
+
+        return false;
+    }
+
+    internal static IEnumerable<string> BreakUnits(string text)
+    {
+        string? held = null;
+        foreach (var unit in RawUnits(text))
+        {
+            if (held == null)
+            {
+                held = unit;
+            }
+            else if (NoLineStart.Contains(unit[0]) || NoLineEnd.Contains(held[^1]))
+            {
+                held += unit;
+            }
+            else
+            {
+                yield return held;
+                held = unit;
+            }
+        }
+
+        if (held != null)
+            yield return held;
+    }
+
+    private static IEnumerable<string> RawUnits(string text)
+    {
+        var start = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == ' ')
+            {
+                yield return text[start..(i + 1)];
+                start = i + 1;
+            }
+            else if (BreaksAnywhere(c))
+            {
+                if (i > start)
+                    yield return text[start..i];
+                yield return c.ToString();
+                start = i + 1;
+            }
+        }
+
+        if (start < text.Length)
+            yield return text[start..];
+    }
+
+    // ImGui cuts a run of CJK wherever it overflows, which can leave a comma at the start of a line.
+    public static unsafe void TextWrapped(string text)
+    {
+        if (!NeedsCjkBreaks(text))
+        {
+            ImGui.TextWrapped(text);
+            return;
+        }
+
+        var wrapPos = ImGuiP.GetCurrentWindow().Handle->DC.TextWrapPos;
+        var width = ImGuiP.CalcWrapWidthForPos(ImGui.GetCursorScreenPos(), wrapPos < 0f ? 0f : wrapPos) - 1f;
+        ImGui.TextUnformatted(string.Join('\n', WrapLines(text, width, candidate => ImGui.CalcTextSize(candidate).X)));
+    }
+
     // Draw text at an explicit pixel size, scaling the font's baked glyphs. Used for the Text size live
     // preview, so a sample resizes as the slider drags without rebuilding the atlas on every frame.
     public static void TextAtSized(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, float pixelSize, uint color, string text)
@@ -56,6 +206,19 @@ internal static class Ui
     public static void CenteredText(float containerWidth, IFontHandle? font, Vector4 color, string text)
     {
         var size = Measure(font, text);
+        if (size.X > containerWidth)
+        {
+            foreach (var line in WrapLines(font, text, containerWidth))
+            {
+                var lineSize = Measure(font, line);
+                var linePos = ImGui.GetCursorScreenPos();
+                TextAt(ImGui.GetWindowDrawList(), font, new Vector2(linePos.X + MathF.Max(0f, (containerWidth - lineSize.X) * 0.5f), linePos.Y), color.U32(), line);
+                ImGui.Dummy(new Vector2(containerWidth, lineSize.Y));
+            }
+
+            return;
+        }
+
         var pos = ImGui.GetCursorScreenPos();
         TextAt(ImGui.GetWindowDrawList(), font, new Vector2(pos.X + MathF.Max(0f, (containerWidth - size.X) * 0.5f), pos.Y), color.U32(), text);
         ImGui.Dummy(size);
@@ -165,24 +328,30 @@ internal static class Ui
     // Measure wrapped text in a specific font.
     public static Vector2 MeasureWrapped(IFontHandle? font, string text, float wrapWidth)
     {
-        if (font is null)
-            return ImGui.CalcTextSize(text, false, wrapWidth);
+        using (font?.Push())
+        {
+            if (!NeedsCjkBreaks(text))
+                return ImGui.CalcTextSize(text, false, wrapWidth);
 
-        using (font.Push())
-            return ImGui.CalcTextSize(text, false, wrapWidth);
+            var lines = WrapLines(text, wrapWidth, candidate => ImGui.CalcTextSize(candidate).X);
+            return new Vector2(lines.Max(line => ImGui.CalcTextSize(line).X), lines.Count * ImGui.GetFontSize());
+        }
     }
 
     // Draw wrapped text into a draw list with a specific font.
     public static void TextWrappedAt(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, uint color, string text, float wrapWidth)
     {
-        if (font is null)
+        using (font?.Push())
         {
-            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), pos, color, text, wrapWidth);
-            return;
-        }
+            if (!NeedsCjkBreaks(text))
+            {
+                drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), pos, color, text, wrapWidth);
+                return;
+            }
 
-        using (font.Push())
-            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), pos, color, text, wrapWidth);
+            var broken = string.Join('\n', WrapLines(text, wrapWidth, candidate => ImGui.CalcTextSize(candidate).X));
+            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), pos, color, broken);
+        }
     }
 
     // A thin horizontal band split into equal vertical stripe columns, carrying a flag theme's full

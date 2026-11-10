@@ -24,6 +24,16 @@ internal sealed class ModerationFlow
         "Something else",
     };
 
+    private static readonly string[] ReasonKeys =
+    {
+        "moderation.reason.harassment",
+        "moderation.reason.spam",
+        "moderation.reason.impersonation",
+        "moderation.reason.nonconsensualIllegal",
+        "moderation.reason.underageChildlike",
+        "moderation.reason.other",
+    };
+
     private static readonly ReportReasonEnum[] ReasonWire =
     {
         ReportReasonEnum.Harassment,
@@ -240,19 +250,19 @@ internal sealed class ModerationFlow
             dl.AddRect(min, max, Palette.Border.U32(), rounding, ImDrawFlags.None, 1f);
 
             // Group 1: the things you look at (the person, the media, the albums you can share).
-            if (this.onViewProfile is { } view && this.MenuRow("##mm_view", FontAwesomeIcon.UserCircle, "View profile", false, width))
+            if (this.onViewProfile is { } view && this.MenuRow("##mm_view", FontAwesomeIcon.UserCircle, Loc.T("moderation.menu.viewProfile"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 view();
             }
 
-            if (this.onSharedMedia is { } sharedMedia && this.MenuRow("##mm_media", FontAwesomeIcon.Images, "Shared media", false, width))
+            if (this.onSharedMedia is { } sharedMedia && this.MenuRow("##mm_media", FontAwesomeIcon.Images, Loc.T("moderation.menu.sharedMedia"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 sharedMedia();
             }
 
-            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.ShareAlt, "Share an album", false, width))
+            if (this.onShareAlbum is { } shareAlbum && this.MenuRow("##mm_album", FontAwesomeIcon.ShareAlt, Loc.T("moderation.menu.shareAlbum"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 shareAlbum();
@@ -263,7 +273,7 @@ internal sealed class ModerationFlow
 
             // Group 2: per-conversation preferences.
             var muted = this.config.MutedConversations.Contains(this.targetId.ToString());
-            if (this.MenuRow("##mm_mute", muted ? FontAwesomeIcon.Bell : FontAwesomeIcon.BellSlash, muted ? "Unmute notifications" : "Mute notifications", false, width))
+            if (this.MenuRow("##mm_mute", muted ? FontAwesomeIcon.Bell : FontAwesomeIcon.BellSlash, Loc.T(muted ? "moderation.menu.unmute" : "moderation.menu.mute"), false, width))
             {
                 if (muted)
                     this.config.MutedConversations.Remove(this.targetId.ToString());
@@ -278,7 +288,7 @@ internal sealed class ModerationFlow
             // the picker never has to fight an open popup for focus.
             if (this.chatActions)
             {
-                if (this.MenuRow("##mm_bg", FontAwesomeIcon.Image, hasBackground ? "Change chat background" : "Set chat background", false, width))
+                if (this.MenuRow("##mm_bg", FontAwesomeIcon.Image, Loc.T(hasBackground ? "moderation.menu.changeBackground" : "moderation.menu.setBackground"), false, width))
                 {
                     ImGui.CloseCurrentPopup();
                     this.media.PickImage(p =>
@@ -288,7 +298,7 @@ internal sealed class ModerationFlow
                     });
                 }
 
-                if (hasBackground && this.MenuRow("##mm_bg_clear", FontAwesomeIcon.TrashAlt, "Clear chat background", false, width))
+                if (hasBackground && this.MenuRow("##mm_bg_clear", FontAwesomeIcon.TrashAlt, Loc.T("moderation.menu.clearBackground"), false, width))
                 {
                     this.config.ChatBackgrounds.Remove(key);
                     this.config.Save();
@@ -299,37 +309,37 @@ internal sealed class ModerationFlow
             this.MenuDivider(width);
 
             // Group 3: safety and moderation.
-            if (this.onSafetyNumber is { } verify && this.MenuRow("##mm_verify", FontAwesomeIcon.ShieldAlt, "Safety number", false, width))
+            if (this.onSafetyNumber is { } verify && this.MenuRow("##mm_verify", FontAwesomeIcon.ShieldAlt, Loc.T("moderation.menu.safetyNumber"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 verify();
             }
 
-            if (this.onRestoreThread is { } restore && this.MenuRow("##mm_restore", FontAwesomeIcon.TrashRestore, "Restore thread", false, width))
+            if (this.onRestoreThread is { } restore && this.MenuRow("##mm_restore", FontAwesomeIcon.TrashRestore, Loc.T("moderation.menu.restoreThread"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 restore();
             }
 
-            if (this.onDeleteThread is { } deleteThread && this.MenuRow("##mm_delete_thread", FontAwesomeIcon.TrashAlt, "Delete thread", true, width))
+            if (this.onDeleteThread is { } deleteThread && this.MenuRow("##mm_delete_thread", FontAwesomeIcon.TrashAlt, Loc.T("moderation.menu.deleteThread"), true, width))
             {
                 ImGui.CloseCurrentPopup();
                 deleteThread();
             }
 
-            if (this.onPurgeThread is { } purge && this.MenuRow("##mm_purge_thread", FontAwesomeIcon.TrashAlt, "Delete permanently", true, width))
+            if (this.onPurgeThread is { } purge && this.MenuRow("##mm_purge_thread", FontAwesomeIcon.TrashAlt, Loc.T("moderation.menu.purgeThread"), true, width))
             {
                 ImGui.CloseCurrentPopup();
                 purge();
             }
 
-            if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, "Block", false, width))
+            if (this.MenuRow("##mm_block", FontAwesomeIcon.Ban, Loc.T("moderation.menu.block"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 this.openBlock = true;
             }
 
-            if (this.MenuRow("##mm_report", FontAwesomeIcon.Flag, "Report", false, width))
+            if (this.MenuRow("##mm_report", FontAwesomeIcon.Flag, Loc.T("moderation.menu.report"), false, width))
             {
                 ImGui.CloseCurrentPopup();
                 this.ResetReport();
@@ -393,18 +403,18 @@ internal sealed class ModerationFlow
             ImGui.Dummy(new Vector2(width, 0f));   // lock the content width; the modal auto-fits its height
             this.IconBadge(width, FontAwesomeIcon.Ban, Palette.Danger);
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, $"Block {this.target}?");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("moderation.block.title", this.target));
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-                ImGui.TextWrapped("They won't see your profile or message you, and you won't see them. You can unblock in settings.");
+                Ui.TextWrapped(Loc.T("moderation.block.body"));
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
             var half = (width - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##bk_cancel", "Cancel", half))
+            if (this.kit.SecondaryButton("##bk_cancel", Loc.T("moderation.block.cancel"), half))
                 ImGui.CloseCurrentPopup();
             ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.DangerButton("##bk_block", "Block", half))
+            if (this.kit.DangerButton("##bk_block", Loc.T("moderation.block.confirm"), half))
             {
                 this.safety.Block(this.targetId);
                 ImGui.CloseCurrentPopup();
@@ -444,11 +454,11 @@ internal sealed class ModerationFlow
     {
         using (this.fonts.Title.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted($"Report {this.target}");
+            ImGui.TextUnformatted(Loc.T("moderation.report.title", this.target));
         ImGui.Dummy(new Vector2(0f, Ui.Px(3f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted("Why are you reporting this?");
+            ImGui.TextUnformatted(Loc.T("moderation.report.prompt"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
 
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(0f, Ui.Px(2f))))
@@ -468,7 +478,7 @@ internal sealed class ModerationFlow
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         if (this.reason >= 0)
         {
-            if (this.kit.DangerButton("##rp_submit", "Submit report", width))
+            if (this.kit.DangerButton("##rp_submit", Loc.T("moderation.report.submit"), width))
             {
                 if (this.reportEventId is { } eid)
                     this.safety.ReportEvent(this.targetId, eid, ReasonWire[this.reason], null);
@@ -479,10 +489,10 @@ internal sealed class ModerationFlow
         }
         else
         {
-            this.kit.SecondaryButton("##rp_submit_disabled", "Submit report", width);
+            this.kit.SecondaryButton("##rp_submit_disabled", Loc.T("moderation.report.submit"), width);
         }
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        if (this.kit.SecondaryButton("##rp_cancel", "Cancel", width))
+        if (this.kit.SecondaryButton("##rp_cancel", Loc.T("moderation.report.cancel"), width))
             ImGui.CloseCurrentPopup();
     }
 
@@ -491,25 +501,25 @@ internal sealed class ModerationFlow
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         this.IconBadge(width, FontAwesomeIcon.CheckCircle, this.theme.Accent);
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Report received");
+        Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("moderation.report.done.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextWrapped(this.reportEventId is null
-                ? "Thanks, we'll review it. You can also block this person so they can't reach you."
-                : "Thanks, we'll take a look.");
+            Ui.TextWrapped(Loc.T(this.reportEventId is null
+                ? "moderation.report.done.bodyBlock"
+                : "moderation.report.done.body"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         if (this.reportEventId is null)
         {
-            if (this.kit.DangerButton("##rp_block", $"Block {this.target}", width))
+            if (this.kit.DangerButton("##rp_block", Loc.T("moderation.report.done.block", this.target), width))
             {
                 this.safety.Block(this.targetId);
                 ImGui.CloseCurrentPopup();
             }
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         }
-        if (this.kit.PrimaryButton("##rp_done", "Done", width))
+        if (this.kit.PrimaryButton("##rp_done", Loc.T("moderation.report.done.close"), width))
             ImGui.CloseCurrentPopup();
     }
 
@@ -541,7 +551,7 @@ internal sealed class ModerationFlow
         ImGui.Indent(indent);
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextWrapped("Sealed for review. A moderator can read them without ongoing access to your chats.");
+            Ui.TextWrapped(Loc.T("moderation.report.sealedNote"));
         ImGui.Unindent(indent);
     }
 
@@ -571,8 +581,9 @@ internal sealed class ModerationFlow
         if (selected)
             drawList.AddCircleFilled(center, Ui.Px(4.5f), this.theme.Secondary.Base.U32(), 12);
 
-        var labelSize = Ui.Measure(this.fonts.Body, Reasons[index]);
-        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(38f), center.Y - (labelSize.Y * 0.5f)), Palette.TextPrimary.U32(), Reasons[index]);
+        var reasonLabel = Loc.T(ReasonKeys[index]);
+        var labelSize = Ui.Measure(this.fonts.Body, reasonLabel);
+        Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(38f), center.Y - (labelSize.Y * 0.5f)), Palette.TextPrimary.U32(), reasonLabel);
 
         if (clicked)
             this.reason = index;
@@ -585,7 +596,7 @@ internal sealed class ModerationFlow
         var pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
 
-        const string label = "Include recent messages";
+        var label = Loc.T("moderation.report.include");
         var labelSize = Ui.Measure(this.fonts.Body, label);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X, pos.Y + ((rowHeight - labelSize.Y) * 0.5f)), Palette.TextPrimary.U32(), label);
 
