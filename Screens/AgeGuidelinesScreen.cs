@@ -40,9 +40,9 @@ internal sealed class AgeGuidelinesScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(28f)));
         this.kit.CenteredFramedIcon(avail.X, FontAwesomeIcon.ShieldAlt.ToIconString(), Ui.Px(48f));
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, "Before you start");
+        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, Loc.T("ageGate.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
-        Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextSecondary, "Eikon is an 18+ space. A few ground rules.");
+        Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextSecondary, Loc.T("ageGate.subtitle"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         ImGui.SetCursorPosX(pad);
@@ -50,21 +50,21 @@ internal sealed class AgeGuidelinesScreen : IScreen
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         ImGui.SetCursorPosX(pad);
-        this.ageConfirmed = this.DrawCheck("##age", this.ageConfirmed, "I'm 18 or older.");
+        this.ageConfirmed = this.DrawCheck("##age", this.ageConfirmed, Loc.T("ageGate.confirm.age"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         ImGui.SetCursorPosX(pad);
-        this.guidelinesConfirmed = this.DrawCheck("##terms", this.guidelinesConfirmed, "I agree to the Community Guidelines and Privacy.");
+        this.guidelinesConfirmed = this.DrawCheck("##terms", this.guidelinesConfirmed, Loc.T("ageGate.confirm.guidelines"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         ImGui.SetCursorPosX(pad);
         if (this.ageConfirmed && this.guidelinesConfirmed)
         {
-            if (this.kit.PrimaryButton("##agree", "Agree and continue", contentWidth))
+            if (this.kit.PrimaryButton("##agree", Loc.T("ageGate.continue"), contentWidth))
                 this.router.Navigate(Screen.Onboarding);
         }
         else
         {
-            this.kit.SecondaryButton("##agree_off", "Agree and continue", contentWidth);
+            this.kit.SecondaryButton("##agree_off", Loc.T("ageGate.continue"), contentWidth);
         }
     }
 
@@ -80,9 +80,9 @@ internal sealed class AgeGuidelinesScreen : IScreen
 
     private static readonly (string Label, string Detail)[] Rules =
     {
-        ("No minors", "No childlike depictions, ever. This includes Lalafell in NSFW."),
-        ("Consent and respect", "No harassment, no unsolicited explicit content."),
-        ("No IRL meetups", "Eikon stays in game and on Discord."),
+        ("ageGate.rule.minors.label", "ageGate.rule.minors.detail"),
+        ("ageGate.rule.consent.label", "ageGate.rule.consent.detail"),
+        ("ageGate.rule.meetups.label", "ageGate.rule.meetups.detail"),
     };
 
     private void DrawRules(float width)
@@ -103,7 +103,7 @@ internal sealed class AgeGuidelinesScreen : IScreen
             {
                 if (i > 0)
                     ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-                this.Rule(Rules[i].Label, Rules[i].Detail);
+                this.Rule(Loc.T(Rules[i].Label), Loc.T(Rules[i].Detail));
             }
         }
     }
@@ -120,7 +120,7 @@ internal sealed class AgeGuidelinesScreen : IScreen
                 if (i > 0)
                     height += Ui.Px(12f);
                 height += ImGui.GetTextLineHeight() + Ui.Px(3f);
-                height += ImGui.CalcTextSize(Rules[i].Detail, false, inner).Y;
+                height += ImGui.CalcTextSize(Loc.T(Rules[i].Detail), false, inner).Y;
             }
 
             return height;
@@ -136,7 +136,7 @@ internal sealed class AgeGuidelinesScreen : IScreen
                 ImGui.TextUnformatted(label);
             ImGui.Dummy(new Vector2(0f, Ui.Px(3f)));
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextWrapped(detail);
+                Ui.TextWrapped(detail);
         }
     }
 }

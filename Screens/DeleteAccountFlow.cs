@@ -25,6 +25,16 @@ internal sealed class DeleteAccountFlow
         "Something else",
     };
 
+    private static readonly string[] ReasonKeys =
+    {
+        "deleteAccount.reason.metSomeone",
+        "deleteAccount.reason.takingBreak",
+        "deleteAccount.reason.notEnoughPeople",
+        "deleteAccount.reason.notSafe",
+        "deleteAccount.reason.privacy",
+        "deleteAccount.reason.other",
+    };
+
     private enum Step { Form, Deleting, Done }
 
     private readonly ThemeService theme;
@@ -111,11 +121,11 @@ internal sealed class DeleteAccountFlow
     {
         this.IconBadge(width, FontAwesomeIcon.TrashAlt, Palette.Danger);
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Delete your account?");
+        Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("deleteAccount.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextWrapped("Your profile comes down right away. Photos, albums, and messages are scheduled for permanent deletion in 30 days - sign back in before then to restore everything.");
+            Ui.TextWrapped(Loc.T("deleteAccount.body"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         this.Divider(width);
@@ -123,15 +133,15 @@ internal sealed class DeleteAccountFlow
 
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted("Anything we could've done better? Optional.");
+            ImGui.TextUnformatted(Loc.T("deleteAccount.feedback.prompt"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
-        var clicked = this.kit.ChipFlow("##del_reason_", Reasons, i => this.selectedReasons.Contains(i), width);
+        var clicked = this.kit.ChipFlow("##del_reason_", Array.ConvertAll(ReasonKeys, key => Loc.T(key)), i => this.selectedReasons.Contains(i), width);
         if (clicked >= 0 && !this.selectedReasons.Add(clicked))
             this.selectedReasons.Remove(clicked);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.kit.TextField("##del_note", ref this.note, "Anything else? (optional)", width, Limits.DeleteNoteMax);
+        this.kit.TextField("##del_note", ref this.note, Loc.T("deleteAccount.feedback.notePlaceholder"), width, Limits.DeleteNoteMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         this.acknowledged = this.AckRow();
@@ -141,29 +151,29 @@ internal sealed class DeleteAccountFlow
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-                ImGui.TextWrapped(this.error);
+                Ui.TextWrapped(Loc.T(this.error));
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         if (this.step == Step.Deleting)
         {
-            this.kit.SecondaryButton("##del_progress", "Deleting your account...", width);
+            this.kit.SecondaryButton("##del_progress", Loc.T("deleteAccount.deleting"), width);
             return;
         }
 
         var half = (width - Ui.Px(10f)) * 0.5f;
-        if (this.kit.SecondaryButton("##del_cancel", "Cancel", half))
+        if (this.kit.SecondaryButton("##del_cancel", Loc.T("deleteAccount.cancel"), half))
             ImGui.CloseCurrentPopup();
         ImGui.SameLine(0f, Ui.Px(10f));
         if (this.acknowledged)
         {
-            if (this.kit.DangerButton("##del_confirm", "Delete account", half))
+            if (this.kit.DangerButton("##del_confirm", Loc.T("deleteAccount.confirm"), half))
                 this.Submit();
         }
         else
         {
             // Gated: the confirm checkbox is unticked, so the destructive action is not yet available.
-            this.kit.SecondaryButton("##del_confirm_off", "Delete account", half);
+            this.kit.SecondaryButton("##del_confirm_off", Loc.T("deleteAccount.confirm"), half);
         }
     }
 
@@ -172,14 +182,14 @@ internal sealed class DeleteAccountFlow
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.IconBadge(width, FontAwesomeIcon.Heart, this.theme.Accent);
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Your account's been deleted");
+        Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("deleteAccount.done.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextWrapped("Changed your mind? Sign back in within 30 days to restore it. After that it's gone for good. Thanks for spending time on Eikon.");
+            Ui.TextWrapped(Loc.T("deleteAccount.done.body"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        if (this.kit.PrimaryButton("##del_close", "Close", width))
+        if (this.kit.PrimaryButton("##del_close", Loc.T("deleteAccount.done.close"), width))
             ImGui.CloseCurrentPopup();   // Draw() finalizes the sign-out once the popup is gone
     }
 
@@ -190,7 +200,7 @@ internal sealed class DeleteAccountFlow
         ImGui.SameLine(0f, Ui.Px(9f));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted("I understand my account will be deleted.");
+            ImGui.TextUnformatted(Loc.T("deleteAccount.acknowledge"));
         return next;
     }
 
@@ -207,7 +217,7 @@ internal sealed class DeleteAccountFlow
                 var token = await this.auth.GetAccessTokenAsync(CancellationToken.None);
                 if (string.IsNullOrEmpty(token))
                 {
-                    this.error = "You're not signed in.";
+                    this.error = "deleteAccount.error.signedOut";
                     this.step = Step.Form;
                     return;
                 }
@@ -218,7 +228,7 @@ internal sealed class DeleteAccountFlow
             catch (Exception ex)
             {
                 this.log.Warning(ex, "Account deletion failed.");
-                this.error = "Couldn't delete your account. Try again.";
+                this.error = "deleteAccount.error.failed";
                 this.step = Step.Form;
             }
         });

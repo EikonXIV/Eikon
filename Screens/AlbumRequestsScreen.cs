@@ -52,8 +52,8 @@ internal sealed class AlbumRequestsScreen : IScreen
                 if (requests.Count == 0)
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(48f)));
-                    this.kit.EmptyState(FontAwesomeIcon.UserCheck.ToIconString(), "No requests",
-                        "When someone asks to see an album, they show up here.", contentWidth);
+                    this.kit.EmptyState(FontAwesomeIcon.UserCheck.ToIconString(), Loc.T("albumRequests.empty.title"),
+                        Loc.T("albumRequests.empty.body"), contentWidth);
                 }
                 else
                 {
@@ -79,7 +79,7 @@ internal sealed class AlbumRequestsScreen : IScreen
             this.router.Navigate(Screen.Albums);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
-        const string title = "ACCESS REQUESTS";
+        var title = Loc.T("albumRequests.title");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -105,7 +105,7 @@ internal sealed class AlbumRequestsScreen : IScreen
 
         var textX = avatarCenter.X + radius + Ui.Px(11f);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + pad), Palette.TextPrimary.U32(), request.Requester.DisplayName);
-        var sub = request.Requester.Verified ? "Verified" : "Wants access";
+        var sub = Loc.T(request.Requester.Verified ? "albumRequests.card.verified" : "albumRequests.card.wantsAccess");
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + pad + Ui.Px(19f)), Palette.TextMuted.U32(), sub);
         var time = Ago(request.CreatedAt);
         var timeSize = Ui.Measure(this.fonts.Caption, time);
@@ -113,7 +113,10 @@ internal sealed class AlbumRequestsScreen : IScreen
 
         // "wants access to <album>"
         var lineY = pos.Y + pad + Ui.Px(44f);
-        const string prefix = "wants access to ";
+        var line = Loc.T("albumRequests.card.line");
+        var slot = line.IndexOf("{0}", StringComparison.Ordinal);
+        var prefix = slot < 0 ? line : line[..slot];
+        var suffix = slot < 0 ? string.Empty : line[(slot + 3)..];
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(pos.X + pad, lineY + Ui.Px(3f)), Palette.TextSecondary.U32(), prefix);
         var prefixW = Ui.Measure(this.fonts.Caption, prefix).X;
         var chipName = request.AlbumName;
@@ -121,15 +124,16 @@ internal sealed class AlbumRequestsScreen : IScreen
         var chipX = pos.X + pad + prefixW;
         drawList.AddRectFilled(new Vector2(chipX, lineY), new Vector2(chipX + chipNameW + Ui.Px(16f), lineY + Ui.Px(22f)), Palette.Surface2.U32(), Ui.Px(8f));
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(chipX + Ui.Px(8f), lineY + Ui.Px(3f)), Palette.TextPrimary.U32(), chipName);
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(chipX + chipNameW + Ui.Px(16f), lineY + Ui.Px(3f)), Palette.TextSecondary.U32(), suffix);
 
         // Approve / Deny row.
         var buttonsY = pos.Y + cardH - pad - Ui.Px(34f);
         var half = (contentWidth - (pad * 2f) - Ui.Px(9f)) * 0.5f;
         ImGui.SetCursorScreenPos(new Vector2(pos.X + pad, buttonsY));
-        if (this.kit.SecondaryButton("##areq_deny_" + request.Id, "Deny", half))
+        if (this.kit.SecondaryButton("##areq_deny_" + request.Id, Loc.T("albumRequests.card.deny"), half))
             this.albums.Deny(request.Id);
         ImGui.SameLine(0f, Ui.Px(9f));
-        if (this.kit.PrimaryButton("##areq_approve_" + request.Id, "Approve", half))
+        if (this.kit.PrimaryButton("##areq_approve_" + request.Id, Loc.T("albumRequests.card.approve"), half))
             this.albums.Approve(request.Id);
 
         // Reserve the whole card height for layout and advance to the next card.
@@ -138,15 +142,15 @@ internal sealed class AlbumRequestsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
     }
 
-    private static string Initial(string name) => name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
+    private static string Initial(string name) => name.Length > 0 ? Loc.Upper(name[..1]) : "?";
 
     private static string Ago(DateTimeOffset at)
     {
         var d = DateTimeOffset.UtcNow - at;
-        if (d.TotalMinutes < 1) return "now";
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h";
-        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d";
-        return at.LocalDateTime.ToString("MMM d");
+        if (d.TotalMinutes < 1) return Loc.T("albumRequests.ago.now");
+        if (d.TotalMinutes < 60) return Loc.T("albumRequests.ago.minutes", (int)d.TotalMinutes);
+        if (d.TotalHours < 24) return Loc.T("albumRequests.ago.hours", (int)d.TotalHours);
+        if (d.TotalDays < 7) return Loc.T("albumRequests.ago.days", (int)d.TotalDays);
+        return at.LocalDateTime.ToString("MMM d", Loc.Culture);
     }
 }

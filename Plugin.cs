@@ -60,6 +60,8 @@ public sealed class Plugin : IDalamudPlugin
         // first frame rather than rebuilding after.
         Ui.Scale = TextScale.ToFactor(config.TextScalePercent);
 
+        Loc.Apply(config.Language);
+
         var services = new ServiceCollection();
 
         // Dalamud services. These interfaces are not IDisposable, so the container will not try

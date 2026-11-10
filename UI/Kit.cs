@@ -75,7 +75,7 @@ internal sealed class Kit
     {
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted(text.ToUpperInvariant());
+            ImGui.TextUnformatted(Loc.Upper(text));
     }
 
     // A centered, square-bordered icon badge (age gate shield, onboarding welcome mark). Draws at the
@@ -170,10 +170,7 @@ internal sealed class Kit
 
         drawList.AddRect(pos, pos + new Vector2(w, height),
             (hovered ? Palette.TextMuted : Palette.Border).U32(), 0f, ImDrawFlags.None, 1f);
-        var textSize = Ui.Measure(this.fonts.Body, label);
-        Ui.TextAt(drawList, this.fonts.Body,
-            pos + new Vector2((w - textSize.X) * 0.5f, (height - textSize.Y) * 0.5f),
-            Palette.TextSecondary.U32(), label);
+        Ui.TextFitCentered(drawList, this.fonts.Body, pos, new Vector2(w, height), Palette.TextSecondary.U32(), label, Ui.Px(8f));
         return clicked;
     }
 
@@ -680,10 +677,7 @@ internal sealed class Kit
         var drawList = ImGui.GetWindowDrawList();
 
         drawList.AddRectFilled(pos, pos + new Vector2(w, height), (hovered ? hoverFill : fill).U32());
-        var textSize = Ui.Measure(this.fonts.Body, label);
-        Ui.TextAt(drawList, this.fonts.Body,
-            pos + new Vector2((w - textSize.X) * 0.5f, (height - textSize.Y) * 0.5f),
-            textColor.U32(), label);
+        Ui.TextFitCentered(drawList, this.fonts.Body, pos, new Vector2(w, height), textColor.U32(), label, Ui.Px(8f));
         return clicked;
     }
 }

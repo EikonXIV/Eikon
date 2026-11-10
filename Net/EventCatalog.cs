@@ -41,13 +41,15 @@ internal sealed class EventCatalog
         (HousingDistrictEnum.Empyreum, "Empyreum"),
     };
 
-    public static string DistrictLabel(HousingDistrictEnum district)
+    public static string DistrictLabel(HousingDistrictEnum district) => district switch
     {
-        foreach (var (value, label) in Districts)
-            if (value == district)
-                return label;
-        return district.ToString();
-    }
+        HousingDistrictEnum.Mist => Loc.T("eventCatalog.district.mist"),
+        HousingDistrictEnum.LavenderBeds => Loc.T("eventCatalog.district.lavenderBeds"),
+        HousingDistrictEnum.Goblet => Loc.T("eventCatalog.district.goblet"),
+        HousingDistrictEnum.Shirogane => Loc.T("eventCatalog.district.shirogane"),
+        HousingDistrictEnum.Empyreum => Loc.T("eventCatalog.district.empyreum"),
+        _ => district.ToString(),
+    };
 
     public void EnsureLoaded()
     {

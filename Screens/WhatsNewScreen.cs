@@ -117,7 +117,7 @@ internal sealed class WhatsNewScreen : IScreen
             textX = origin.X + pad + backSize.X + Ui.Px(12f);
         }
 
-        const string eyebrow = "WHAT'S NEW";
+        var eyebrow = Loc.T("whatsNew.eyebrow");
         var eyebrowSize = Ui.Measure(this.fonts.Eyebrow, eyebrow);
         Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(textX, midY - (eyebrowSize.Y * 0.5f)), Palette.TextSecondary.U32(), eyebrow);
 
@@ -135,7 +135,7 @@ internal sealed class WhatsNewScreen : IScreen
         var drawList = ImGui.GetWindowDrawList();
         var rowPos = ImGui.GetCursorScreenPos();
         var v = release.Version;
-        var header = v.Build == 0 ? $"Version {v.Major}.{v.Minor}" : $"Version {v.Major}.{v.Minor}.{v.Build}";
+        var header = Loc.T("whatsNew.version", v.Build == 0 ? $"{v.Major}.{v.Minor}" : $"{v.Major}.{v.Minor}.{v.Build}");
         var headerSize = Ui.Measure(this.fonts.SerifTitle, header);
         Ui.TextAt(drawList, this.fonts.SerifTitle, rowPos, Palette.TextPrimary.U32(), header);
 
@@ -146,7 +146,7 @@ internal sealed class WhatsNewScreen : IScreen
 
         if (latest)
         {
-            const string tag = "LATEST";
+            var tag = Loc.T("whatsNew.latest");
             var tagText = Ui.Measure(this.fonts.Eyebrow, tag);
             var tagPad = new Vector2(Ui.Px(8f), Ui.Px(3f));
             var tagSize = tagText + (tagPad * 2f);
@@ -157,9 +157,9 @@ internal sealed class WhatsNewScreen : IScreen
 
         ImGui.Dummy(new Vector2(width, headerSize.Y));
 
-        this.Group(width, "New", release.New, Palette.Signal);
-        this.Group(width, "Improved", release.Improved, Palette.Signal);
-        this.Group(width, "Fixed", release.Fixed, Palette.TextMuted);
+        this.Group(width, Loc.T("whatsNew.group.new"), release.New, Palette.Signal);
+        this.Group(width, Loc.T("whatsNew.group.improved"), release.Improved, Palette.Signal);
+        this.Group(width, Loc.T("whatsNew.group.fixed"), release.Fixed, Palette.TextMuted);
 
         if (divider)
         {
@@ -177,7 +177,7 @@ internal sealed class WhatsNewScreen : IScreen
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         var pos = ImGui.GetCursorScreenPos();
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, pos, Palette.TextSecondary.U32(), label.ToUpperInvariant());
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, pos, Palette.TextSecondary.U32(), Loc.Upper(label));
         ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, label).Y + Ui.Px(8f)));
 
         foreach (var item in items)
@@ -201,7 +201,7 @@ internal sealed class WhatsNewScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
         {
             ImGui.PushTextWrapPos(startX + width);
-            ImGui.TextWrapped(text);
+            Ui.TextWrapped(text);
             ImGui.PopTextWrapPos();
         }
 
@@ -215,7 +215,7 @@ internal sealed class WhatsNewScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
         {
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width);
-            ImGui.TextWrapped("You're all caught up.");
+            Ui.TextWrapped(Loc.T("whatsNew.caughtUp"));
             ImGui.PopTextWrapPos();
         }
     }
@@ -235,11 +235,11 @@ internal sealed class WhatsNewScreen : IScreen
         drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.Signal.U32());
         if (ImGui.IsItemHovered())
             drawList.AddRectFilled(buttonPos, buttonPos + buttonSize, Palette.WithAlpha(Palette.Overlay, 0.10f).U32());
-        const string gotIt = "GOT IT";
+        var gotIt = Loc.T("whatsNew.gotIt");
         var gotSize = Ui.Measure(this.fonts.Eyebrow, gotIt);
         Ui.TextAt(drawList, this.fonts.Eyebrow, buttonPos + ((buttonSize - gotSize) * 0.5f), Palette.Paper.U32(), gotIt);
 
-        const string link = "FULL CHANGELOG  →";
+        var link = Loc.T("whatsNew.changelog");
         var linkSize = Ui.Measure(this.fonts.Eyebrow, link);
         ImGui.SetCursorPos(new Vector2(pad + ((width - linkSize.X) * 0.5f), top + Ui.Px(60f)));
         if (ImGui.InvisibleButton("##wn_changelog", linkSize))

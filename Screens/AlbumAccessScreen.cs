@@ -66,14 +66,14 @@ internal sealed class AlbumAccessScreen : IScreen
                 var contentWidth = avail.X - (pad * 2f);
                 ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
 
-                if (this.kit.PrimaryButton("##acc_share", "Share with someone", contentWidth))
+                if (this.kit.PrimaryButton("##acc_share", Loc.T("albumAccess.share"), contentWidth))
                     this.openPicker = true;
 
                 var requests = this.albums.Requests.Where(r => r.AlbumId == albumId.Value).ToList();
                 if (requests.Count > 0)
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-                    this.kit.SectionLabel($"Requests ({requests.Count})");
+                    this.kit.SectionLabel(Loc.T("albumAccess.section.requests", requests.Count));
                     ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
                     foreach (var request in requests)
                         this.DrawRequestCard(request, contentWidth);
@@ -81,12 +81,12 @@ internal sealed class AlbumAccessScreen : IScreen
 
                 var grants = this.albums.Grants(albumId.Value);
                 ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-                this.kit.SectionLabel($"Has access ({grants.Count})");
+                this.kit.SectionLabel(Loc.T("albumAccess.section.grants", grants.Count));
                 ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
                 if (grants.Count == 0)
                     using (this.fonts.Caption.Push())
                     using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                        ImGui.TextUnformatted("No one yet. Share it above.");
+                        ImGui.TextUnformatted(Loc.T("albumAccess.grants.empty"));
                 else
                     foreach (var grantee in grants)
                         this.DrawGranteeRow(albumId.Value, grantee, contentWidth);
@@ -111,7 +111,7 @@ internal sealed class AlbumAccessScreen : IScreen
             this.router.Navigate(Screen.AlbumDetail);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
-        var title = $"WHO CAN SEE · {name.ToUpperInvariant()}";
+        var title = Loc.T("albumAccess.title", Loc.Upper(name));
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -132,15 +132,15 @@ internal sealed class AlbumAccessScreen : IScreen
         this.DrawAvatar(drawList, center, radius, request.Requester.MainPhotoId, request.Requester.DisplayName);
         var textX = center.X + radius + Ui.Px(11f);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + pad), Palette.TextPrimary.U32(), request.Requester.DisplayName);
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + pad + Ui.Px(19f)), Palette.TextMuted.U32(), request.Requester.Verified ? "Verified" : "Wants access");
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + pad + Ui.Px(19f)), Palette.TextMuted.U32(), Loc.T(request.Requester.Verified ? "albumAccess.request.verified" : "albumAccess.request.wantsAccess"));
 
         var buttonsY = pos.Y + cardH - pad - Ui.Px(32f);
         var half = (contentWidth - (pad * 2f) - Ui.Px(9f)) * 0.5f;
         ImGui.SetCursorScreenPos(new Vector2(pos.X + pad, buttonsY));
-        if (this.kit.SecondaryButton("##acc_deny_" + request.Id, "Deny", half))
+        if (this.kit.SecondaryButton("##acc_deny_" + request.Id, Loc.T("albumAccess.request.deny"), half))
             this.albums.Deny(request.Id);
         ImGui.SameLine(0f, Ui.Px(9f));
-        if (this.kit.PrimaryButton("##acc_approve_" + request.Id, "Approve", half))
+        if (this.kit.PrimaryButton("##acc_approve_" + request.Id, Loc.T("albumAccess.request.approve"), half))
             this.albums.Approve(request.Id);
 
         ImGui.SetCursorScreenPos(pos);
@@ -162,7 +162,7 @@ internal sealed class AlbumAccessScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(28f)), Palette.TextMuted.U32(), SourceLabel(grantee.Source));
 
         // Revoke pill on the right.
-        const string label = "Revoke";
+        var label = Loc.T("albumAccess.revoke");
         var ls = Ui.Measure(this.fonts.Caption, label);
         var pillW = ls.X + Ui.Px(20f);
         var pillH = Ui.Px(26f);
@@ -193,7 +193,8 @@ internal sealed class AlbumAccessScreen : IScreen
         var people = this.inbox.Conversations.Where(c => !c.IsRequest).ToList();
         var boxPad = Ui.Px(16f);
         var rowHeight = Ui.Px(48f);
-        var titleHeight = Ui.Measure(this.fonts.Title, "Share with").Y;
+        var pickerTitle = Loc.T("albumAccess.picker.title");
+        var titleHeight = Ui.Measure(this.fonts.Title, pickerTitle).Y;
         var labelHeight = Ui.Measure(this.fonts.Eyebrow, "X").Y;
         var listHeight = people.Count == 0
             ? Ui.Px(52f)
@@ -214,9 +215,9 @@ internal sealed class AlbumAccessScreen : IScreen
                 return;
 
             var width = ImGui.GetContentRegionAvail().X;
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Share with");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, pickerTitle);
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            this.kit.SectionLabel("People you've messaged");
+            this.kit.SectionLabel(Loc.T("albumAccess.picker.section"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
             var granted = this.albums.Grants(albumId).Select(g => g.UserId).ToHashSet();
@@ -226,13 +227,13 @@ internal sealed class AlbumAccessScreen : IScreen
                 if (people.Count == 0)
                     using (this.fonts.Caption.Push())
                     using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                        ImGui.TextWrapped("You can only share with people you have messaged.");
+                        Ui.TextWrapped(Loc.T("albumAccess.picker.empty"));
                 foreach (var person in people)
                     this.DrawPickerRow(albumId, person, granted.Contains(person.UserId), rowWidth);
             }
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-            if (this.kit.SecondaryButton("##acc_picker_close", "Close", width))
+            if (this.kit.SecondaryButton("##acc_picker_close", Loc.T("albumAccess.picker.close"), width))
                 ImGui.CloseCurrentPopup();
 
             ImGui.EndPopup();
@@ -278,15 +279,15 @@ internal sealed class AlbumAccessScreen : IScreen
             return;
         }
         drawList.AddCircleFilled(center, radius, Palette.Surface2.U32(), 24);
-        var initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
+        var initial = name.Length > 0 ? Loc.Upper(name[..1]) : "?";
         var isz = Ui.Measure(this.fonts.Body, initial);
         Ui.TextAt(drawList, this.fonts.Body, center - (isz * 0.5f), Palette.TextSecondary.U32(), initial);
     }
 
     private static string SourceLabel(AlbumGrantSourceEnum source) => source switch
     {
-        AlbumGrantSourceEnum.Chat => "shared in chat",
-        AlbumGrantSourceEnum.Request => "approved request",
-        _ => "shared from profile",
+        AlbumGrantSourceEnum.Chat => Loc.T("albumAccess.source.chat"),
+        AlbumGrantSourceEnum.Request => Loc.T("albumAccess.source.request"),
+        _ => Loc.T("albumAccess.source.profile"),
     };
 }

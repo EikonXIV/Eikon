@@ -12,6 +12,21 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(3, 0, 0),
+            "November 2026",
+            New:
+            [
+                "Languages. Eikon can now be shown in Japanese, Korean, Simplified Chinese, French, German and Spanish. Pick one under Settings > Appearance > Language. Nothing changes until you do.",
+                "These first translations are new and have not had a native review yet. If something reads wrong, tell us on Discord.",
+            ],
+            Improved:
+            [
+                "Dates, times and numbers follow the language you pick, including a 24-hour clock and time picker where that is the norm.",
+                "Buttons, tabs and labels fit longer text instead of clipping it.",
+                "Japanese and Chinese text wraps cleanly, in the app's own text and in messages and bios.",
+            ],
+            Fixed: []),
+        new Release(
             new Version(2, 5, 0),
             "September 2026",
             New:

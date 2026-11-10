@@ -48,4 +48,75 @@ internal static class Options
         "Roleplay", "Praise", "Degradation", "Bondage", "Exhibition",
         "Voyeur", "Pet play", "Edging", "Aftercare", "Impact", "Sensory",
     };
+
+    private static readonly Dictionary<string[], string[]> Keys = new()
+    {
+        [Pronouns] = KeysFor("pronoun", Pronouns),
+        [Genders] = KeysFor("gender", Genders),
+        [Tribes] = KeysFor("tribe", Tribes),
+        [Races] = KeysFor("race", Races),
+        [LookingFor] = KeysFor("lookingFor", LookingFor),
+        [Interests] = KeysFor("interest", Interests),
+        [Positions] = KeysFor("position", Positions),
+        [Roles] = KeysFor("role", Roles),
+        [Sizes] = KeysFor("size", Sizes),
+        [Meet] = KeysFor("meet", Meet),
+        [Kinks] = KeysFor("kink", Kinks),
+    };
+
+    private static readonly Dictionary<string[], string[]> Translated = new();
+
+    private static string? translatedFor;
+
+    public static string[] Labels(string[] values)
+    {
+        if (!Keys.TryGetValue(values, out var keys))
+            return values;
+
+        var locale = Loc.Current.Id;
+        if (translatedFor != locale)
+        {
+            Translated.Clear();
+            translatedFor = locale;
+        }
+
+        if (!Translated.TryGetValue(values, out var labels))
+        {
+            labels = Array.ConvertAll(keys, key => Loc.T(key));
+            Translated[values] = labels;
+        }
+
+        return labels;
+    }
+
+    public static string Label(string[] values, string value)
+    {
+        var index = Array.IndexOf(values, value);
+        return index >= 0 ? Labels(values)[index] : value;
+    }
+
+    public static string[] Labels(string[] values, IEnumerable<string> chosen) =>
+        chosen.Select(value => Label(values, value)).ToArray();
+
+    private static string[] KeysFor(string group, string[] values) =>
+        Array.ConvertAll(values, value => "option." + group + "." + Slug(value));
+
+    private static string Slug(string value)
+    {
+        var slug = new System.Text.StringBuilder(value.Length);
+        var upper = false;
+        foreach (var c in value)
+        {
+            if (!char.IsLetterOrDigit(c))
+            {
+                upper = slug.Length > 0;
+                continue;
+            }
+
+            slug.Append(upper ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
+            upper = false;
+        }
+
+        return slug.ToString();
+    }
 }

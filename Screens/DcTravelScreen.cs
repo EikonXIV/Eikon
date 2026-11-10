@@ -89,11 +89,11 @@ internal sealed class DcTravelScreen : IScreen
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), backGlyph);
 
         var away = this.AwayCount;
-        var title = away > 0 ? $"DATA CENTER TRAVEL · +{away}" : "DATA CENTER TRAVEL";
+        var title = away > 0 ? Loc.T("dcTravel.title.away", away) : Loc.T("dcTravel.title");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
-        const string clear = "CLEAR";
+        var clear = Loc.T("dcTravel.clear");
         var clearSize = Ui.Measure(this.fonts.Eyebrow, clear);
         ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth) - pad - clearSize.X, midY - (clearSize.Y * 0.5f)));
         if (ImGui.InvisibleButton("##dct_clear", clearSize))
@@ -114,14 +114,14 @@ internal sealed class DcTravelScreen : IScreen
         ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextWrapped("Your home data center is always included. Pick others to browse alongside it, in any region.");
+            Ui.TextWrapped(Loc.T("dcTravel.intro"));
         ImGui.PopTextWrapPos();
         ImGui.Unindent(pad);
 
         if (!this.Ready)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(24f)));
-            Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, "Loading worlds…");
+            Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("dcTravel.loading"));
             return;
         }
 
@@ -134,12 +134,12 @@ internal sealed class DcTravelScreen : IScreen
             if (dcs.Count == 0)
                 continue;
 
-            var title = region == homeRegion ? $"{WorldCatalog.RegionName(region)} · Home" : WorldCatalog.RegionName(region);
+            var title = region == homeRegion ? Loc.T("dcTravel.region.home", WorldCatalog.RegionName(region)) : WorldCatalog.RegionName(region);
             this.BlockTop(title, pad);
             ImGui.Indent(pad);
             var clicked = this.kit.ChipFlow(
                 $"dct_{region}",
-                dcs.Select(d => d.Id == homeId ? $"{d.Name} · Home" : d.Name).ToList(),
+                dcs.Select(d => d.Id == homeId ? Loc.T("dcTravel.dc.home", d.Name) : d.Name).ToList(),
                 i => dcs[i].Id == homeId || this.draft.Contains(dcs[i].Id),
                 contentWidth,
                 showCheck: true,
@@ -162,7 +162,7 @@ internal sealed class DcTravelScreen : IScreen
     {
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
         var pos = ImGui.GetCursorScreenPos();
-        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y), Palette.TextSecondary.U32(), title.ToUpperInvariant());
+        Ui.TextAt(ImGui.GetWindowDrawList(), this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y), Palette.TextSecondary.U32(), Loc.Upper(title));
         ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(12f)));
     }
 
@@ -191,7 +191,7 @@ internal sealed class DcTravelScreen : IScreen
         var homeWidth = MathF.Floor(width * 0.4f);
         var goWidth = width - homeWidth;
         ImGui.SetCursorPos(new Vector2(pad, (avail.Y - height) + Ui.Px(15f)));
-        if (this.kit.SecondaryButton("##dct_home", "Home only", homeWidth))
+        if (this.kit.SecondaryButton("##dct_home", Loc.T("dcTravel.homeOnly"), homeWidth))
         {
             this.travel.Apply(Array.Empty<int>());
             this.Leave();
@@ -199,7 +199,7 @@ internal sealed class DcTravelScreen : IScreen
         }
 
         ImGui.SameLine(0f, gap);
-        if (this.kit.PrimaryButton("##dct_go", "Travel", goWidth))
+        if (this.kit.PrimaryButton("##dct_go", Loc.T("dcTravel.travel"), goWidth))
         {
             this.travel.Apply(this.draft);
             this.Leave();

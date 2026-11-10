@@ -61,18 +61,18 @@ internal sealed class UnlockScreen : IScreen
         this.DrawBadge(avail.X, FontAwesomeIcon.Lock.ToIconString(), this.theme.AccentTint, this.theme.AccentText);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, "Welcome back");
+        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, Loc.T("unlock.title"));
 
         var name = this.profiles.Mine?.DisplayName;
         if (!string.IsNullOrWhiteSpace(name))
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
-            Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextSecondary, $"Signed in as {name}");
+            Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextSecondary, Loc.T("unlock.signedInAs", name));
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         this.Wrapped(pad, contentWidth, Palette.TextMuted,
-            "Enter your passphrase to unlock your messages on this device.");
+            Loc.T("unlock.prompt"));
 
         // Passphrase field with a Show/Hide toggle beside it.
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
@@ -82,7 +82,7 @@ internal sealed class UnlockScreen : IScreen
         ImGui.SetCursorPosX(pad);
         var submitted = this.kit.MaskedField("##unlock_pass", ref this.passphrase, fieldWidth, this.reveal);
         ImGui.SameLine(0f, gap);
-        if (this.kit.SecondaryButton("##unlock_eye", this.reveal ? "Hide" : "Show", toggleWidth))
+        if (this.kit.SecondaryButton("##unlock_eye", Loc.T(this.reveal ? "unlock.hide" : "unlock.show"), toggleWidth))
             this.reveal = !this.reveal;
 
         if (this.error)
@@ -91,7 +91,7 @@ internal sealed class UnlockScreen : IScreen
             ImGui.SetCursorPosX(pad);
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-                ImGui.TextUnformatted("That passphrase didn't work. Try again.");
+                ImGui.TextUnformatted(Loc.T("unlock.error"));
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
@@ -99,24 +99,24 @@ internal sealed class UnlockScreen : IScreen
         var ready = this.passphrase.Length > 0;
         if (this.unlocking)
         {
-            this.kit.SecondaryButton("##unlock_busy", "Unlocking...", contentWidth);
+            this.kit.SecondaryButton("##unlock_busy", Loc.T("unlock.unlocking"), contentWidth);
         }
         else if (ready)
         {
-            if (this.kit.PrimaryButton("##unlock_go", "Unlock", contentWidth) || submitted)
+            if (this.kit.PrimaryButton("##unlock_go", Loc.T("unlock.submit"), contentWidth) || submitted)
                 this.BeginUnlock();
         }
         else
         {
-            this.kit.SecondaryButton("##unlock_off", "Unlock", contentWidth);
+            this.kit.SecondaryButton("##unlock_off", Loc.T("unlock.submit"), contentWidth);
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
         this.Wrapped(pad, contentWidth, Palette.TextMuted,
-            "Only you can unlock your chats. We can't reset your passphrase.");
+            Loc.T("unlock.note"));
 
         // Reset escape hatch, pinned near the bottom.
-        var linkText = "Forgot it? Reset and start over";
+        var linkText = Loc.T("unlock.forgot");
         var linkSize = Ui.Measure(this.fonts.Caption, linkText);
         ImGui.SetCursorPos(new Vector2((avail.X - linkSize.X) * 0.5f, avail.Y - Ui.Px(30f)));
         if (this.TextLink("##unlock_reset", linkText, this.theme.AccentText))
@@ -129,20 +129,20 @@ internal sealed class UnlockScreen : IScreen
         this.DrawBadge(avail.X, FontAwesomeIcon.Lock.ToIconString(), Palette.WithAlpha(Palette.Danger, 0.16f), Palette.Danger);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
-        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, "Reset and start over?");
+        Ui.CenteredText(avail.X, this.fonts.Title, Palette.TextPrimary, Loc.T("unlock.reset.title"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
         this.Wrapped(pad, contentWidth, Palette.TextSecondary,
-            "This erases your keys on this device and creates a new identity. Messages you already received can no longer be read, and you'll set a new passphrase. Your account stays the same.");
+            Loc.T("unlock.reset.body"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
         ImGui.SetCursorPosX(pad);
-        if (this.kit.DangerButton("##reset_go", "Reset everything", contentWidth))
+        if (this.kit.DangerButton("##reset_go", Loc.T("unlock.reset.confirm"), contentWidth))
             this.DoReset();
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         ImGui.SetCursorPosX(pad);
-        if (this.kit.SecondaryButton("##reset_cancel", "Cancel", contentWidth))
+        if (this.kit.SecondaryButton("##reset_cancel", Loc.T("unlock.reset.cancel"), contentWidth))
             this.confirmReset = false;
     }
 
@@ -208,7 +208,7 @@ internal sealed class UnlockScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, color))
         {
             ImGui.PushTextWrapPos(pad + width);
-            ImGui.TextWrapped(text);
+            Ui.TextWrapped(text);
             ImGui.PopTextWrapPos();
         }
     }

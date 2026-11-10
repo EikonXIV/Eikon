@@ -60,6 +60,8 @@ internal sealed class AuthService : IDisposable, ITokenProvider
 
     public string Message { get; private set; } = string.Empty;
 
+    public bool BrowserOpenFailed { get; private set; }
+
     // The current authorize URL, exposed so the UI can offer a manual "copy link" fallback if the
     // browser could not be launched automatically. Cleared when not authorizing.
     public string? AuthorizeUrl { get; private set; }
@@ -84,7 +86,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         this.cts = new CancellationTokenSource();
         this.Phase = AuthPhase.Authorizing;
         this.AuthorizeUrl = null;
-        this.Message = "Connecting...";
+        this.Message = Loc.T("auth.login.connecting");
         this.loginTask = Task.Run(() => this.RunLoginAsync(this.cts.Token));
     }
 
@@ -163,7 +165,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         if (this.Phase != AuthPhase.LoggedIn)
         {
             this.VerifyState = VerifyPhase.Failed;
-            this.VerifyMessage = "Sign in first.";
+            this.VerifyMessage = Loc.T("auth.verify.signInFirst");
             return;
         }
 
@@ -175,7 +177,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         this.verifyCts = new CancellationTokenSource();
         this.VerifyState = VerifyPhase.Authorizing;
         this.AuthorizeUrl = null;
-        this.VerifyMessage = "Connecting...";
+        this.VerifyMessage = Loc.T("auth.verify.connecting");
         this.verifyTask = Task.Run(() => this.RunVerifyAsync(this.verifyCts.Token));
     }
 
@@ -276,9 +278,8 @@ internal sealed class AuthService : IDisposable, ITokenProvider
             var start = await this.api.LoginStartAsync(ct);
             var url = start.AuthorizeUrl.ToString();
             this.AuthorizeUrl = url;
-            this.Message = OpenBrowser(url, this.log)
-                ? "Waiting for Discord..."
-                : "Couldn't open your browser. Copy the sign-in link below.";
+            this.BrowserOpenFailed = !OpenBrowser(url, this.log);
+            this.Message = Loc.T(this.BrowserOpenFailed ? "auth.login.browserFailed" : "auth.login.waiting");
 
             while (!ct.IsCancellationRequested)
             {
@@ -289,7 +290,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
                     this.store.Set(poll.Tokens);
                     this.AuthorizeUrl = null;
                     this.Phase = AuthPhase.LoggedIn;
-                    this.Message = "Signed in";
+                    this.Message = Loc.T("auth.login.done");
                     this.RouteAfterAuth();
                     return;
                 }
@@ -297,7 +298,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
                 if (poll.Status == Status.Expired)
                 {
                     this.Phase = AuthPhase.Failed;
-                    this.Message = "Sign-in expired. Try again.";
+                    this.Message = Loc.T("auth.login.expired");
                     return;
                 }
             }
@@ -310,7 +311,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         {
             this.log.Error(ex, "Discord login failed");
             this.Phase = AuthPhase.Failed;
-            this.Message = "Couldn't reach the server.";
+            this.Message = Loc.T("auth.login.unreachable");
         }
     }
 
@@ -322,7 +323,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
             if (string.IsNullOrEmpty(access))
             {
                 this.VerifyState = VerifyPhase.Failed;
-                this.VerifyMessage = "Sign in first.";
+                this.VerifyMessage = Loc.T("auth.verify.signInFirst");
                 return;
             }
 
@@ -330,8 +331,8 @@ internal sealed class AuthService : IDisposable, ITokenProvider
             var url = start.AuthorizeUrl.ToString();
             this.AuthorizeUrl = url;
             this.VerifyMessage = OpenBrowser(url, this.log)
-                ? "Waiting for XIVAuth..."
-                : "Couldn't open your browser. Copy the link below.";
+                ? Loc.T("auth.verify.waiting")
+                : Loc.T("auth.verify.browserFailed");
 
             while (!ct.IsCancellationRequested)
             {
@@ -341,14 +342,14 @@ internal sealed class AuthService : IDisposable, ITokenProvider
                 {
                     this.IsVerified = poll.Verified ?? false;
                     this.VerifyState = VerifyPhase.Done;
-                    this.VerifyMessage = this.IsVerified ? "Character verified" : "No verified character found.";
+                    this.VerifyMessage = Loc.T(this.IsVerified ? "auth.verify.done" : "auth.verify.none");
                     return;
                 }
 
                 if (poll.Status == Status.Expired)
                 {
                     this.VerifyState = VerifyPhase.Failed;
-                    this.VerifyMessage = "Verification expired. Try again.";
+                    this.VerifyMessage = Loc.T("auth.verify.expired");
                     return;
                 }
             }
@@ -361,7 +362,7 @@ internal sealed class AuthService : IDisposable, ITokenProvider
         {
             this.log.Error(ex, "XIVAuth verification failed");
             this.VerifyState = VerifyPhase.Failed;
-            this.VerifyMessage = "Couldn't reach the server.";
+            this.VerifyMessage = Loc.T("auth.verify.unreachable");
         }
     }
 

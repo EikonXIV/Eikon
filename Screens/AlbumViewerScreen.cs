@@ -61,7 +61,7 @@ internal sealed class AlbumViewerScreen : IScreen
                 if (photos.Count == 0)
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(48f)));
-                    this.kit.EmptyState(FontAwesomeIcon.Images.ToIconString(), "No photos", "This album is empty for now.", contentWidth);
+                    this.kit.EmptyState(FontAwesomeIcon.Images.ToIconString(), Loc.T("albumViewer.empty.title"), Loc.T("albumViewer.empty.body"), contentWidth);
                 }
                 else
                 {
@@ -103,7 +103,7 @@ internal sealed class AlbumViewerScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), back);
 
         var name = this.selection.ProfileDisplayName ?? string.Empty;
-        var title = (name.Length > 0 ? $"{name} · {this.selection.AlbumName}" : this.selection.AlbumName).ToUpperInvariant();
+        var title = Loc.Upper(name.Length > 0 ? $"{name} · {this.selection.AlbumName}" : this.selection.AlbumName);
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -128,7 +128,7 @@ internal sealed class AlbumViewerScreen : IScreen
         else
         {
             var center = pos + (size * 0.5f);
-            const string label = "Loading...";
+            var label = Loc.T("albumViewer.loading");
             var ls = Ui.Measure(this.fonts.Caption, label);
             Ui.TextAt(drawList, this.fonts.Caption, center - (ls * 0.5f), Palette.TextMuted.U32(), label);
         }

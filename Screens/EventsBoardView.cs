@@ -77,7 +77,7 @@ internal sealed class EventsBoardView
 
         if (this.events.Reloading && this.events.Events.Count == 0)
         {
-            this.DrawStatus(contentWidth, "Finding events…");
+            this.DrawStatus(contentWidth, Loc.T("eventsBoard.status.finding"));
             return;
         }
 
@@ -92,7 +92,7 @@ internal sealed class EventsBoardView
         if (this.events.HasMore)
         {
             if (this.events.Loading)
-                this.DrawStatus(contentWidth, "Loading more…");
+                this.DrawStatus(contentWidth, Loc.T("eventsBoard.status.loadingMore"));
             else if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - Ui.Px(240f))
                 this.events.LoadMore();
         }
@@ -107,16 +107,18 @@ internal sealed class EventsBoardView
         var y = origin.Y + Ui.Px(14f);
 
         var eyebrowH = Ui.Measure(this.fonts.Eyebrow, "X").Y;
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(left, y), Palette.TextSecondary.U32(), "HAPPENING");
-        var listedW = Ui.Measure(this.fonts.Eyebrow, "LISTED").X;
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(right - listedW, y), Palette.TextSecondary.U32(), "LISTED");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(left, y), Palette.TextSecondary.U32(), Loc.T("eventsBoard.eyebrow.happening"));
+        var listed = Loc.T("eventsBoard.eyebrow.listed");
+        var listedW = Ui.Measure(this.fonts.Eyebrow, listed).X;
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(right - listedW, y), Palette.TextSecondary.U32(), listed);
         y += eyebrowH + Ui.Px(4f);
 
         var titleH = Ui.Measure(this.fonts.SerifTitle, "Events").Y;
-        var leadW = Ui.Measure(this.fonts.SerifTitle, "Events ").X;
-        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(left, y), Palette.TextPrimary.U32(), "Events ");
-        Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(left + leadW, y), Palette.TextSecondary.U32(), "on the board");
-        var count = this.events.Events.Count.ToString("N0");
+        var (lead, tail) = Loc.Tones("eventsBoard.title");
+        var leadW = Ui.Measure(this.fonts.SerifTitle, lead).X;
+        Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(left, y), Palette.TextPrimary.U32(), lead);
+        Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(left + leadW, y), Palette.TextSecondary.U32(), tail);
+        var count = this.events.Events.Count.ToString("N0", Loc.Culture);
         var countSize = Ui.Measure(this.fonts.Count, count);
         Ui.TextAt(dl, this.fonts.Count, new Vector2(right - countSize.X, (y + titleH) - countSize.Y - Ui.Px(1f)), Palette.TextPrimary.U32(), count);
         y += titleH + Ui.Px(16f);
@@ -129,9 +131,9 @@ internal sealed class EventsBoardView
         var cellW = segW / 3f;
         var cells = new[]
         {
-            ("BROWSE", (int?)null),
-            ("HOSTING", this.events.HostingCount),
-            ("SAVED", this.events.SavedCount),
+            (Loc.T("eventsBoard.tab.browse"), (int?)null),
+            (Loc.T("eventsBoard.tab.hosting"), this.events.HostingCount),
+            (Loc.T("eventsBoard.tab.saved"), this.events.SavedCount),
         };
         dl.AddRect(new Vector2(segX, y), new Vector2(segX + segW, y + segH), Palette.BorderStrong.U32(), 0f, ImDrawFlags.None, 1f);
         for (var b = 1; b < 3; b++)
@@ -146,10 +148,9 @@ internal sealed class EventsBoardView
                 this.events.SetTab(EventService.TabOrder[i]);
             if (active)
                 dl.AddRectFilled(new Vector2(cx0 + Ui.Px(2f), y + Ui.Px(2f)), new Vector2(cx0 + cellW - Ui.Px(2f), y + segH - Ui.Px(2f)), Palette.TextPrimary.U32(), 0f);
-            var label = cells[i].Item2 is { } n ? $"{cells[i].Item1}  {n:00}" : cells[i].Item1;
-            var ts = Ui.Measure(this.fonts.Eyebrow, label);
+            var label = cells[i].Item2 is { } n ? Loc.T("eventsBoard.tab.count", cells[i].Item1, n) : cells[i].Item1;
             var col = (active ? Palette.Paper : Palette.TextSecondary).U32();
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx0 + ((cellW - ts.X) * 0.5f), y + ((segH - ts.Y) * 0.5f)), col, label);
+            Ui.TextFitCentered(dl, this.fonts.Eyebrow, new Vector2(cx0, y), new Vector2(cellW, segH), col, label, Ui.Px(8f));
         }
 
         ImGui.SetCursorScreenPos(new Vector2(origin.X, y + segH + Ui.Px(14f)));
@@ -167,7 +168,7 @@ internal sealed class EventsBoardView
         var tabX = left;
         foreach (var scope in EventService.ScopeOrder)
         {
-            var label = scope.ToString().ToUpperInvariant();
+            var label = Loc.T("tier." + scope.ToString().ToLowerInvariant());
             var size = Ui.Measure(this.fonts.Eyebrow, label);
             ImGui.SetCursorScreenPos(new Vector2(tabX, y));
             if (ImGui.InvisibleButton($"##escope_{scope}", new Vector2(size.X, tabH)))
@@ -183,14 +184,15 @@ internal sealed class EventsBoardView
         // Right group: key (code lookup) | + HOST (create).
         var plus = FontAwesomeIcon.Plus.ToIconString();
         var plusW = Ui.Measure(this.fonts.Icon, plus).X;
-        var hostW = Ui.Measure(this.fonts.Eyebrow, "HOST").X;
+        var host = Loc.T("eventsBoard.host");
+        var hostW = Ui.Measure(this.fonts.Eyebrow, host).X;
         var hostGroupW = plusW + Ui.Px(6f) + hostW;
         var hx = right - hostGroupW;
         ImGui.SetCursorScreenPos(new Vector2(hx, y - Ui.Px(3f)));
         var hostClicked = ImGui.InvisibleButton("##ehost", new Vector2(hostGroupW, tabH + Ui.Px(6f)));
         var hostCol = (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32();
         Ui.TextAt(dl, this.fonts.Icon, new Vector2(hx, y), hostCol, plus);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(hx + plusW + Ui.Px(6f), y), hostCol, "HOST");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(hx + plusW + Ui.Px(6f), y), hostCol, host);
         if (hostClicked)
             this.OpenCreate();
 
@@ -241,12 +243,12 @@ internal sealed class EventsBoardView
                     ImGui.SetScrollX(0f);
                 this.kindNudge = 0;
 
-                this.Chip("All", this.events.Kinds.Count == 0, chipH, () => this.events.ClearKinds());
+                this.Chip(Loc.T("eventsBoard.kind.all"), this.events.Kinds.Count == 0, chipH, () => this.events.ClearKinds());
                 foreach (var k in KindRow)
                 {
                     ImGui.SameLine(0f, Ui.Px(8f));
                     var kind = k.Kind;
-                    this.Chip(k.Chip, this.events.Kinds.Contains(kind), chipH, () => this.events.ToggleKind(kind));
+                    this.Chip(Loc.T("eventsBoard.kind." + kind.ToString().ToLowerInvariant()), this.events.Kinds.Contains(kind), chipH, () => this.events.ToggleKind(kind));
                 }
 
                 this.kindScrollX = ImGui.GetScrollX();
@@ -309,7 +311,7 @@ internal sealed class EventsBoardView
             if (dayKey != currentDay)
             {
                 currentDay = dayKey;
-                this.DrawDayHeader(dl, width, pad, EventFormat.DayLabel(local), local.ToString("MMM dd").ToUpperInvariant());
+                this.DrawDayHeader(dl, width, pad, EventFormat.DayLabel(local), Loc.Upper(EventFormat.MonthDay(local)));
             }
 
             this.DrawCard(dl, e, width, pad);
@@ -323,7 +325,7 @@ internal sealed class EventsBoardView
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + Ui.Px(8f));
         var pos = ImGui.GetCursorScreenPos();
         var h = Ui.Measure(this.fonts.Eyebrow, day).Y;
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y), Palette.TextSecondary.U32(), day.ToUpperInvariant());
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(pos.X + pad, pos.Y), Palette.TextSecondary.U32(), Loc.Upper(day));
         var stampW = Ui.Measure(this.fonts.Eyebrow, stamp).X;
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2((pos.X + width) - pad - stampW, pos.Y), Palette.TextSecondary.U32(), stamp);
         ImGui.Dummy(new Vector2(width, h + Ui.Px(10f)));
@@ -375,31 +377,34 @@ internal sealed class EventsBoardView
         Ui.TextAt(dl, this.fonts.Count, new Vector2(timeX, iy), Palette.TextPrimary.U32(), clock);
         var bigH = Ui.Measure(this.fonts.Count, clock).Y;
         var subY = iy + bigH + Ui.Px(4f);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(timeX, subY), Palette.TextSecondary.U32(), e.HostTzLabel.ToUpperInvariant());
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(timeX, subY), Palette.TextSecondary.U32(), Loc.Upper(e.HostTzLabel));
         var subH = Ui.Measure(this.fonts.Eyebrow, "X").Y;
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(timeX, subY + subH + Ui.Px(3f)), Palette.TextMuted.U32(), EventFormat.Duration(e.DurationMins).ToUpperInvariant());
+        Ui.TextFitAt(dl, this.fonts.Eyebrow, new Vector2(timeX, subY + subH + Ui.Px(3f)), Ui.Px(82f), Palette.TextMuted.U32(), Loc.Upper(EventFormat.Duration(e.DurationMins)));
 
         var textX = pos.X + pad + Ui.Px(90f);
         var textRight = (pos.X + width) - pad;
         var textW = textRight - textX;
 
-        var eyebrow = EventFormat.KindLabel(e.Kind).ToUpperInvariant();
+        var eyebrow = Loc.Upper(EventFormat.KindLabel(e.Kind));
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX, iy), Palette.TextSecondary.U32(), eyebrow);
         var markX = textX + Ui.Measure(this.fonts.Eyebrow, eyebrow).X + Ui.Px(8f);
         if (cancelled)
         {
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.Danger.U32(), "CANCELLED");
-            markX += Ui.Measure(this.fonts.Eyebrow, "CANCELLED").X + Ui.Px(6f);
+            var mark = Loc.T("eventsBoard.badge.cancelled");
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.Danger.U32(), mark);
+            markX += Ui.Measure(this.fonts.Eyebrow, mark).X + Ui.Px(6f);
         }
         else if (ended)
         {
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.TextMuted.U32(), "ENDED");
-            markX += Ui.Measure(this.fonts.Eyebrow, "ENDED").X + Ui.Px(6f);
+            var mark = Loc.T("eventsBoard.badge.ended");
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.TextMuted.U32(), mark);
+            markX += Ui.Measure(this.fonts.Eyebrow, mark).X + Ui.Px(6f);
         }
         if (e.Rating == EventRatingEnum.Ad)
         {
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.Danger.U32(), "18+");
-            markX += Ui.Measure(this.fonts.Eyebrow, "18+").X + Ui.Px(6f);
+            var mark = Loc.T("eventsBoard.badge.adult");
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(markX, iy), Palette.Danger.U32(), mark);
+            markX += Ui.Measure(this.fonts.Eyebrow, mark).X + Ui.Px(6f);
         }
         if (e.Visibility == Visibility.Private)
         {
@@ -450,14 +455,14 @@ internal sealed class EventsBoardView
         ImGui.Dummy(new Vector2(0f, Ui.Px(44f)));
         var (headline, body) = this.events.Tab switch
         {
-            Tab.Hosting => ("Nothing hosted yet", "Put an event on the board and it shows here."),
-            Tab.Saved => ("No saved events", "Save an event and it shows here for quick access."),
-            _ => ("Nothing on right now", "Widen the scope, or put something on the board yourself."),
+            Tab.Hosting => ("eventsBoard.empty.hosting.title", "eventsBoard.empty.hosting.body"),
+            Tab.Saved => ("eventsBoard.empty.saved.title", "eventsBoard.empty.saved.body"),
+            _ => ("eventsBoard.empty.browse.title", "eventsBoard.empty.browse.body"),
         };
-        this.kit.EmptyState(FontAwesomeIcon.CalendarAlt.ToIconString(), headline, body, width);
+        this.kit.EmptyState(FontAwesomeIcon.CalendarAlt.ToIconString(), Loc.T(headline), Loc.T(body), width);
         var buttonWidth = Ui.Px(180f);
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-        if (this.kit.PrimaryButton("##empty_host", "Create an event", buttonWidth))
+        if (this.kit.PrimaryButton("##empty_host", Loc.T("eventsBoard.empty.action"), buttonWidth))
             this.OpenCreate();
     }
 
@@ -477,9 +482,8 @@ internal sealed class EventsBoardView
         {
             case EventVenueEnum.Housing:
             {
-                var room = v.Room is > 0 ? $" · Room {v.Room}" : string.Empty;
                 var world = v.WorldId is { } w ? this.WorldOnly((int)w) : string.Empty;
-                return $"{EventCatalog.DistrictLabel(v.District ?? HousingDistrictEnum.Mist)} W{v.Ward} P{v.Plot}{room} · {world}".Trim(' ', '·');
+                return EventFormat.HousingLine(EventCatalog.DistrictLabel(v.District ?? HousingDistrictEnum.Mist), v.Ward, v.Plot, v.Room, world);
             }
 
             case EventVenueEnum.OpenWorld:
@@ -492,7 +496,7 @@ internal sealed class EventsBoardView
             }
 
             default:
-                return string.IsNullOrEmpty(v.DiscordNote) ? "Discord voice" : $"Discord · {v.DiscordNote}";
+                return string.IsNullOrEmpty(v.DiscordNote) ? Loc.T("eventsBoard.location.discordVoice") : Loc.T("eventsBoard.location.discordNote", v.DiscordNote);
         }
     }
 

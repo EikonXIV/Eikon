@@ -86,7 +86,7 @@ internal sealed class OnboardingScreen : IScreen
         ImGui.SetCursorPos(new Vector2(pad, Ui.Px(16f)));
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted($"STEP {this.step + 1} OF {StepCount}");
+            ImGui.TextUnformatted(Loc.T("onboarding.step", this.step + 1, StepCount));
         const string wordmark = "EIKON";
         var wordmarkWidth = Ui.Measure(this.fonts.Eyebrow, wordmark).X;
         ImGui.SetCursorPos(new Vector2(avail.X - pad - wordmarkWidth, Ui.Px(16f)));
@@ -132,11 +132,11 @@ internal sealed class OnboardingScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(48f)));
         this.kit.CenteredFramedIcon(fullWidth, FontAwesomeIcon.Magic.ToIconString(), Ui.Px(52f));
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        Ui.CenteredText(fullWidth, this.fonts.Title, Palette.TextPrimary, "Welcome to Eikon");
+        Ui.CenteredText(fullWidth, this.fonts.Title, Palette.TextPrimary, Loc.T("onboarding.signIn.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextPrimary, "18+ dating & social for FFXIV");
+        Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextPrimary, Loc.T("onboarding.signIn.tagline"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, "We use Discord to sign in. We never see your password.");
+        Ui.CenteredText(fullWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("onboarding.signIn.discord"));
 
         if (this.auth.Phase != AuthPhase.LoggedOut)
         {
@@ -152,10 +152,10 @@ internal sealed class OnboardingScreen : IScreen
             // Fallback when the browser could not be launched automatically: let the user copy the
             // sign-in link and open it themselves. Polling keeps running, so the sign-in still completes.
             if (this.auth.Phase == AuthPhase.Authorizing && this.auth.AuthorizeUrl is { Length: > 0 } url &&
-                this.auth.Message.StartsWith("Couldn't", StringComparison.Ordinal))
+                this.auth.BrowserOpenFailed)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-                if (this.kit.SecondaryButton("##ob_copylink", "Copy sign-in link", fullWidth))
+                if (this.kit.SecondaryButton("##ob_copylink", Loc.T("onboarding.signIn.copyLink"), fullWidth))
                     ImGui.SetClipboardText(url);
             }
         }
@@ -163,17 +163,17 @@ internal sealed class OnboardingScreen : IScreen
 
     private void DrawPassphrase(float contentWidth)
     {
-        this.kit.SectionLabel("Set a passphrase");
+        this.kit.SectionLabel(Loc.T("onboarding.passphrase.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.kit.PasswordField("##ob_pass", ref this.passphrase, contentWidth, ref this.revealPassphrase, "At least 8 characters");
+        this.kit.PasswordField("##ob_pass", ref this.passphrase, contentWidth, ref this.revealPassphrase, Loc.T("onboarding.passphrase.hint"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         var strength = Math.Min(this.passphrase.Length / 14f, 1f);
         this.kit.Meter(strength);
         ImGui.Dummy(new Vector2(0f, Ui.Px(5f)));
         var (label, color) = strength < 0.4f
-            ? ("Weak", Palette.TextMuted)
-            : strength < 0.8f ? ("Okay", this.theme.AccentText) : ("Strong", this.theme.AccentText);
+            ? (Loc.T("onboarding.passphrase.weak"), Palette.TextMuted)
+            : strength < 0.8f ? (Loc.T("onboarding.passphrase.okay"), this.theme.AccentText) : (Loc.T("onboarding.passphrase.strong"), this.theme.AccentText);
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, color))
             ImGui.TextUnformatted(label);
@@ -181,31 +181,31 @@ internal sealed class OnboardingScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextWrapped("Only you can unlock your chats. We can't reset it, so keep it safe.");
+            Ui.TextWrapped(Loc.T("onboarding.passphrase.note"));
     }
 
     private void DrawIdentity(float contentWidth)
     {
-        this.kit.SectionLabel("Display name");
+        this.kit.SectionLabel(Loc.T("onboarding.identity.displayName"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        this.kit.TextField("##ob_name", ref this.displayName, "How friends know you", contentWidth, Limits.DisplayNameMax);
+        this.kit.TextField("##ob_name", ref this.displayName, Loc.T("onboarding.identity.displayName.hint"), contentWidth, Limits.DisplayNameMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Pronouns");
+        this.kit.SectionLabel(Loc.T("onboarding.identity.pronouns"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var p = this.kit.ChipFlow("ob_pn", Options.Pronouns, i => i == this.pronoun, contentWidth, showCheck: false);
+        var p = this.kit.ChipFlow("ob_pn", Options.Labels(Options.Pronouns), i => i == this.pronoun, contentWidth, showCheck: false);
         if (p >= 0)
             this.pronoun = p;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Gender");
+        this.kit.SectionLabel(Loc.T("onboarding.identity.gender"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var g = this.kit.ChipFlow("ob_gn", Options.Genders, i => i == this.gender, contentWidth, showCheck: false);
+        var g = this.kit.ChipFlow("ob_gn", Options.Labels(Options.Genders), i => i == this.gender, contentWidth, showCheck: false);
         if (g >= 0)
             this.gender = g;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Age");
+        this.kit.SectionLabel(Loc.T("onboarding.identity.age"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.age = this.kit.Stepper("##ob_age", this.age, 18, 99);
 
@@ -215,14 +215,14 @@ internal sealed class OnboardingScreen : IScreen
 
     private void DrawWorldPicker(float contentWidth)
     {
-        this.kit.SectionLabel("Data center");
+        this.kit.SectionLabel(Loc.T("onboarding.identity.dataCenter"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.catalog.EnsureLoaded();
         if (!this.catalog.Ready)
         {
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted("Loading worlds...");
+                ImGui.TextUnformatted(Loc.T("onboarding.identity.loadingWorlds"));
             return;
         }
 
@@ -237,7 +237,7 @@ internal sealed class OnboardingScreen : IScreen
         if (this.selectedDc >= 0 && this.selectedDc < dcs.Count)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-            this.kit.SectionLabel("World");
+            this.kit.SectionLabel(Loc.T("onboarding.identity.world"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             var worlds = dcs[this.selectedDc].Worlds;
             var w = this.kit.ChipFlow("ob_world", worlds.Select(x => x.Name).ToArray(), i => worlds[i].Id == this.selectedWorldId, contentWidth, showCheck: false);
@@ -248,12 +248,12 @@ internal sealed class OnboardingScreen : IScreen
 
     private void DrawVibe(float contentWidth)
     {
-        this.kit.SectionLabel($"Body / tribe · up to {Limits.TribesMax}");
+        this.kit.SectionLabel(Loc.T("onboarding.vibe.tribe", Limits.TribesMax));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.Multi("ob_tribe", Options.Tribes, this.tribes, contentWidth, Limits.TribesMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel($"Race · up to {Limits.RacesMax}");
+        this.kit.SectionLabel(Loc.T("onboarding.vibe.race", Limits.RacesMax));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         this.Multi("ob_race", Options.Races, this.races, contentWidth, Limits.RacesMax);
         if (!this.races.Any(r => r))
@@ -261,13 +261,13 @@ internal sealed class OnboardingScreen : IScreen
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted("Pick at least one to continue.");
+                ImGui.TextUnformatted(Loc.T("onboarding.vibe.raceRequired"));
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Looking for");
+        this.kit.SectionLabel(Loc.T("onboarding.vibe.lookingFor"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var l = this.kit.ChipFlow("ob_lf", Options.LookingFor, i => this.lookingFor[i], contentWidth, showCheck: false);
+        var l = this.kit.ChipFlow("ob_lf", Options.Labels(Options.LookingFor), i => this.lookingFor[i], contentWidth, showCheck: false);
         if (l >= 0)
             this.lookingFor[l] = !this.lookingFor[l];
     }
@@ -279,21 +279,21 @@ internal sealed class OnboardingScreen : IScreen
             this.nsfwEnabled = false;
             using (this.fonts.SerifName.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                ImGui.TextUnformatted("After dark");
+                ImGui.TextUnformatted(Loc.T("onboarding.afterDark.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextWrapped("After dark isn't available for Lalafell profiles. Continue to add photos.");
+                Ui.TextWrapped(Loc.T("onboarding.afterDark.lalafell"));
             return;
         }
 
         using (this.fonts.SerifName.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted("Enable after dark");
+            ImGui.TextUnformatted(Loc.T("onboarding.afterDark.enable"));
         ImGui.SameLine(0f, Ui.Px(6f));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted("(18+)");
+            ImGui.TextUnformatted(Loc.T("onboarding.afterDark.ageTag"));
         ImGui.SameLine();
         ImGui.SetCursorPosX(Ui.Px(16f) + contentWidth - Ui.Px(36f));
         this.nsfwEnabled = this.kit.Toggle("##ob_nsfw", this.nsfwEnabled);
@@ -301,64 +301,64 @@ internal sealed class OnboardingScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextWrapped("Only shown to people who have NSFW turned on.");
+            Ui.TextWrapped(Loc.T("onboarding.afterDark.note"));
 
         if (!this.nsfwEnabled)
             return;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        this.kit.SectionLabel("Position");
+        this.kit.SectionLabel(Loc.T("onboarding.afterDark.position"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var pos = this.kit.ChipFlow("ob_pos", Options.Positions, i => i == this.position, contentWidth, showCheck: false);
+        var pos = this.kit.ChipFlow("ob_pos", Options.Labels(Options.Positions), i => i == this.position, contentWidth, showCheck: false);
         if (pos >= 0)
             this.position = pos;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Role");
+        this.kit.SectionLabel(Loc.T("onboarding.afterDark.role"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var ro = this.kit.ChipFlow("ob_role", Options.Roles, i => i == this.role, contentWidth, showCheck: false);
+        var ro = this.kit.ChipFlow("ob_role", Options.Labels(Options.Roles), i => i == this.role, contentWidth, showCheck: false);
         if (ro >= 0)
             this.role = ro;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Size (optional)");
+        this.kit.SectionLabel(Loc.T("onboarding.afterDark.size"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var sz = this.kit.ChipFlow("ob_size", Options.Sizes, i => i == this.size, contentWidth, showCheck: false);
+        var sz = this.kit.ChipFlow("ob_size", Options.Labels(Options.Sizes), i => i == this.size, contentWidth, showCheck: false);
         if (sz >= 0)
             this.size = sz;
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Meet");
+        this.kit.SectionLabel(Loc.T("onboarding.afterDark.meet"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var m = this.kit.ChipFlow("ob_meet", Options.Meet, i => this.meet[i], contentWidth, showCheck: false);
+        var m = this.kit.ChipFlow("ob_meet", Options.Labels(Options.Meet), i => this.meet[i], contentWidth, showCheck: false);
         if (m >= 0)
             this.meet[m] = !this.meet[m];
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.kit.SectionLabel("Kinks");
+        this.kit.SectionLabel(Loc.T("onboarding.afterDark.kinks"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
-        var k = this.kit.ChipFlow("ob_kink", Options.Kinks, i => this.kinks[i], contentWidth, showCheck: false);
+        var k = this.kit.ChipFlow("ob_kink", Options.Labels(Options.Kinks), i => this.kinks[i], contentWidth, showCheck: false);
         if (k >= 0)
             this.kinks[k] = !this.kinks[k];
     }
 
     private void DrawPhotos(float contentWidth)
     {
-        this.kit.SectionLabel("Add photos");
+        this.kit.SectionLabel(Loc.T("onboarding.photos.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.photos.DrawGrid(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted("Up to 6, reviewed before they go live.");
+            ImGui.TextUnformatted(Loc.T("onboarding.photos.note"));
 
         if (this.saveError is { } error)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-                ImGui.TextWrapped(error);
+                Ui.TextWrapped(Loc.T(error));
         }
     }
 
@@ -383,15 +383,15 @@ internal sealed class OnboardingScreen : IScreen
             switch (this.auth.Phase)
             {
                 case AuthPhase.LoggedIn:
-                    if (this.kit.PrimaryButton("##ob_continue", "Continue", forwardWidth))
+                    if (this.kit.PrimaryButton("##ob_continue", Loc.T("onboarding.nav.continue"), forwardWidth))
                         this.step = 1;
                     break;
                 case AuthPhase.Authorizing:
-                    if (this.kit.SecondaryButton("##ob_cancel", "Cancel sign-in", forwardWidth))
+                    if (this.kit.SecondaryButton("##ob_cancel", Loc.T("onboarding.nav.cancelSignIn"), forwardWidth))
                         this.auth.Cancel();
                     break;
                 default:
-                    if (this.kit.PrimaryButton("##ob_signin", "Continue with Discord", forwardWidth))
+                    if (this.kit.PrimaryButton("##ob_signin", Loc.T("onboarding.nav.discord"), forwardWidth))
                         this.auth.StartLogin();
                     break;
             }
@@ -402,11 +402,11 @@ internal sealed class OnboardingScreen : IScreen
         var last = this.step == StepCount - 1;
         if (this.finalizing)
         {
-            this.kit.SecondaryButton("##ob_forward_busy", "Saving…", forwardWidth);
+            this.kit.SecondaryButton("##ob_forward_busy", Loc.T("onboarding.nav.saving"), forwardWidth);
         }
         else if (this.CanAdvance())
         {
-            if (this.kit.PrimaryButton("##ob_forward", last ? (this.saveError is null ? "Finalize" : "Try again") : "Continue", forwardWidth))
+            if (this.kit.PrimaryButton("##ob_forward", Loc.T(last ? (this.saveError is null ? "onboarding.nav.finalize" : "onboarding.nav.retry") : "onboarding.nav.continue"), forwardWidth))
             {
                 if (last)
                     this.Complete();
@@ -416,7 +416,7 @@ internal sealed class OnboardingScreen : IScreen
         }
         else
         {
-            this.kit.SecondaryButton("##ob_forward_off", last ? "Finalize" : "Continue", forwardWidth);
+            this.kit.SecondaryButton("##ob_forward_off", Loc.T(last ? "onboarding.nav.finalize" : "onboarding.nav.continue"), forwardWidth);
         }
     }
 
@@ -436,7 +436,7 @@ internal sealed class OnboardingScreen : IScreen
         drawList.AddLine(new Vector2(cx + r, cy - r), new Vector2(cx, cy), color, Ui.Px(1.5f));
         drawList.AddLine(new Vector2(cx, cy), new Vector2(cx + r, cy + r), color, Ui.Px(1.5f));
 
-        const string label = "Back";
+        var label = Loc.T("onboarding.nav.back");
         var labelSize = Ui.Measure(this.fonts.Label, label);
         Ui.TextAt(drawList, this.fonts.Label, new Vector2(cx + r + Ui.Px(9f), cy - (labelSize.Y * 0.5f)), color, label);
         return clicked;
@@ -477,7 +477,7 @@ internal sealed class OnboardingScreen : IScreen
                 if (await this.profiles.SaveAsync(request, System.Threading.CancellationToken.None))
                     this.router.Navigate(Screen.Grid);
                 else
-                    this.saveError = "Couldn't save your profile. Check your connection and try again.";
+                    this.saveError = "onboarding.saveFailed";
             }
             finally
             {
@@ -490,7 +490,7 @@ internal sealed class OnboardingScreen : IScreen
     private void Multi(string id, string[] labels, bool[] flags, float contentWidth, int max)
     {
         var atCap = flags.Count(f => f) >= max;
-        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth, showCheck: false, disabled: atCap ? i => !flags[i] : null);
+        var hit = this.kit.ChipFlow(id, Options.Labels(labels), i => flags[i], contentWidth, showCheck: false, disabled: atCap ? i => !flags[i] : null);
         if (hit >= 0 && (flags[hit] || !atCap))
             flags[hit] = !flags[hit];
     }

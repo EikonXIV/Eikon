@@ -132,7 +132,7 @@ internal sealed class OrbWindow : Window
         if (ImGui.IsWindowHovered())
         {
             using (this.fonts.Caption.Push())
-                ImGui.SetTooltip("Tap to open. Right-click to close.");
+                ImGui.SetTooltip(Loc.T("orb.tooltip"));
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                 this.pressPos = ImGui.GetIO().MousePos;
             if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && Vector2.Distance(ImGui.GetIO().MousePos, this.pressPos) < Ui.Px(6f))

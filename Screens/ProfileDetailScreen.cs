@@ -70,7 +70,7 @@ internal sealed class ProfileDetailScreen : IScreen
         {
             ImGui.SetCursorPos(new Vector2(0f, headerHeight + Ui.Px(120f)));
             Ui.CenteredText(avail.X, this.fonts.Caption, Palette.TextMuted,
-                this.details.Failed ? "Couldn't load this profile." : "Loading profile…");
+                Loc.T(this.details.Failed ? "profileDetail.loadFailed" : "profileDetail.loading"));
             return;
         }
 
@@ -119,7 +119,7 @@ internal sealed class ProfileDetailScreen : IScreen
         // previously viewed member, and their world must not be stitched onto this one's name.
         var name = this.selection.ProfileDisplayName is { Length: > 0 } picked ? picked : loaded?.DisplayName ?? string.Empty;
         var handle = Handle(name, loaded?.World);
-        var title = $"PROFILE · {handle}";
+        var title = Loc.T("profileDetail.title", handle);
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -186,7 +186,7 @@ internal sealed class ProfileDetailScreen : IScreen
             Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(ox, restY), Palette.Signal.U32(), rest);
         Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(ox, firstY), Palette.TextPrimary.U32(), first);
 
-        var status = this.current.Online ? "ONLINE NOW" : string.Empty;
+        var status = this.current.Online ? Loc.T("profileDetail.online") : string.Empty;
         if (status.Length > 0)
         {
             var eH = Ui.Measure(this.fonts.Eyebrow, status).Y;
@@ -231,7 +231,7 @@ internal sealed class ProfileDetailScreen : IScreen
         if (!string.IsNullOrWhiteSpace(this.current.Bio))
         {
             this.SectionTop();
-            this.Eyebrow("About");
+            this.Eyebrow(Loc.T("profileDetail.section.about"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.WithAlpha(Palette.TextPrimary, 0.9f)))
@@ -244,10 +244,10 @@ internal sealed class ProfileDetailScreen : IScreen
         }
 
         if (this.current.Interests.Count > 0)
-            this.TagSection(fullWidth, innerWidth, "Interests", this.current.Interests.ToArray(), signal: false);
+            this.TagSection(fullWidth, innerWidth, Loc.T("profileDetail.section.interests"), Options.Labels(Options.Interests, this.current.Interests), signal: false);
 
         if (this.current.LookingFor.Count > 0)
-            this.TagSection(fullWidth, innerWidth, "Looking for", ProfileMapper.Labels(this.current.LookingFor).ToArray(), signal: true);
+            this.TagSection(fullWidth, innerWidth, Loc.T("profileDetail.section.lookingFor"), Options.Labels(Options.LookingFor, ProfileMapper.Labels(this.current.LookingFor)), signal: true);
 
         if (this.current.AfterDark is { } ad)
             this.DrawAfterDark(fullWidth, innerWidth, ad);
@@ -261,17 +261,17 @@ internal sealed class ProfileDetailScreen : IScreen
 
     private void DrawDataTable(float fullWidth)
     {
-        var pronoun = this.current.PronounCustom is { Length: > 0 } pc ? pc : ProfileMapper.Label(this.current.Pronoun);
-        var race = string.Join(" / ", ProfileMapper.Labels(this.current.Races));
+        var pronoun = this.current.PronounCustom is { Length: > 0 } pc ? pc : Options.Label(Options.Pronouns, ProfileMapper.Label(this.current.Pronoun));
+        var race = string.Join(" / ", Options.Labels(Options.Races, ProfileMapper.Labels(this.current.Races)));
 
         var cells = new (string Label, string Value, bool Mono)[]
         {
-            ("Age", this.current.Age.ToString(), true),
-            ("Gender", ProfileMapper.Label(this.current.Gender), false),
-            ("Race", race.Length > 0 ? race : "—", false),
-            ("Pronouns", pronoun, false),
-            ("World", this.current.World, false),
-            ("Data Center", this.current.Dc, false),
+            (Loc.T("profileDetail.data.age"), this.current.Age.ToString(Loc.Culture), true),
+            (Loc.T("profileDetail.data.gender"), Options.Label(Options.Genders, ProfileMapper.Label(this.current.Gender)), false),
+            (Loc.T("profileDetail.data.race"), race.Length > 0 ? race : "—", false),
+            (Loc.T("profileDetail.data.pronouns"), pronoun, false),
+            (Loc.T("profileDetail.data.world"), this.current.World, false),
+            (Loc.T("profileDetail.data.dataCenter"), this.current.Dc, false),
         };
 
         var origin = ImGui.GetCursorScreenPos();
@@ -289,7 +289,7 @@ internal sealed class ProfileDetailScreen : IScreen
             var cx = origin.X + (col * cellW);
             var cy = origin.Y + (row * cellH);
             var w = lone ? fullWidth : cellW;
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + pad, cy + Ui.Px(12f)), Palette.TextSecondary.U32(), cells[i].Label.ToUpperInvariant());
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + pad, cy + Ui.Px(12f)), Palette.TextSecondary.U32(), Loc.Upper(cells[i].Label));
             var valueFont = cells[i].Mono ? this.fonts.Eyebrow : this.fonts.Label;
             Ui.TextAt(dl, valueFont, new Vector2(cx + pad, cy + Ui.Px(28f)), Palette.TextPrimary.U32(), cells[i].Value);
             if (col == 0 && !lone)
@@ -359,8 +359,9 @@ internal sealed class ProfileDetailScreen : IScreen
         var moonSize = Ui.Measure(this.fonts.Icon, moon);
         Ui.TextAt(dl, this.fonts.Icon, origin, Palette.Signal.U32(), moon);
         var labelX = origin.X + moonSize.X + Ui.Px(8f);
-        var eSize = Ui.Measure(this.fonts.Eyebrow, "AFTER DARK");
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(labelX, origin.Y + ((moonSize.Y - eSize.Y) * 0.5f)), Palette.TextSecondary.U32(), "AFTER DARK");
+        var afterDark = Loc.T("profileDetail.afterDark.title");
+        var eSize = Ui.Measure(this.fonts.Eyebrow, afterDark);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(labelX, origin.Y + ((moonSize.Y - eSize.Y) * 0.5f)), Palette.TextSecondary.U32(), afterDark);
         var pillX = labelX + eSize.X + Ui.Px(10f);
         var pillText = Ui.Measure(this.fonts.Eyebrow, "18+");
         var pillSize = new Vector2(pillText.X + Ui.Px(10f), moonSize.Y);
@@ -371,17 +372,17 @@ internal sealed class ProfileDetailScreen : IScreen
         ImGui.Dummy(new Vector2(0f, moonSize.Y));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        this.AfterDarkRow("Position", ad.Position is { } p ? ProfileMapper.Label(p) : "—");
-        this.AfterDarkRow("Role", ad.Role is { } r ? ProfileMapper.Label(r) : "—");
-        this.AfterDarkRow("Size", ad.Size is { } s ? ProfileMapper.Label(s) : "—");
-        this.AfterDarkRow("Meet", ad.Meet.Count > 0 ? string.Join(" · ", ad.Meet.Select(ProfileMapper.Label)) : "—");
+        this.AfterDarkRow(Loc.T("profileDetail.afterDark.position"), ad.Position is { } p ? Options.Label(Options.Positions, ProfileMapper.Label(p)) : "—");
+        this.AfterDarkRow(Loc.T("profileDetail.afterDark.role"), ad.Role is { } r ? Options.Label(Options.Roles, ProfileMapper.Label(r)) : "—");
+        this.AfterDarkRow(Loc.T("profileDetail.afterDark.size"), ad.Size is { } s ? Options.Label(Options.Sizes, ProfileMapper.Label(s)) : "—");
+        this.AfterDarkRow(Loc.T("profileDetail.afterDark.meet"), ad.Meet.Count > 0 ? string.Join(" · ", ad.Meet.Select(m => Options.Label(Options.Meet, ProfileMapper.Label(m)))) : "—");
 
         if (ad.Kinks.Count > 0)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-            this.Eyebrow("Kinks");
+            this.Eyebrow(Loc.T("profileDetail.afterDark.kinks"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.DrawTagFlow(ad.Kinks.ToArray(), signal: true, innerWidth);
+            this.DrawTagFlow(Options.Labels(Options.Kinks, ad.Kinks), signal: true, innerWidth);
         }
 
         this.SectionBottom(fullWidth);
@@ -408,7 +409,7 @@ internal sealed class ProfileDetailScreen : IScreen
             return;
 
         this.SectionTop();
-        this.Eyebrow("Albums");
+        this.Eyebrow(Loc.T("profileDetail.albums.title"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         foreach (var album in peerAlbums)
             this.DrawAlbumRow(userId, album, innerWidth);
@@ -443,14 +444,13 @@ internal sealed class ProfileDetailScreen : IScreen
 
         var textX = pos.X + thumb + Ui.Px(12f);
         Ui.TextAt(dl, this.fonts.Label, new Vector2(textX, pos.Y + Ui.Px(11f)), Palette.TextPrimary.U32(), album.Name);
-        var vis = album.Access == PeerAlbumAccessEnum.Public ? "public" : "private";
-        var meta = album.PhotoCount == 1 ? $"1 photo · {vis}" : $"{album.PhotoCount} photos · {vis}";
+        var meta = Loc.N(album.Access == PeerAlbumAccessEnum.Public ? "profileDetail.albums.meta.public" : "profileDetail.albums.meta.private", (int)album.PhotoCount);
         Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, pos.Y + Ui.Px(30f)), Palette.TextMuted.U32(), meta);
 
         var midY = pos.Y + (rowH * 0.5f);
         if (viewable)
         {
-            const string label = "View";
+            var label = Loc.T("profileDetail.albums.view");
             var ls = Ui.Measure(this.fonts.LabelSmall, label);
             var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
             var chs = Ui.Measure(this.fonts.Icon, chevron);
@@ -460,13 +460,13 @@ internal sealed class ProfileDetailScreen : IScreen
         }
         else if (album.Access == PeerAlbumAccessEnum.Requested)
         {
-            const string label = "Requested";
+            var label = Loc.T("profileDetail.albums.requested");
             var ls = Ui.Measure(this.fonts.LabelSmall, label);
             Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2((pos.X + innerWidth) - ls.X, midY - (ls.Y * 0.5f)), Palette.TextMuted.U32(), label);
         }
         else
         {
-            const string label = "Request access";
+            var label = Loc.T("profileDetail.albums.request");
             var ls = Ui.Measure(this.fonts.LabelSmall, label);
             var pillW = ls.X + Ui.Px(20f);
             var pillH = Ui.Px(28f);
@@ -499,7 +499,7 @@ internal sealed class ProfileDetailScreen : IScreen
     {
         if (this.isSelf)
         {
-            if (this.CreamButton("##pd_self_back", "Back to my profile", contentWidth, Ui.Px(44f)))
+            if (this.CreamButton("##pd_self_back", Loc.T("profileDetail.backToMine"), contentWidth, Ui.Px(44f)))
                 this.router.Navigate(Screen.MyProfile);
             return;
         }
@@ -508,7 +508,7 @@ internal sealed class ProfileDetailScreen : IScreen
         var gap = Ui.Px(8f);
         var messageWidth = contentWidth - square - gap;
 
-        if (this.CreamButton("##pd_message", "Send a message", messageWidth, square))
+        if (this.CreamButton("##pd_message", Loc.T("profileDetail.message"), messageWidth, square))
         {
             this.selection.ProfileUserId = this.current.UserId;
             this.selection.ProfileDisplayName = this.current.DisplayName;
@@ -554,7 +554,7 @@ internal sealed class ProfileDetailScreen : IScreen
     {
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted(text.ToUpperInvariant());
+            ImGui.TextUnformatted(Loc.Upper(text));
     }
 
     private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));

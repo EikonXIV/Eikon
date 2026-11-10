@@ -66,17 +66,17 @@ internal sealed class EventCodeLookupScreen : IScreen
         var keyIcon = FontAwesomeIcon.Key.ToIconString();
         var kis = Ui.Measure(this.fonts.Icon, keyIcon);
         Ui.TextAt(dl, this.fonts.Icon, new Vector2(kp.X + pad, kp.Y), Palette.TextMuted.U32(), keyIcon);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(kp.X + pad + kis.X + Ui.Px(8f), kp.Y + Ui.Px(2f)), Palette.TextMuted.U32(), "PRIVATE LISTING");
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(kp.X + pad + kis.X + Ui.Px(8f), kp.Y + Ui.Px(2f)), Palette.TextMuted.U32(), Loc.T("eventCode.eyebrow"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(26f)));
 
         var tp = ImGui.GetCursorScreenPos();
-        var lead = "Have a code? ";
+        var (lead, tail) = Loc.Tones("eventCode.title");
         var lSz = Ui.Measure(this.fonts.SerifTitle, lead);
         Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(tp.X + pad, tp.Y), Palette.TextPrimary.U32(), lead);
-        Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(tp.X + pad + lSz.X, tp.Y), Palette.TextSecondary.U32(), "Open the door.");
+        Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(tp.X + pad + lSz.X, tp.Y), Palette.TextSecondary.U32(), tail);
         ImGui.Dummy(new Vector2(0f, lSz.Y + Ui.Px(10f)));
 
-        var desc = "Private events never appear on the board. Paste the code a host gave you to see the full listing.";
+        var desc = Loc.T("eventCode.body");
         var descPos = ImGui.GetCursorScreenPos();
         Ui.TextWrappedAt(dl, this.fonts.Caption, new Vector2(descPos.X + pad, descPos.Y), Palette.TextMuted.U32(), desc, w);
         ImGui.Dummy(new Vector2(0f, Ui.MeasureWrapped(this.fonts.Caption, desc, w).Y + Ui.Px(24f)));
@@ -93,8 +93,9 @@ internal sealed class EventCodeLookupScreen : IScreen
 
         // Gap under the field, then the error (left-aligned) when a lookup missed.
         ImGui.Dummy(new Vector2(0f, this.error is null ? Ui.Px(38f) : Ui.Px(14f)));
-        if (this.error is { } err)
+        if (this.error is { } errorKey)
         {
+            var err = Loc.T(errorKey);
             var ep = ImGui.GetCursorScreenPos();
             Ui.TextAt(dl, this.fonts.Caption, new Vector2(ep.X + pad, ep.Y), Palette.Danger.U32(), err);
             ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Caption, err).Y + Ui.Px(16f)));
@@ -182,7 +183,7 @@ internal sealed class EventCodeLookupScreen : IScreen
             : Palette.WithAlpha(Palette.TextPrimary, 0.22f);
         dl.AddRectFilled(new Vector2(x, y), new Vector2(x + w, y + h), fill.U32());
 
-        var label = this.searching ? "SEARCHING" : "FIND EVENT";
+        var label = Loc.T(this.searching ? "eventCode.searching" : "eventCode.find");
         var color = (ready ? Palette.Paper : Palette.TextSecondary).U32();
         var midY = y + ((h - Ui.Measure(this.fonts.Eyebrow, label).Y) * 0.5f);
         DrawTracked(dl, this.fonts.Eyebrow, label, x + (w * 0.5f), midY, Ui.Px(2f), color);
@@ -228,7 +229,7 @@ internal sealed class EventCodeLookupScreen : IScreen
         }
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        var title = "ENTER A CODE";
+        var title = Loc.T("eventCode.header");
         var ts = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((width - ts.X) * 0.5f), midY - (ts.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -251,7 +252,7 @@ internal sealed class EventCodeLookupScreen : IScreen
             }
             else
             {
-                this.error = "No event matches that code.";
+                this.error = "eventCode.noMatch";
             }
         }
         finally

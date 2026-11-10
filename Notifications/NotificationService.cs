@@ -21,7 +21,7 @@ internal sealed class NotificationToast
 {
     public ToastKind Kind = ToastKind.Message;
     public Guid Peer;
-    public string Name = "New message";   // toast title; falls back to a generic label when the peer is unknown
+    public string Name = Loc.T("notification.newMessage");   // toast title; falls back to a generic label when the peer is unknown
     public string? PeerName;              // the peer's real display name, or null when not known (never the fallback)
     public string? Subtitle;      // null for messages (rendered from Count); set for album toasts
     public Guid? AlbumId;
@@ -93,13 +93,13 @@ internal sealed class NotificationService
             if (existing != null)
             {
                 existing.Count++;
-                existing.Name = name ?? "New message";
+                existing.Name = name ?? Loc.T("notification.newMessage");
                 existing.PeerName = name;
                 existing.ExpiresAt = now + LifetimeMs;
             }
             else
             {
-                this.Add(new NotificationToast { Peer = peer, Name = name ?? "New message", PeerName = name, Count = 1, ExpiresAt = now + LifetimeMs });
+                this.Add(new NotificationToast { Peer = peer, Name = name ?? Loc.T("notification.newMessage"), PeerName = name, Count = 1, ExpiresAt = now + LifetimeMs });
             }
 
             shown = true;
@@ -121,7 +121,7 @@ internal sealed class NotificationService
             if (!this.config.NotificationsEnabled) continue;
             if (this.IsViewingAlbums(kind, notice.AlbumId)) continue;
 
-            var subtitle = kind == ToastKind.AlbumRequest ? "Requested album access" : "Unlocked an album for you";
+            var subtitle = Loc.T(kind == ToastKind.AlbumRequest ? "notification.albumRequest" : "notification.albumApproved");
             var existing = this.toasts.Find(t => t.Kind == kind && t.Peer == notice.PeerId && t.AlbumId == notice.AlbumId);
             if (existing != null)
             {

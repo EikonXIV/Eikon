@@ -82,7 +82,7 @@ internal sealed class MyProfileScreen : IScreen
             if (!this.profiles.Loaded)
             {
                 ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
-                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading…");
+                Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("myProfile.loading"));
                 return;
             }
 
@@ -146,7 +146,7 @@ internal sealed class MyProfileScreen : IScreen
                 if (loaded is null)
                 {
                     ImGui.Dummy(new Vector2(0f, Ui.Px(80f)));
-                    Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, "Loading preview…");
+                    Ui.CenteredText(contentWidth, this.fonts.Caption, Palette.TextMuted, Loc.T("myProfile.preview.loading"));
                 }
                 else
                 {
@@ -184,7 +184,7 @@ internal sealed class MyProfileScreen : IScreen
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
         {
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth - (pad * 2f));
-            ImGui.TextWrapped("Your last change couldn't be saved. Edit your profile and save again.");
+            Ui.TextWrapped(Loc.T("myProfile.saveFailed"));
             ImGui.PopTextWrapPos();
         }
         ImGui.Unindent(pad);
@@ -198,12 +198,13 @@ internal sealed class MyProfileScreen : IScreen
         var pad = Ui.Px(20f);
         var midY = origin.Y + (height * 0.5f);
 
-        const string label = "YOUR PROFILE PREVIEW · HOW OTHERS SEE YOU";
-        var ls = Ui.Measure(this.fonts.Eyebrow, label);
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, midY - (ls.Y * 0.5f)), Palette.TextSecondary.U32(), label);
-
         var pen = FontAwesomeIcon.Pen.ToIconString();
         var ps = Ui.Measure(this.fonts.Icon, pen);
+
+        var label = Loc.T("myProfile.preview.strip");
+        var ls = Ui.Measure(this.fonts.Eyebrow, label);
+        Ui.TextFitAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + pad, midY - (ls.Y * 0.5f)), fullWidth - (pad * 2f) - ps.X - Ui.Px(12f), Palette.TextSecondary.U32(), label);
+
         ImGui.SetCursorScreenPos(new Vector2((origin.X + fullWidth - pad) - ps.X, midY - (ps.Y * 0.5f)));
         if (ImGui.InvisibleButton("##mp_edit_top", ps))
             this.OpenForm();
@@ -266,7 +267,7 @@ internal sealed class MyProfileScreen : IScreen
 
         if (dto.Online)
         {
-            const string status = "ONLINE NOW";
+            var status = Loc.T("myProfile.online");
             var eH = Ui.Measure(this.fonts.Eyebrow, status).Y;
             var ey = firstY - Ui.Px(8f) - eH;
             dl.AddCircleFilled(new Vector2(ox + Ui.Px(3f), ey + (eH * 0.5f)), Ui.Px(3f), Palette.Online.U32(), 12);
@@ -307,8 +308,8 @@ internal sealed class MyProfileScreen : IScreen
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
         var head = ImGui.GetCursorScreenPos();
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(head.X + pad, head.Y), Palette.TextSecondary.U32(), "PORTRAITS");
-        var slots = $"{count:00} slots";
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(head.X + pad, head.Y), Palette.TextSecondary.U32(), Loc.T("myProfile.portraits.title"));
+        var slots = Loc.T("myProfile.portraits.slots", count);
         var ss = Ui.Measure(this.fonts.Eyebrow, slots);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2((head.X + fullWidth) - pad - ss.X, head.Y), Palette.TextMuted.U32(), slots);
         ImGui.Dummy(new Vector2(0f, Ui.Measure(this.fonts.Eyebrow, "X").Y + Ui.Px(14f)));
@@ -361,10 +362,10 @@ internal sealed class MyProfileScreen : IScreen
         // Only fields the profile model actually carries — the mockup's FFXIV job/role cells have no data.
         var cells = new (string Label, string Value, bool Mono)[]
         {
-            ("World", dto.World, false),
-            ("Data Center", dto.Dc, false),
-            ("Age", dto.Age.ToString(), true),
-            ("Last Seen", dto.Online ? "Now" : LastSeen(dto.LastSeenAt), false),
+            (Loc.T("myProfile.data.world"), dto.World, false),
+            (Loc.T("myProfile.data.dataCenter"), dto.Dc, false),
+            (Loc.T("myProfile.data.age"), dto.Age.ToString(Loc.Culture), true),
+            (Loc.T("myProfile.data.lastSeen"), dto.Online ? Loc.T("myProfile.lastSeen.now") : LastSeen(dto.LastSeenAt), false),
         };
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
@@ -383,7 +384,7 @@ internal sealed class MyProfileScreen : IScreen
             var row = i / 2;
             var cx = origin.X + (col * cellW);
             var cy = origin.Y + (row * cellH);
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + pad, cy + Ui.Px(12f)), Palette.TextSecondary.U32(), cells[i].Label.ToUpperInvariant());
+            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(cx + pad, cy + Ui.Px(12f)), Palette.TextSecondary.U32(), Loc.Upper(cells[i].Label));
             var valueFont = cells[i].Mono ? this.fonts.Eyebrow : this.fonts.Label;
             Ui.TextAt(dl, valueFont, new Vector2(cx + pad, cy + Ui.Px(28f)), Palette.TextPrimary.U32(), cells[i].Value);
             if (col == 0)
@@ -405,7 +406,7 @@ internal sealed class MyProfileScreen : IScreen
         if (!string.IsNullOrWhiteSpace(dto.Bio))
         {
             this.SectionTop();
-            this.Eyebrow("About");
+            this.Eyebrow(Loc.T("myProfile.section.about"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.WithAlpha(Palette.TextPrimary, 0.9f)))
@@ -418,10 +419,10 @@ internal sealed class MyProfileScreen : IScreen
         }
 
         if (dto.Interests.Count > 0)
-            this.TagSection(fullWidth, innerWidth, "Interests", dto.Interests.ToArray(), signal: false);
+            this.TagSection(fullWidth, innerWidth, Loc.T("myProfile.section.interests"), Options.Labels(Options.Interests, dto.Interests), signal: false);
 
         if (dto.LookingFor.Count > 0)
-            this.TagSection(fullWidth, innerWidth, "Looking for", ProfileMapper.Labels(dto.LookingFor).ToArray(), signal: true);
+            this.TagSection(fullWidth, innerWidth, Loc.T("myProfile.section.lookingFor"), Options.Labels(Options.LookingFor, ProfileMapper.Labels(dto.LookingFor)), signal: true);
 
         if (dto.AfterDark is { } ad)
             this.DrawAfterDark(fullWidth, innerWidth, ad);
@@ -442,7 +443,7 @@ internal sealed class MyProfileScreen : IScreen
         {
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted("No albums yet.");
+                ImGui.TextUnformatted(Loc.T("myProfile.albums.empty"));
         }
         else
         {
@@ -460,8 +461,8 @@ internal sealed class MyProfileScreen : IScreen
         var origin = ImGui.GetCursorScreenPos();
         var dl = ImGui.GetWindowDrawList();
 
-        const string title = "ALBUMS";
-        const string label = "Manage";
+        var title = Loc.T("myProfile.albums.title");
+        var label = Loc.T("myProfile.albums.manage");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         var labelSize = Ui.Measure(this.fonts.LabelSmall, label);
         var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
@@ -512,14 +513,13 @@ internal sealed class MyProfileScreen : IScreen
 
         var textX = pos.X + thumb + Ui.Px(12f);
         Ui.TextAt(dl, this.fonts.Label, new Vector2(textX, pos.Y + Ui.Px(11f)), Palette.TextPrimary.U32(), album.Name);
-        var vis = isPublic ? "public" : "private";
-        var meta = album.PhotoCount == 1 ? $"1 photo · {vis}" : $"{album.PhotoCount} photos · {vis}";
+        var meta = Loc.N(isPublic ? "myProfile.albums.meta.public" : "myProfile.albums.meta.private", (int)album.PhotoCount);
         Ui.TextAt(dl, this.fonts.LabelSmall, new Vector2(textX, pos.Y + Ui.Px(30f)), Palette.TextMuted.U32(), meta);
 
         // Self-preview: every album is viewable to me, so the affordance is always View (the public/private
         // state a visitor keys off is carried in the meta line above).
         var midY = pos.Y + (rowH * 0.5f);
-        const string label = "View";
+        var label = Loc.T("myProfile.albums.view");
         var lsz = Ui.Measure(this.fonts.LabelSmall, label);
         var chevron = FontAwesomeIcon.ChevronRight.ToIconString();
         var chs = Ui.Measure(this.fonts.Icon, chevron);
@@ -546,8 +546,9 @@ internal sealed class MyProfileScreen : IScreen
         var moonSize = Ui.Measure(this.fonts.Icon, moon);
         Ui.TextAt(dl, this.fonts.Icon, origin, Palette.Signal.U32(), moon);
         var labelX = origin.X + moonSize.X + Ui.Px(8f);
-        var eSize = Ui.Measure(this.fonts.Eyebrow, "AFTER DARK");
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(labelX, origin.Y + ((moonSize.Y - eSize.Y) * 0.5f)), Palette.TextSecondary.U32(), "AFTER DARK");
+        var afterDark = Loc.T("myProfile.afterDark.title");
+        var eSize = Ui.Measure(this.fonts.Eyebrow, afterDark);
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(labelX, origin.Y + ((moonSize.Y - eSize.Y) * 0.5f)), Palette.TextSecondary.U32(), afterDark);
         var pillX = labelX + eSize.X + Ui.Px(10f);
         var pillText = Ui.Measure(this.fonts.Eyebrow, "18+");
         var pillSize = new Vector2(pillText.X + Ui.Px(10f), moonSize.Y);
@@ -558,17 +559,17 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.Dummy(new Vector2(0f, moonSize.Y));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-        if (ad.Position is { } p) this.AfterDarkRow("Position", ProfileMapper.Label(p));
-        if (ad.Role is { } r) this.AfterDarkRow("Role", ProfileMapper.Label(r));
-        if (ad.Size is { } s) this.AfterDarkRow("Size", ProfileMapper.Label(s));
-        if (ad.Meet.Count > 0) this.AfterDarkRow("Meet", string.Join(" · ", ad.Meet.Select(ProfileMapper.Label)));
+        if (ad.Position is { } p) this.AfterDarkRow(Loc.T("myProfile.field.position"), Options.Label(Options.Positions, ProfileMapper.Label(p)));
+        if (ad.Role is { } r) this.AfterDarkRow(Loc.T("myProfile.field.role"), Options.Label(Options.Roles, ProfileMapper.Label(r)));
+        if (ad.Size is { } s) this.AfterDarkRow(Loc.T("myProfile.field.size"), Options.Label(Options.Sizes, ProfileMapper.Label(s)));
+        if (ad.Meet.Count > 0) this.AfterDarkRow(Loc.T("myProfile.field.meet"), string.Join(" · ", ad.Meet.Select(m => Options.Label(Options.Meet, ProfileMapper.Label(m)))));
 
         if (ad.Kinks.Count > 0)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
-            this.Eyebrow("Kinks");
+            this.Eyebrow(Loc.T("myProfile.field.kinks"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-            this.TagFlow(ad.Kinks.ToArray(), signal: true, innerWidth);
+            this.TagFlow(Options.Labels(Options.Kinks, ad.Kinks), signal: true, innerWidth);
         }
 
         this.SectionBottom(fullWidth);
@@ -644,7 +645,7 @@ internal sealed class MyProfileScreen : IScreen
         dl.AddRectFilled(pos, pos + new Vector2(width, height), bg);
 
         var pen = FontAwesomeIcon.Pen.ToIconString();
-        const string label = "Edit profile";
+        var label = Loc.T("myProfile.edit");
         var ps = Ui.Measure(this.fonts.Icon, pen);
         var lsz = Ui.Measure(this.fonts.Label, label);
         var gap = Ui.Px(8f);
@@ -658,7 +659,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted(text.ToUpperInvariant());
+            ImGui.TextUnformatted(Loc.Upper(text));
     }
 
     private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
@@ -690,11 +691,11 @@ internal sealed class MyProfileScreen : IScreen
         if (at is null)
             return "—";
         var d = DateTimeOffset.UtcNow - at.Value;
-        if (d.TotalMinutes < 1) return "Now";
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
-        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
-        return at.Value.LocalDateTime.ToString("MMM d");
+        if (d.TotalMinutes < 1) return Loc.T("myProfile.lastSeen.now");
+        if (d.TotalMinutes < 60) return Loc.T("myProfile.lastSeen.minutes", (int)d.TotalMinutes);
+        if (d.TotalHours < 24) return Loc.T("myProfile.lastSeen.hours", (int)d.TotalHours);
+        if (d.TotalDays < 7) return Loc.T("myProfile.lastSeen.days", (int)d.TotalDays);
+        return at.Value.LocalDateTime.ToString("MMM d", Loc.Culture);
     }
 
     // ---- form ----
@@ -732,62 +733,62 @@ internal sealed class MyProfileScreen : IScreen
         var buttonWidth = Ui.Px(84f);
         var rowX = ImGui.GetCursorPosX();
         var canSave = this.NameProblem() is null && this.RaceProblem() is null;
-        if (this.kit.SecondaryButton("##f_cancel", "Cancel", buttonWidth))
+        if (this.kit.SecondaryButton("##f_cancel", Loc.T("myProfile.form.cancel"), buttonWidth))
         {
             this.CloseForm(false);
             return;
         }
         ImGui.SameLine();
         ImGui.SetCursorPosX(rowX + contentWidth - buttonWidth);
-        if (this.SaveButton("##f_save", "Save", buttonWidth, canSave))
+        if (this.SaveButton("##f_save", Loc.T("myProfile.form.save"), buttonWidth, canSave))
         {
             this.CloseForm(true);
             return;
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));
-        this.kit.SectionLabel("Photos");
+        this.kit.SectionLabel(Loc.T("myProfile.form.section.photos"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.photos.DrawGrid(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("Identity");
+        this.kit.SectionLabel(Loc.T("myProfile.form.section.identity"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.kit.TextField("##f_name", ref this.displayName, "Display name", contentWidth, Limits.DisplayNameMax);
+        this.kit.TextField("##f_name", ref this.displayName, Loc.T("myProfile.form.displayName"), contentWidth, Limits.DisplayNameMax);
         this.Problem(this.NameProblem());
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Pronouns");
+        this.Field(Loc.T("myProfile.field.pronouns"));
         this.Single("f_pn", Options.Pronouns, ref this.pronoun, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Gender");
+        this.Field(Loc.T("myProfile.field.gender"));
         this.Single("f_gn", Options.Genders, ref this.gender, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Age");
+        this.Field(Loc.T("myProfile.field.age"));
         this.age = this.kit.Stepper("##f_age", this.age, 18, 99);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("World");
+        this.kit.SectionLabel(Loc.T("myProfile.form.section.world"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.DrawWorld(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("Matching");
+        this.kit.SectionLabel(Loc.T("myProfile.form.section.matching"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.Field("Looking for");
+        this.Field(Loc.T("myProfile.field.lookingFor"));
         this.Multi("f_lf", Options.LookingFor, this.lookingFor, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Into");
+        this.Field(Loc.T("myProfile.field.into"));
         this.Multi("f_into", Options.Interests, this.interests, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field($"Tribe · up to {Limits.TribesMax}");
+        this.Field(Loc.T("myProfile.field.tribe", Limits.TribesMax));
         this.Multi("f_tribe", Options.Tribes, this.tribes, contentWidth, Limits.TribesMax);
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field($"Race · up to {Limits.RacesMax}");
+        this.Field(Loc.T("myProfile.field.race", Limits.RacesMax));
         this.Multi("f_race", Options.Races, this.races, contentWidth, Limits.RacesMax, Limits.RacesMin);
         this.Problem(this.RaceProblem());
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("About");
+        this.kit.SectionLabel(Loc.T("myProfile.form.section.about"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         using (ImRaii.PushColor(ImGuiCol.FrameBg, Palette.Surface2))
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
@@ -797,26 +798,26 @@ internal sealed class MyProfileScreen : IScreen
         this.bio = Limits.Clamp(this.bio, Limits.BioMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
-        this.kit.SectionLabel("After dark");
+        this.kit.SectionLabel(Loc.T("myProfile.form.section.afterDark"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         this.DrawAfterDark(contentWidth);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
         var half = (contentWidth - Ui.Px(10f)) * 0.5f;
-        if (this.SaveButton("##f_save2", "Save changes", half, canSave))
+        if (this.SaveButton("##f_save2", Loc.T("myProfile.form.saveChanges"), half, canSave))
         {
             this.CloseForm(true);
             return;
         }
         ImGui.SameLine(0f, Ui.Px(10f));
-        if (this.kit.SecondaryButton("##f_cancel2", "Cancel", half))
+        if (this.kit.SecondaryButton("##f_cancel2", Loc.T("myProfile.form.cancel"), half))
         {
             this.CloseForm(false);
             return;
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        if (this.kit.SecondaryButton("##f_preview", "Preview as others see it", contentWidth) && this.session.UserId is { } me)
+        if (this.kit.SecondaryButton("##f_preview", Loc.T("myProfile.form.preview"), contentWidth) && this.session.UserId is { } me)
         {
             this.selection.ProfileUserId = me;
             this.selection.ProfileDisplayName = this.displayName;
@@ -831,7 +832,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         if (!this.catalog.Ready)
         {
-            this.Helper("Loading worlds…");
+            this.Helper(Loc.T("myProfile.form.loadingWorlds"));
             return;
         }
 
@@ -839,7 +840,7 @@ internal sealed class MyProfileScreen : IScreen
         if (this.editDc < 0)
             this.editDc = this.DcIndexOf(this.worldId);
 
-        this.Field("Data center");
+        this.Field(Loc.T("myProfile.field.dataCenter"));
         var dc = this.kit.ChipFlow("f_dc", dcs.Select(d => d.Name).ToArray(), i => i == this.editDc, contentWidth);
         if (dc >= 0)
         {
@@ -850,7 +851,7 @@ internal sealed class MyProfileScreen : IScreen
         if (this.editDc >= 0 && this.editDc < dcs.Count)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-            this.Field("Home world");
+            this.Field(Loc.T("myProfile.field.homeWorld"));
             var worlds = dcs[this.editDc].Worlds;
             var w = this.kit.ChipFlow("f_world", worlds.Select(x => x.Name).ToArray(), i => worlds[i].Id == this.worldId, contentWidth);
             if (w >= 0)
@@ -863,43 +864,43 @@ internal sealed class MyProfileScreen : IScreen
         if (this.IsLalafell)
         {
             this.nsfwEnabled = false;
-            this.Helper("After dark isn't available for Lalafell profiles.");
+            this.Helper(Loc.T("myProfile.afterDark.lalafell"));
             return;
         }
 
         using (this.fonts.Body.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted("Enable after dark (18+)");
+            ImGui.TextUnformatted(Loc.T("myProfile.afterDark.enable"));
         ImGui.SameLine(0f, Ui.Px(10f));
         this.nsfwEnabled = this.kit.Toggle("##f_nsfw", this.nsfwEnabled);
         if (!this.nsfwEnabled)
         {
             ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
-            this.Helper("Off removes the after-dark section from your profile.");
+            this.Helper(Loc.T("myProfile.afterDark.offHint"));
             return;
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-        this.Field("Position");
+        this.Field(Loc.T("myProfile.field.position"));
         this.Single("f_pos", Options.Positions, ref this.position, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.Field("Role");
+        this.Field(Loc.T("myProfile.field.role"));
         this.Single("f_role", Options.Roles, ref this.roleIndex, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.Field("Size");
+        this.Field(Loc.T("myProfile.field.size"));
         this.Single("f_size", Options.Sizes, ref this.size, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.Field("Meet");
+        this.Field(Loc.T("myProfile.field.meet"));
         this.Multi("f_meet", Options.Meet, this.meet, contentWidth);
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
-        this.Field("Kinks");
+        this.Field(Loc.T("myProfile.field.kinks"));
         this.Multi("f_kinks", Options.Kinks, this.kinks, contentWidth);
     }
 
     private void Single(string id, string[] labels, ref int selected, float contentWidth)
     {
         var current = selected;
-        var hit = this.kit.ChipFlow(id, labels, i => i == current, contentWidth);
+        var hit = this.kit.ChipFlow(id, Options.Labels(labels), i => i == current, contentWidth);
         if (hit >= 0)
             selected = hit;
     }
@@ -909,7 +910,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         var count = flags.Count(f => f);
         var atCap = max > 0 && count >= max;
-        var hit = this.kit.ChipFlow(id, labels, i => flags[i], contentWidth, disabled: atCap ? i => !flags[i] : null);
+        var hit = this.kit.ChipFlow(id, Options.Labels(labels), i => flags[i], contentWidth, disabled: atCap ? i => !flags[i] : null);
         if (hit < 0)
             return;
         if (flags[hit] ? count <= min : atCap)
@@ -921,9 +922,9 @@ internal sealed class MyProfileScreen : IScreen
 
     // Why a field can't be saved yet, shown right under it; null when it is fine. These mirror the
     // server's SaveProfileRequest so a save never bounces silently.
-    private string? NameProblem() => this.displayName.Trim().Length == 0 ? "Add a display name." : null;
+    private string? NameProblem() => this.displayName.Trim().Length == 0 ? Loc.T("myProfile.problem.name") : null;
 
-    private string? RaceProblem() => this.races.Count(r => r) < Limits.RacesMin ? "Pick at least one race." : null;
+    private string? RaceProblem() => this.races.Count(r => r) < Limits.RacesMin ? Loc.T("myProfile.problem.race") : null;
 
     private void Problem(string? text)
     {
@@ -932,7 +933,7 @@ internal sealed class MyProfileScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-            ImGui.TextWrapped(text);
+            Ui.TextWrapped(text);
     }
 
     private bool SaveButton(string id, string label, float width, bool enabled)
@@ -957,7 +958,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextWrapped(text);
+            Ui.TextWrapped(text);
     }
 
     // ---- server state (reused) ----

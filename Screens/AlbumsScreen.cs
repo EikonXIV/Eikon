@@ -86,7 +86,7 @@ internal sealed class AlbumsScreen : IScreen
         {
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted("No albums yet. Name one below to start.");
+                ImGui.TextUnformatted(Loc.T("albums.empty"));
         }
         else
         {
@@ -100,7 +100,7 @@ internal sealed class AlbumsScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextWrapped("New albums start private. Unlock one for people you choose, or make it public on your profile.");
+            Ui.TextWrapped(Loc.T("albums.hint"));
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(20f)));
     }
@@ -118,7 +118,7 @@ internal sealed class AlbumsScreen : IScreen
             this.router.Navigate(Screen.MyProfile);
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        const string title = "ALBUMS";
+        var title = Loc.T("albums.title");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(drawList, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 
@@ -130,7 +130,7 @@ internal sealed class AlbumsScreen : IScreen
     {
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetCursorScreenPos();
-        Ui.TextAt(drawList, this.fonts.Eyebrow, origin, Palette.TextSecondary.U32(), "YOUR ALBUMS");
+        Ui.TextAt(drawList, this.fonts.Eyebrow, origin, Palette.TextSecondary.U32(), Loc.T("albums.eyebrow"));
         var count = $"{this.albums.Mine.Count:00}";
         var cs = Ui.Measure(this.fonts.Mono, count);
         Ui.TextAt(drawList, this.fonts.Mono, new Vector2(origin.X + contentWidth - cs.X, origin.Y), Palette.TextMuted.U32(), count);
@@ -154,7 +154,7 @@ internal sealed class AlbumsScreen : IScreen
         var gs = Ui.Measure(this.fonts.Icon, glyph);
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(pos.X + Ui.Px(14f), midY - (gs.Y * 0.5f)), this.theme.AccentText.U32(), glyph);
 
-        var label = count == 1 ? "1 person wants access" : $"{count} people want access";
+        var label = Loc.N("albums.requests", count);
         var ls = Ui.Measure(this.fonts.Body, label);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(pos.X + Ui.Px(44f), midY - (ls.Y * 0.5f)), Palette.TextPrimary.U32(), label);
 
@@ -242,7 +242,7 @@ internal sealed class AlbumsScreen : IScreen
         var addWidth = Ui.Px(84f);
         var fieldWidth = width - addWidth;
 
-        this.kit.TextField("##album_new_name", ref this.newName, atCap ? $"Album limit is {MaxAlbums}" : "New album name", fieldWidth, Limits.AlbumNameMax);
+        this.kit.TextField("##album_new_name", ref this.newName, atCap ? Loc.T("albums.new.limit", MaxAlbums) : Loc.T("albums.new.hint"), fieldWidth, Limits.AlbumNameMax);
         var height = ImGui.GetItemRectSize().Y;
         ImGui.SameLine(0f, 0f);
 
@@ -260,13 +260,14 @@ internal sealed class AlbumsScreen : IScreen
 
         var glyph = FontAwesomeIcon.Plus.ToIconString();
         var gs = Ui.Measure(this.fonts.Icon, glyph);
-        var label = Ui.Measure(this.fonts.Caption, "Add");
+        var addText = Loc.T("albums.new.add");
+        var label = Ui.Measure(this.fonts.Caption, addText);
         var groupWidth = gs.X + Ui.Px(6f) + label.X;
         var glyphX = pos.X + ((addWidth - groupWidth) * 0.5f);
         var midY = pos.Y + (height * 0.5f);
         var tint = ready ? Palette.TextPrimary : Palette.TextMuted;
         Ui.TextAt(drawList, this.fonts.Icon, new Vector2(glyphX, midY - (gs.Y * 0.5f)), tint.U32(), glyph);
-        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(glyphX + gs.X + Ui.Px(6f), midY - (label.Y * 0.5f)), tint.U32(), "Add");
+        Ui.TextAt(drawList, this.fonts.Caption, new Vector2(glyphX + gs.X + Ui.Px(6f), midY - (label.Y * 0.5f)), tint.U32(), addText);
 
         if (clicked && ready)
         {
@@ -297,18 +298,18 @@ internal sealed class AlbumsScreen : IScreen
                 return;
 
             var width = Ui.Px(280f);
-            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, "Delete album?");
+            Ui.CenteredText(width, this.fonts.Title, Palette.TextPrimary, Loc.T("albums.delete.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-                ImGui.TextWrapped($"\"{this.deleteName}\" and its photos go for good, and anyone you unlocked it for loses access. This cannot be undone.");
+                Ui.TextWrapped(Loc.T("albums.delete.body", this.deleteName));
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
             var half = (width - Ui.Px(10f)) * 0.5f;
-            if (this.kit.SecondaryButton("##album_del_cancel", "Cancel", half))
+            if (this.kit.SecondaryButton("##album_del_cancel", Loc.T("albums.delete.cancel"), half))
                 ImGui.CloseCurrentPopup();
             ImGui.SameLine(0f, Ui.Px(10f));
-            if (this.kit.DangerButton("##album_del_confirm", "Delete", half))
+            if (this.kit.DangerButton("##album_del_confirm", Loc.T("albums.delete.confirm"), half))
             {
                 if (this.deleteId is { } id)
                     this.albums.Delete(id);
@@ -322,12 +323,12 @@ internal sealed class AlbumsScreen : IScreen
 
     private static string Meta(AlbumDto album)
     {
-        var photos = album.PhotoCount == 1 ? "1 photo" : $"{album.PhotoCount} photos";
+        var photos = Loc.N("albums.photos", album.PhotoCount);
         if (album.Visibility == AlbumVisibilityEnum.Public)
-            return photos + " · public";
+            return Loc.T("albums.meta.public", photos);
         if (album.SharedCount > 0)
-            return photos + $" · shared with {album.SharedCount}";
-        return photos + " · private";
+            return Loc.T("albums.meta.shared", photos, album.SharedCount);
+        return Loc.T("albums.meta.private", photos);
     }
 
     private string Fit(string text, float maxWidth)

@@ -127,7 +127,7 @@ internal sealed class GridScreen : IScreen
         var loading = this.favoritesOnly ? !this.favorites.Loaded : this.discovery.Loading;
         if (loading && this.Source.Count == 0)
         {
-            this.DrawStatus(contentWidth, this.favoritesOnly ? "Loading favorites…" : "Finding people…");
+            this.DrawStatus(contentWidth, Loc.T(this.favoritesOnly ? "grid.status.loadingFavorites" : "grid.status.finding"));
             return;
         }
 
@@ -145,7 +145,7 @@ internal sealed class GridScreen : IScreen
         if (!this.favoritesOnly && this.discovery.HasMore && this.transition.Current == TravelTransition.Phase.Idle)
         {
             if (this.discovery.Loading)
-                this.DrawStatus(contentWidth, "Loading more…");
+                this.DrawStatus(contentWidth, Loc.T("grid.status.loadingMore"));
             else if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - Ui.Px(240f))
                 this.discovery.LoadMore();
         }
@@ -158,7 +158,7 @@ internal sealed class GridScreen : IScreen
         var origin = ImGui.GetCursorScreenPos();
         var dl = ImGui.GetWindowDrawList();
         var y = origin.Y + Ui.Px(12f);
-        var tabH = Ui.Measure(this.fonts.SerifName, "People").Y;
+        var tabH = Ui.Measure(this.fonts.SerifName, Loc.T("grid.tab.people")).Y;
         var x = origin.X + pad;
         var hairY = y + tabH + Ui.Px(12f);
         var activeX = 0f;
@@ -181,8 +181,8 @@ internal sealed class GridScreen : IScreen
             x += size.X + Ui.Px(30f);
         }
 
-        Tab("People", !this.showEvents, () => this.showEvents = false);
-        Tab("Events", this.showEvents, () =>
+        Tab(Loc.T("grid.tab.people"), !this.showEvents, () => this.showEvents = false);
+        Tab(Loc.T("grid.tab.events"), this.showEvents, () =>
         {
             this.showEvents = true;
             this.eventsView.EnsureInitial();
@@ -210,38 +210,44 @@ internal sealed class GridScreen : IScreen
 
         var y = origin.Y + Ui.Px(18f);
 
-        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(left, y), Palette.TextSecondary.U32(), this.favoritesOnly ? "SAVED" : "DISCOVER");
-        var scope = this.favoritesOnly ? "STARRED" : "IN SCOPE";
+        Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(left, y), Palette.TextSecondary.U32(), Loc.T(this.favoritesOnly ? "grid.eyebrow.saved" : "grid.eyebrow.discover"));
+        var scope = Loc.T(this.favoritesOnly ? "grid.scope.starred" : "grid.scope.inScope");
         var scopeW = Ui.Measure(this.fonts.Eyebrow, scope).X;
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(right - scopeW, y), Palette.TextSecondary.U32(), scope);
         y += eyebrowH + Ui.Px(4f);
 
         // Two-tone title: roman lead, italic tail. The filter swaps the words, not the treatment.
-        var lead = this.favoritesOnly ? "Your " : "Nearby ";
-        var tail = this.favoritesOnly ? "favorites" : "adventurers";
+        var (lead, tail) = Loc.Tones(this.favoritesOnly ? "grid.title.favorites" : "grid.title.nearby");
         var leadW = Ui.Measure(this.fonts.SerifTitle, lead).X;
         Ui.TextAt(dl, this.fonts.SerifTitle, new Vector2(left, y), Palette.TextPrimary.U32(), lead);
         Ui.TextAt(dl, this.fonts.SerifItalicTitle, new Vector2(left + leadW, y), Palette.TextSecondary.U32(), tail);
-        var count = this.Source.Count.ToString("N0");
+        var count = this.Source.Count.ToString("N0", Loc.Culture);
         var countSize = Ui.Measure(this.fonts.Count, count);
         Ui.TextAt(dl, this.fonts.Count, new Vector2(right - countSize.X, (y + titleH) - countSize.Y), Palette.TextPrimary.U32(), count);
         y += titleH + Ui.Px(16f);
 
         // Scope tabs (left), underline-active.
+        var tool = new Vector2(Ui.Px(24f), tabH + Ui.Px(4f));
+        var tiers = DiscoveryService.TierOrder;
+        var labels = tiers.Select(t => Loc.T("tier." + t.ToString().ToLowerInvariant())).ToArray();
+        var gap = Ui.Px(18f);
+        var natural = labels.Sum(l => Ui.Measure(this.fonts.Eyebrow, l).X) + (gap * labels.Length);
+        var room = (right - (tool.X * 3f) - Ui.Px(18f)) - left - Ui.Px(64f);
+        var squeeze = natural > room ? MathF.Max(0.6f, room / natural) : 1f;
         var tabX = left;
-        foreach (var tier in DiscoveryService.TierOrder)
+        for (var i = 0; i < tiers.Length; i++)
         {
-            var label = tier.ToString().ToUpperInvariant();
-            var labelSize = Ui.Measure(this.fonts.Eyebrow, label);
+            var tier = tiers[i];
+            var labelWidth = Ui.Measure(this.fonts.Eyebrow, labels[i]).X * squeeze;
             ImGui.SetCursorScreenPos(new Vector2(tabX, y));
-            if (ImGui.InvisibleButton($"##tier_{tier}", new Vector2(labelSize.X, tabH)))
+            if (ImGui.InvisibleButton($"##tier_{tier}", new Vector2(labelWidth, tabH)))
                 this.discovery.SetTier(tier);
             var active = this.discovery.Tier == tier;
             var col = (active || ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32();
-            Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(tabX, y), col, label);
+            labelWidth = Ui.TextFitAt(dl, this.fonts.Eyebrow, new Vector2(tabX, y), labelWidth, col, labels[i]);
             if (active)
-                dl.AddLine(new Vector2(tabX, y + tabH + Ui.Px(3f)), new Vector2(tabX + labelSize.X, y + tabH + Ui.Px(3f)), Palette.TextPrimary.U32(), 1f);
-            tabX += labelSize.X + Ui.Px(18f);
+                dl.AddLine(new Vector2(tabX, y + tabH + Ui.Px(3f)), new Vector2(tabX + labelWidth, y + tabH + Ui.Px(3f)), Palette.TextPrimary.U32(), 1f);
+            tabX += labelWidth + (gap * squeeze);
         }
 
         // Data center travel control after the tabs: a hairline, then the mark's diamond (gold while
@@ -252,7 +258,6 @@ internal sealed class GridScreen : IScreen
         this.DrawTravelControl(dl, new Vector2(tabX, y), tabH);
 
         // Tools (right): filters · density expanded · density compact.
-        var tool = new Vector2(Ui.Px(24f), tabH + Ui.Px(4f));
         var toolY = y - Ui.Px(3f);
         var compact = this.config.GridLayout == 1;
         var tx = right - tool.X;
@@ -325,9 +330,9 @@ internal sealed class GridScreen : IScreen
         var y = origin.Y + padY;
         var x = origin.X + pad;
 
-        if (this.PillChip(dl, "##chip_online", "Online now", this.discovery.OnlineOnly, true, ref x, y, chipH))
+        if (this.PillChip(dl, "##chip_online", Loc.T("grid.chip.online"), this.discovery.OnlineOnly, true, ref x, y, chipH))
             this.discovery.SetOnline(!this.discovery.OnlineOnly);
-        if (this.PillChip(dl, "##chip_favs", "Favorites", this.favoritesOnly, false, ref x, y, chipH))
+        if (this.PillChip(dl, "##chip_favs", Loc.T("grid.chip.favorites"), this.favoritesOnly, false, ref x, y, chipH))
             this.favoritesOnly = !this.favoritesOnly;
 
         // Refresh: re-pull discovery from the top so members who just came online surface. Right-aligned
@@ -509,36 +514,36 @@ internal sealed class GridScreen : IScreen
         // that is not the reason the grid is empty.
         if (this.favoritesOnly)
         {
-            this.kit.EmptyState(FontAwesomeIcon.Star.ToIconString(), "No favorites yet", "People you star appear here for quick access.", width);
+            this.kit.EmptyState(FontAwesomeIcon.Star.ToIconString(), Loc.T("grid.empty.favorites.title"), Loc.T("grid.empty.favorites.body"), width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (Primary("##empty_favs", "Browse everyone", buttonWidth))
+            if (Primary("##empty_favs", Loc.T("grid.empty.favorites.action"), buttonWidth))
                 this.favoritesOnly = false;
             return;
         }
 
         if (this.discovery.Tier == Tier.World)
         {
-            this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), "Quiet on your world", "No one nearby right now. Try the wider Data Center pool.", width);
+            this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), Loc.T("grid.empty.world.title"), Loc.T("grid.empty.world.body"), width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (Primary("##empty_dc", "Switch to DC", buttonWidth))
+            if (Primary("##empty_dc", Loc.T("grid.empty.world.action"), buttonWidth))
                 this.discovery.SetTier(Tier.Dc);
         }
         else if (this.discovery.Tier == Tier.Dc)
         {
-            this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), "Quiet on your data center", "Widen to your whole region, or travel to another data center.", width);
+            this.kit.EmptyState(FontAwesomeIcon.Compass.ToIconString(), Loc.T("grid.empty.dc.title"), Loc.T("grid.empty.dc.body"), width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (Primary("##empty_region", "Switch to Region", buttonWidth))
+            if (Primary("##empty_region", Loc.T("grid.empty.dc.action"), buttonWidth))
                 this.discovery.SetTier(Tier.Region);
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - wideWidth) * 0.5f));
-            if (Secondary("##empty_travel", "Travel to another data center", wideWidth))
+            if (Secondary("##empty_travel", Loc.T("grid.empty.dc.travel"), wideWidth))
                 this.OpenTravel();
         }
         else
         {
-            this.kit.EmptyState(FontAwesomeIcon.SlidersH.ToIconString(), "No one matches", "Loosen your filters to see more people.", width);
+            this.kit.EmptyState(FontAwesomeIcon.SlidersH.ToIconString(), Loc.T("grid.empty.filters.title"), Loc.T("grid.empty.filters.body"), width);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((width - buttonWidth) * 0.5f));
-            if (Secondary("##empty_reset", "Reset filters", buttonWidth))
+            if (Secondary("##empty_reset", Loc.T("grid.empty.filters.action"), buttonWidth))
                 this.discovery.Reset();
         }
     }
@@ -618,11 +623,10 @@ internal sealed class GridScreen : IScreen
         // Caption stack: eyebrow, two-tone serif line, tracked gold destinations.
         var y0 = center.Y + Ui.Px(40f);
         var eyebrowA = Motion.EaseOutCubic(Motion.Segment(c, 0.3f, 0.55f)) * fade;
-        Ui.TrackedText(dl, this.fonts.Eyebrow, center.X, y0 + Ui.Px(8f), Palette.WithAlpha(Palette.TextSecondary, eyebrowA).U32(), "DATA CENTER TRAVEL", Ui.Px(3f));
+        Ui.TrackedText(dl, this.fonts.Eyebrow, center.X, y0 + Ui.Px(8f), Palette.WithAlpha(Palette.TextSecondary, eyebrowA).U32(), Loc.T("grid.travel.eyebrow"), Ui.Px(3f));
 
         var serifA = Motion.EaseOutCubic(Motion.Segment(c, 0.4f, 0.7f)) * fade;
-        const string lead = "Crossing the ";
-        const string tail = "aether";
+        var (lead, tail) = Loc.Tones("grid.travel.title");
         var leadW = Ui.Measure(this.fonts.EventTitle, lead).X;
         var tailW = Ui.Measure(this.fonts.EventTitleItalic, tail).X;
         var serifX = center.X - ((leadW + tailW) * 0.5f);

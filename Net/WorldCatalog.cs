@@ -57,7 +57,7 @@ internal sealed class WorldCatalog
             foreach (var w in dc.Worlds)
                 if (w.Id == worldId)
                     return $"{dc.Name} · {w.Name}";
-        return "Pick a world";
+        return Loc.T("worldCatalog.pickWorld");
     }
 
     public Dc? DcOfWorld(int worldId)
@@ -89,10 +89,10 @@ internal sealed class WorldCatalog
 
     public static string RegionName(string region) => RegionCode(region) switch
     {
-        "NA" => "North America",
-        "EU" => "Europe",
-        "JP" => "Japan",
-        "OCE" => "Oceania",
+        "NA" => Loc.T("worldCatalog.region.na"),
+        "EU" => Loc.T("worldCatalog.region.eu"),
+        "JP" => Loc.T("worldCatalog.region.jp"),
+        "OCE" => Loc.T("worldCatalog.region.oce"),
         var other => other,
     };
 

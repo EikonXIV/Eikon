@@ -13,7 +13,7 @@ internal sealed class TypefaceScreen : IScreen
 {
     // One shared body line across every card, so the faces are compared on identical text. Caps, commas,
     // a period and digits exercise the parts that read "thin" or "squished".
-    private const string Sample = "Clear at a glance, day or night. 28.";
+    private static string Sample => Loc.T("typeface.sample");
 
     private readonly ScreenRouter router;
     private readonly UiFonts fonts;
@@ -69,7 +69,7 @@ internal sealed class TypefaceScreen : IScreen
 
     private void DrawIntro(float contentWidth)
     {
-        const string hint = "Pick the typeface that reads best for you. It applies across the whole app.";
+        var hint = Loc.T("typeface.hint");
         var pos = ImGui.GetCursorScreenPos();
         Ui.TextWrappedAt(ImGui.GetWindowDrawList(), this.fonts.Caption, pos, Palette.TextMuted.U32(), hint, contentWidth);
         ImGui.Dummy(new Vector2(contentWidth, Ui.MeasureWrapped(this.fonts.Caption, hint, contentWidth).Y));
@@ -80,9 +80,11 @@ internal sealed class TypefaceScreen : IScreen
     private void DrawCard(FontSet set, float width)
     {
         var (display, sample) = this.fonts.Specimen(set.Id);
-        var nameH = Ui.Measure(display, set.Name).Y;
-        var sampleH = Ui.Measure(sample, Sample).Y;
-        var tag = set.Tag.ToUpperInvariant();
+        var name = Loc.T("font." + set.Id + ".name");
+        var sampleText = Sample;
+        var nameH = Ui.Measure(display, name).Y;
+        var sampleH = Ui.Measure(sample, sampleText).Y;
+        var tag = Loc.Upper(Loc.T("font." + set.Id + ".tag"));
         var tagH = Ui.Measure(this.fonts.Eyebrow, tag).Y;
 
         var padX = Ui.Px(14f);
@@ -100,9 +102,9 @@ internal sealed class TypefaceScreen : IScreen
 
         var textX = pos.X + padX;
         var y = pos.Y + padY;
-        Ui.TextAt(dl, display, new Vector2(textX, y), Palette.TextPrimary.U32(), set.Name);
+        Ui.TextAt(dl, display, new Vector2(textX, y), Palette.TextPrimary.U32(), name);
         y += nameH + Ui.Px(7f);
-        Ui.TextAt(dl, sample, new Vector2(textX, y), Palette.TextSecondary.U32(), Sample);
+        Ui.TextAt(dl, sample, new Vector2(textX, y), Palette.TextSecondary.U32(), sampleText);
         y += sampleH + Ui.Px(9f);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(textX, y), Palette.TextMuted.U32(), tag);
 
@@ -111,7 +113,7 @@ internal sealed class TypefaceScreen : IScreen
 
         if (selected)
         {
-            const string on = "ON";
+            var on = Loc.T("typeface.on");
             var os = Ui.Measure(this.fonts.Eyebrow, on);
             var bpad = new Vector2(Ui.Px(5f), Ui.Px(3f));
             var bsize = os + (bpad * 2f);
@@ -137,7 +139,7 @@ internal sealed class TypefaceScreen : IScreen
             this.router.Navigate(Screen.Settings);
         Ui.TextAt(dl, this.fonts.Icon, ImGui.GetItemRectMin(), (ImGui.IsItemHovered() ? Palette.TextPrimary : Palette.TextSecondary).U32(), back);
 
-        const string title = "FONT";
+        var title = Loc.T("typeface.title");
         var titleSize = Ui.Measure(this.fonts.Eyebrow, title);
         Ui.TextAt(dl, this.fonts.Eyebrow, new Vector2(origin.X + ((fullWidth - titleSize.X) * 0.5f), midY - (titleSize.Y * 0.5f)), Palette.TextSecondary.U32(), title);
 

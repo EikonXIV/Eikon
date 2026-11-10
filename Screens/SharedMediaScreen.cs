@@ -79,7 +79,7 @@ internal sealed class SharedMediaScreen : IScreen
                 var contentWidth = avail.X - (pad * 2f);
 
                 ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
-                var labels = new[] { "All", name.Length > 0 ? name : "Them", "You" };
+                var labels = new[] { Loc.T("sharedMedia.filter.all"), name.Length > 0 ? name : Loc.T("sharedMedia.filter.them"), Loc.T("sharedMedia.filter.you") };
                 this.filter = this.kit.Segmented("##sm_filter", labels, this.filter, contentWidth);
                 ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
 
@@ -108,10 +108,10 @@ internal sealed class SharedMediaScreen : IScreen
         Ui.TextAt(drawList, this.fonts.Icon, ImGui.GetItemRectMin(), Palette.TextSecondary.U32(), backGlyph);
 
         var textX = origin.X + pad + backSize.X + Ui.Px(12f);
-        const string title = "Shared media";
+        var title = Loc.T("sharedMedia.title");
         var titleSize = Ui.Measure(this.fonts.Body, title);
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, midY - titleSize.Y), Palette.TextPrimary.U32(), title);
-        var sub = total == 1 ? $"with {name} · 1 photo" : $"with {name} · {total} photos";
+        var sub = Loc.T(Loc.Current.IsOne(total) ? "sharedMedia.subtitle.one" : "sharedMedia.subtitle.other", name, total);
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, midY + Ui.Px(2f)), Palette.TextMuted.U32(), sub);
 
         drawList.AddLine(new Vector2(origin.X, origin.Y + Ui.Px(53f)), new Vector2(origin.X + fullWidth, origin.Y + Ui.Px(53f)), Palette.Border.U32(), 1f);
@@ -185,16 +185,16 @@ internal sealed class SharedMediaScreen : IScreen
     private static string DayLabel(DateTimeOffset? sentAt)
     {
         if (sentAt is not { } t)
-            return "Earlier";
+            return Loc.T("sharedMedia.day.earlier");
         var day = t.ToLocalTime().Date;
         var today = DateTime.Today;
         if (day == today)
-            return "Today";
+            return Loc.T("chat.day.today");
         if (day == today.AddDays(-1))
-            return "Yesterday";
+            return Loc.T("chat.day.yesterday");
         if (day > today.AddDays(-7))
-            return day.ToString("dddd");
-        return day.Year == today.Year ? day.ToString("MMM d") : day.ToString("MMM d, yyyy");
+            return day.ToString(Loc.T("chat.day.weekday"), Loc.Culture);
+        return day.ToString(Loc.T(day.Year == today.Year ? "chat.day.sameYear" : "chat.day.otherYear"), Loc.Culture);
     }
 
     private bool Matches(ChatService.Message m) => this.filter switch
@@ -227,7 +227,7 @@ internal sealed class SharedMediaScreen : IScreen
             var eye = FontAwesomeIcon.EyeSlash.ToIconString();
             var es = Ui.Measure(this.fonts.Icon, eye);
             Ui.TextAt(drawList, this.fonts.Icon, new Vector2(center.X - (es.X * 0.5f), center.Y - es.Y), Palette.TextSecondary.U32(), eye);
-            const string label = "NSFW";
+            var label = Loc.T("sharedMedia.nsfw");
             var ls = Ui.Measure(this.fonts.Caption, label);
             Ui.TextAt(drawList, this.fonts.Caption, new Vector2(center.X - (ls.X * 0.5f), center.Y + Ui.Px(3f)), Palette.TextMuted.U32(), label);
         }
@@ -245,8 +245,8 @@ internal sealed class SharedMediaScreen : IScreen
     {
         ImGui.Dummy(new Vector2(0f, Ui.Px(40f)));
         if (total == 0)
-            this.kit.EmptyState(FontAwesomeIcon.Images.ToIconString(), "No photos yet", $"Photos you and {name} share show up here.", contentWidth);
+            this.kit.EmptyState(FontAwesomeIcon.Images.ToIconString(), Loc.T("sharedMedia.empty.title"), Loc.T("sharedMedia.empty.body", name), contentWidth);
         else
-            this.kit.EmptyState(FontAwesomeIcon.Images.ToIconString(), "Nothing here", "No photos match this filter.", contentWidth);
+            this.kit.EmptyState(FontAwesomeIcon.Images.ToIconString(), Loc.T("sharedMedia.filtered.title"), Loc.T("sharedMedia.filtered.body"), contentWidth);
     }
 }

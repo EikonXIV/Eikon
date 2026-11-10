@@ -112,7 +112,7 @@ internal sealed class NotificationWindow : Window
         var textX = pos.X + Ui.Px(13f) + (radius * 2f) + Ui.Px(11f);
         var name = this.Fit(toast.Name, (pos.X + width) - textX - Ui.Px(12f));
         Ui.TextAt(drawList, this.fonts.Body, new Vector2(textX, pos.Y + Ui.Px(11f)), Palette.TextPrimary.U32(), name);
-        var sub = toast.Subtitle ?? (toast.Count > 1 ? $"{toast.Count} new messages" : "New message");
+        var sub = toast.Subtitle ?? Loc.N("notificationWindow.newMessages", toast.Count);
         Ui.TextAt(drawList, this.fonts.Caption, new Vector2(textX, pos.Y + Ui.Px(31f)), Palette.TextSecondary.U32(), sub);
 
         if (clicked)
