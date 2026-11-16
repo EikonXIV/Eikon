@@ -454,11 +454,11 @@ internal sealed class ModerationFlow
     {
         using (this.fonts.Title.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted(Loc.T("moderation.report.title", this.target));
+            Ui.TextUnformatted(Loc.T("moderation.report.title", this.target));
         ImGui.Dummy(new Vector2(0f, Ui.Px(3f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted(Loc.T("moderation.report.prompt"));
+            Ui.TextUnformatted(Loc.T("moderation.report.prompt"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(10f)));
 
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(0f, Ui.Px(2f))))

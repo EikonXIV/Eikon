@@ -86,13 +86,13 @@ internal sealed class OnboardingScreen : IScreen
         ImGui.SetCursorPos(new Vector2(pad, Ui.Px(16f)));
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted(Loc.T("onboarding.step", this.step + 1, StepCount));
+            Ui.TextUnformatted(Loc.T("onboarding.step", this.step + 1, StepCount));
         const string wordmark = "EIKON";
         var wordmarkWidth = Ui.Measure(this.fonts.Eyebrow, wordmark).X;
         ImGui.SetCursorPos(new Vector2(avail.X - pad - wordmarkWidth, Ui.Px(16f)));
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted(wordmark);
+            Ui.TextUnformatted(wordmark);
         ImGui.SetCursorPos(new Vector2(pad, Ui.Px(40f)));
         this.kit.ProgressSegments(this.step + 1, StepCount, contentWidth);
 
@@ -176,7 +176,7 @@ internal sealed class OnboardingScreen : IScreen
             : strength < 0.8f ? (Loc.T("onboarding.passphrase.okay"), this.theme.AccentText) : (Loc.T("onboarding.passphrase.strong"), this.theme.AccentText);
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, color))
-            ImGui.TextUnformatted(label);
+            Ui.TextUnformatted(label);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
         using (this.fonts.Caption.Push())
@@ -222,7 +222,7 @@ internal sealed class OnboardingScreen : IScreen
         {
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted(Loc.T("onboarding.identity.loadingWorlds"));
+                Ui.TextUnformatted(Loc.T("onboarding.identity.loadingWorlds"));
             return;
         }
 
@@ -261,7 +261,7 @@ internal sealed class OnboardingScreen : IScreen
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                ImGui.TextUnformatted(Loc.T("onboarding.vibe.raceRequired"));
+                Ui.TextUnformatted(Loc.T("onboarding.vibe.raceRequired"));
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
@@ -279,7 +279,7 @@ internal sealed class OnboardingScreen : IScreen
             this.nsfwEnabled = false;
             using (this.fonts.SerifName.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                ImGui.TextUnformatted(Loc.T("onboarding.afterDark.title"));
+                Ui.TextUnformatted(Loc.T("onboarding.afterDark.title"));
             ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
@@ -289,11 +289,11 @@ internal sealed class OnboardingScreen : IScreen
 
         using (this.fonts.SerifName.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted(Loc.T("onboarding.afterDark.enable"));
+            Ui.TextUnformatted(Loc.T("onboarding.afterDark.enable"));
         ImGui.SameLine(0f, Ui.Px(6f));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted(Loc.T("onboarding.afterDark.ageTag"));
+            Ui.TextUnformatted(Loc.T("onboarding.afterDark.ageTag"));
         ImGui.SameLine();
         ImGui.SetCursorPosX(Ui.Px(16f) + contentWidth - Ui.Px(36f));
         this.nsfwEnabled = this.kit.Toggle("##ob_nsfw", this.nsfwEnabled);
@@ -351,7 +351,7 @@ internal sealed class OnboardingScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            ImGui.TextUnformatted(Loc.T("onboarding.photos.note"));
+            Ui.TextUnformatted(Loc.T("onboarding.photos.note"));
 
         if (this.saveError is { } error)
         {

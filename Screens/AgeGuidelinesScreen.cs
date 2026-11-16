@@ -74,7 +74,7 @@ internal sealed class AgeGuidelinesScreen : IScreen
         ImGui.SameLine(0f, Ui.Px(9f));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted(label);
+            Ui.TextUnformatted(label);
         return result;
     }
 
@@ -133,7 +133,7 @@ internal sealed class AgeGuidelinesScreen : IScreen
         using (this.fonts.Caption.Push())
         {
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                ImGui.TextUnformatted(label);
+                Ui.TextUnformatted(label);
             ImGui.Dummy(new Vector2(0f, Ui.Px(3f)));
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
                 Ui.TextWrapped(detail);

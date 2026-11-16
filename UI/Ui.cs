@@ -27,6 +27,7 @@ internal static class Ui
     // Measure text in a specific font, at the display size (baked size times the pending render ratio).
     public static Vector2 Measure(IFontHandle? font, string text)
     {
+        GlyphTracker.Shared.Observe(text);
         if (font is null)
             return ImGui.CalcTextSize(text) * TextRenderScale;
 
@@ -38,6 +39,7 @@ internal static class Ui
     // size setting the moment it changes rather than waiting for the atlas rebuild.
     public static void TextAt(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, uint color, string text)
     {
+        GlyphTracker.Shared.Observe(text);
         using (font?.Push())
             drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize() * TextRenderScale, pos, color, text);
     }
@@ -178,9 +180,20 @@ internal static class Ui
             yield return text[start..];
     }
 
+    // Text drawn with the current font. Goes through here rather than ImGui directly so GlyphTracker
+    // sees it; a character it never sees is never baked.
+    public static void TextUnformatted(string text)
+    {
+        GlyphTracker.Shared.Observe(text);
+        ImGui.TextUnformatted(text);
+    }
+
+    public static void Typed(string text) => GlyphTracker.Shared.Observe(text);
+
     // ImGui cuts a run of CJK wherever it overflows, which can leave a comma at the start of a line.
     public static unsafe void TextWrapped(string text)
     {
+        GlyphTracker.Shared.Observe(text);
         if (!NeedsCjkBreaks(text))
         {
             ImGui.TextWrapped(text);
@@ -196,6 +209,7 @@ internal static class Ui
     // preview, so a sample resizes as the slider drags without rebuilding the atlas on every frame.
     public static void TextAtSized(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, float pixelSize, uint color, string text)
     {
+        GlyphTracker.Shared.Observe(text);
         using (font?.Push())
             drawList.AddText(ImGui.GetFont(), pixelSize, pos, color, text);
     }
@@ -328,6 +342,7 @@ internal static class Ui
     // Measure wrapped text in a specific font.
     public static Vector2 MeasureWrapped(IFontHandle? font, string text, float wrapWidth)
     {
+        GlyphTracker.Shared.Observe(text);
         using (font?.Push())
         {
             if (!NeedsCjkBreaks(text))
@@ -341,6 +356,7 @@ internal static class Ui
     // Draw wrapped text into a draw list with a specific font.
     public static void TextWrappedAt(ImDrawListPtr drawList, IFontHandle? font, Vector2 pos, uint color, string text, float wrapWidth)
     {
+        GlyphTracker.Shared.Observe(text);
         using (font?.Push())
         {
             if (!NeedsCjkBreaks(text))

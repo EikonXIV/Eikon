@@ -173,7 +173,7 @@ internal sealed class SharedMediaScreen : IScreen
 
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextUnformatted(label);
+            Ui.TextUnformatted(label);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
     }
 

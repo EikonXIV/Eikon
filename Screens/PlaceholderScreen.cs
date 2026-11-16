@@ -27,9 +27,9 @@ internal sealed class PlaceholderScreen : IScreen
     public void Draw()
     {
         using (this.fonts.Title.Push())
-            ImGui.TextUnformatted(this.title);
+            Ui.TextUnformatted(this.title);
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            ImGui.TextWrapped(this.note);
+            Ui.TextWrapped(this.note);
     }
 }

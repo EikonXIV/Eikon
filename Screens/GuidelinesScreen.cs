@@ -119,7 +119,7 @@ internal sealed class GuidelinesScreen : IScreen
         ImGui.Dummy(new Vector2(0f, Ui.Px(18f)));
         using (this.fonts.Body.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            ImGui.TextUnformatted(title);
+            Ui.TextUnformatted(title);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
     }
 
@@ -131,7 +131,7 @@ internal sealed class GuidelinesScreen : IScreen
         using (this.fonts.Caption.Push())
         {
             using (ImRaii.PushColor(ImGuiCol.Text, this.theme.Secondary.Text))
-                ImGui.TextUnformatted("•");
+                Ui.TextUnformatted("•");
             ImGui.SameLine(0f, 0f);
             ImGui.SetCursorPosX(startX + indent);
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
