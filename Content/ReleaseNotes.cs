@@ -12,6 +12,15 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(3, 0, 1),
+            "November 2026",
+            New: [],
+            Improved: [],
+            Fixed:
+            [
+                "Memory use in Korean and Simplified Chinese. Eikon loaded every character of the script up front, which could use several gigabytes of memory and freeze the game. Characters now load as they appear, so a new one can take a moment to show.",
+            ]),
+        new Release(
             new Version(3, 0, 0),
             "November 2026",
             New:
