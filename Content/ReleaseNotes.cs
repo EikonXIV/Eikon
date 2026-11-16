@@ -12,6 +12,18 @@ internal static class ReleaseNotes
     public static readonly IReadOnlyList<Release> All =
     [
         new Release(
+            new Version(3, 0, 1),
+            "November 2026",
+            New: [],
+            Improved:
+            [
+                "Korean and Simplified Chinese are no longer offered as languages. The game has no font for them, and drawing them ourselves used too much memory. If you had picked one, Eikon is back in English.",
+            ],
+            Fixed:
+            [
+                "Runaway memory use. With Korean or Simplified Chinese selected, Eikon could use several gigabytes of memory within minutes and freeze the game.",
+            ]),
+        new Release(
             new Version(3, 0, 0),
             "November 2026",
             New:

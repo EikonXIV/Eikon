@@ -25,18 +25,18 @@ public sealed class LocTests
     [Theory]
     [InlineData(null, "en")]
     [InlineData("en", "en")]
-    [InlineData("ko", "ko")]
-    [InlineData("zh-Hans", "zh-Hans")]
     [InlineData("es-419", "es-419")]
+    [InlineData("ko", "en")]
+    [InlineData("zh-Hans", "en")]
     [InlineData("from-a-newer-build", "en")]
     [InlineData("qps", "qps")]
     public void A_saved_language_is_used_and_anything_else_is_english(string? setting, string expected) =>
         Assert.Equal(expected, Locales.Resolve(setting).Id);
 
     [Fact]
-    public void Seven_locales_ship_and_every_one_has_a_real_culture()
+    public void Five_locales_ship_and_every_one_has_a_real_culture()
     {
-        Assert.Equal(new[] { "en", "ja", "ko", "zh-Hans", "fr", "de", "es-419" }, Locales.All.Select(l => l.Id));
+        Assert.Equal(new[] { "en", "ja", "fr", "de", "es-419" }, Locales.All.Select(l => l.Id));
         Assert.All(Locales.All, l => Assert.NotEqual(string.Empty, l.Culture.Name));
     }
 
@@ -58,8 +58,6 @@ public sealed class LocTests
     [InlineData("fr", 1, "1 request")]
     [InlineData("fr", 2, "2 requests")]
     [InlineData("ja", 1, "1 requests")]
-    [InlineData("ko", 1, "1 requests")]
-    [InlineData("zh-Hans", 1, "1 requests")]
     public void Plural_form_follows_the_locale_rule(string localeId, int count, string expected) =>
         Assert.Equal(expected, Book(localeId).N("count", count));
 
@@ -86,9 +84,9 @@ public sealed class LocTests
     [Fact]
     public void Glyphs_lists_only_the_non_latin_characters_of_the_active_table()
     {
-        var book = Book("ko", new Dictionary<string, string> { ["greeting"] = "설정 Settings 설" });
+        var book = Book("ja", new Dictionary<string, string> { ["greeting"] = "設定 Settings 設" });
 
-        Assert.Equal(new[] { '설', '정' }, book.Glyphs().OrderBy(c => c));
+        Assert.Equal(new[] { '定', '設' }, book.Glyphs().OrderBy(c => c));
     }
 
     [Fact]

@@ -26,7 +26,7 @@ internal sealed class Configuration : IPluginConfiguration
     // other's config, and an id an older or newer build cannot resolve falls back to the default.
     public string? FontSetId { get; set; }
 
-    // UI language as a locale id ("ja", "zh-Hans", ...), or null for English. Additive and optional, so
+    // UI language as a locale id ("ja", "fr", ...), or null for English. Additive and optional, so
     // old and new builds read each other's config; an id a build cannot resolve behaves as null.
     public string? Language { get; set; }
 

@@ -1,13 +1,11 @@
 using System.IO;
 using System.Threading.Tasks;
-using Dalamud;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin;
 using Eikon.Config;
-using Eikon.I18n;
 
 namespace Eikon.UI;
 
@@ -19,8 +17,8 @@ namespace Eikon.UI;
 // (Rebuild) while Ui scales the draw-list text instantly, so the change reads at once and then sharpens.
 // Fonts are bundled as embedded resources (see the csproj). The member-text handles merge the game's Axis
 // glyphs (see Make's cjk flag) so non-Latin names and bios fall back to the game font rather than tofu;
-// the bundled faces cover Latin, Greek and Cyrillic. Axis has no Hangul and few Simplified-only
-// ideographs, so the Korean and Simplified Chinese locales add Dalamud's Noto Sans CJK on top. Each
+// the bundled faces cover Latin, Greek and Cyrillic. Game glyphs are copied pre-baked and cost almost no
+// atlas space; rasterizing a CJK block from a real font for every role costs gigabytes, so we never do. Each
 // set also gets a pair of specimen handles (display + body) so the picker can preview every face at once.
 internal sealed class UiFonts : IDisposable
 {
@@ -34,26 +32,6 @@ internal sealed class UiFonts : IDisposable
         0x4E00, 0x9FFF,   // CJK unified ideographs
         0xF900, 0xFAFF,   // CJK compatibility ideographs
         0xFF00, 0xFFEF,   // halfwidth and fullwidth forms
-        0,
-    };
-
-    // Member roles show names and messages in any language, so they bake a script's whole block. Chrome
-    // roles only show our own strings, so they bake just the characters the active table uses.
-    private enum Reach
-    {
-        Chrome,
-        Member,
-    }
-
-    // Face indices inside Dalamud's Noto Sans CJK collection, per SafeFontConfig.FontNo's documentation.
-    private const int NotoSimplifiedChinese = 2;
-    private const int NotoKorean = 3;
-
-    private static readonly ushort[] HangulRanges =
-    {
-        0x1100, 0x11FF,   // Hangul jamo
-        0x3130, 0x318F,   // Hangul compatibility jamo
-        0xAC00, 0xD7A3,   // Hangul syllables
         0,
     };
 
@@ -76,24 +54,25 @@ internal sealed class UiFonts : IDisposable
         this.buildScale = Ui.Scale;
         Ui.FontBakedScale = Ui.Scale;   // the first build rasterizes at the startup Text size
 
-        this.Title = this.Make(s => s.Display, 22f, Reach.Chrome, medium: true);
-        this.SerifTitle = this.Make(s => s.Display, 28f, Reach.Member, medium: true);
-        this.SerifName = this.Make(s => s.Display, 22f, Reach.Member, medium: true);
-        this.SerifItalicTitle = this.Make(s => s.DisplayItalic, 28f, Reach.Member, medium: true);
-        this.Body = this.Make(s => s.Body, 18f, Reach.Member);
-        this.Caption = this.Make(s => s.Body, 15f, Reach.Member);
-        this.Label = this.Make(s => s.Body, 15f, Reach.Member);
-        this.LabelSmall = this.Make(s => s.Body, 13f, Reach.Chrome);
-        this.Eyebrow = this.Make(s => s.Mono, 15f, Reach.Chrome);
-        this.Mono = this.Make(s => s.Mono, 12f, Reach.Chrome);
-        this.Count = this.Make(s => s.Mono, 18f, Reach.Chrome);
-        this.EventTitle = this.Make(s => s.Display, 24f, Reach.Member, medium: true);
-        this.EventTitleItalic = this.Make(s => s.DisplayItalic, 24f, Reach.Member, medium: true);
-        this.EventMeta = this.Make(s => s.Body, 16f, Reach.Member);
+        // Every new handle asks the atlas for a rebuild; hold those back so the whole set bakes once.
+        using var singleBuild = this.atlas.SuppressAutoRebuild();
+
+        this.Title = this.Make(s => s.Display, 22f);
+        this.SerifTitle = this.Make(s => s.Display, 28f);
+        this.SerifName = this.Make(s => s.Display, 22f);
+        this.SerifItalicTitle = this.Make(s => s.DisplayItalic, 28f);
+        this.Body = this.Make(s => s.Body, 18f);
+        this.Caption = this.Make(s => s.Body, 15f);
+        this.Label = this.Make(s => s.Body, 15f);
+        this.LabelSmall = this.Make(s => s.Body, 13f);
+        this.Eyebrow = this.Make(s => s.Mono, 15f);
+        this.Mono = this.Make(s => s.Mono, 12f);
+        this.Count = this.Make(s => s.Mono, 18f);
+        this.EventTitle = this.Make(s => s.Display, 24f);
+        this.EventTitleItalic = this.Make(s => s.DisplayItalic, 24f);
+        this.EventMeta = this.Make(s => s.Body, 16f);
         this.Icon = this.MakeIcon(17f);
         this.LanguageNames = this.MakeLanguageNames(18f);
-
-        Loc.Changed += this.OnLocaleChanged;
 
         foreach (var set in FontSets.All)
             this.specimens[set.Id] = (this.MakeSpecimen(set.Display, 21f, set.Scale), this.MakeSpecimen(set.Body, 15f, set.Scale));
@@ -164,45 +143,21 @@ internal sealed class UiFonts : IDisposable
         typeof(UiFonts).Assembly.GetManifestResourceStream(resource)
             ?? throw new InvalidOperationException($"Missing embedded font resource: {resource}");
 
-    private void OnLocaleChanged() => this.atlas.BuildFontsAsync();
-
-    private IFontHandle Make(Func<FontSet, string> role, float designPx, Reach reach, bool medium = false)
+    private IFontHandle Make(Func<FontSet, string> role, float designPx)
     {
         var handle = this.atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk =>
         {
             var resource = role(this.current);
             var px = this.ScaledPx(designPx);
             var font = tk.AddFontFromStream(OpenResource(resource), new SafeFontConfig { SizePx = px }, false, resource);
-            var noto = medium ? DalamudAsset.NotoSansCjkMedium : DalamudAsset.NotoSansCjkRegular;
-            var script = Loc.Current.Script;
-
-            // Axis carries Japanese forms and lacks many Simplified-only characters, so Simplified Chinese
-            // takes the whole block from Noto's SC face rather than mixing the two.
-            if (script == Script.SimplifiedChinese)
-            {
-                MergeNoto(tk, noto, NotoSimplifiedChinese, px, font, reach == Reach.Member ? CjkRanges : RangesFor(Loc.Glyphs()));
-                return;
-            }
 
             // Restricted to CjkRanges: game glyphs override the base font's, so an unbounded merge would
             // replace the bundled Latin letterforms too.
             tk.AddGameGlyphs(new GameFontStyle(GameFontFamily.Axis, px), CjkRanges, font);
-
-            if (script == Script.Korean)
-                MergeNoto(tk, noto, NotoKorean, px, font, reach == Reach.Member ? HangulRanges : RangesFor(Loc.Glyphs().Where(IsHangul)));
         }));
         this.owned.Add(handle);
         return handle;
     }
-
-    private static void MergeNoto(IFontAtlasBuildToolkitPreBuild tk, DalamudAsset asset, int face, float px, ImFontPtr font, ushort[] ranges)
-    {
-        if (ranges.Length < 3)
-            return;
-        tk.AddDalamudAssetFont(asset, new SafeFontConfig { SizePx = px, GlyphRanges = ranges, MergeFont = font, FontNo = face });
-    }
-
-    private static bool IsHangul(char c) => c is (>= '\uAC00' and <= '\uD7A3') or (>= '\u3130' and <= '\u318F');
 
     // A picker preview handle, baked from one set's file at a fixed design size (times the Text size, so
     // previews grow with it). Latin-only sample text, so no CJK merge.
@@ -225,20 +180,10 @@ internal sealed class UiFonts : IDisposable
             var resource = this.current.Body;
             var px = this.ScaledPx(designPx);
             var font = tk.AddFontFromStream(OpenResource(resource), new SafeFontConfig { SizePx = px }, false, resource);
-            var names = Locales.All.SelectMany(l => l.NativeName);
-            MergeNoto(tk, DalamudAsset.NotoSansCjkRegular, 0, px, font, RangesFor(names));
+            tk.AddGameGlyphs(new GameFontStyle(GameFontFamily.Axis, px), CjkRanges, font);
         }));
         this.owned.Add(handle);
         return handle;
-    }
-
-    private static ushort[] RangesFor(IEnumerable<char> text)
-    {
-        var chars = text.Where(c => c > 0x2FFF).Distinct().OrderBy(c => c).ToArray();
-        var ranges = new ushort[(chars.Length * 2) + 1];
-        for (var i = 0; i < chars.Length; i++)
-            ranges[i * 2] = ranges[(i * 2) + 1] = chars[i];
-        return ranges;
     }
 
     private IFontHandle MakeIcon(float designPx)
@@ -251,7 +196,6 @@ internal sealed class UiFonts : IDisposable
 
     public void Dispose()
     {
-        Loc.Changed -= this.OnLocaleChanged;
         foreach (var handle in this.owned)
             handle.Dispose();
     }
