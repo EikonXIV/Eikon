@@ -75,7 +75,7 @@ internal sealed class Kit
     {
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            Ui.TextUnformatted(Loc.Upper(text));
+            ImGui.TextUnformatted(Loc.Upper(text));
     }
 
     // A centered, square-bordered icon badge (age gate shield, onboarding welcome mark). Draws at the
@@ -497,8 +497,6 @@ internal sealed class Kit
             {
                 ImGui.InputTextWithHint(id, hint, ref value);
             }
-
-            Ui.Typed(value);
         }
     }
 
@@ -568,7 +566,6 @@ internal sealed class Kit
                 ? ImGuiInputTextFlags.None
                 : ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.CtrlEnterForNewLine;
             submitted = ImGui.InputTextMultiline(id, ref value, 2000, new Vector2(width, height), flags);
-            Ui.Typed(value);
             if (empty)
             {
                 var min = ImGui.GetItemRectMin();

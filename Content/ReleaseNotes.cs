@@ -15,10 +15,13 @@ internal static class ReleaseNotes
             new Version(3, 0, 1),
             "November 2026",
             New: [],
-            Improved: [],
+            Improved:
+            [
+                "Korean and Simplified Chinese are no longer offered as languages. The game has no font for them, and drawing them ourselves used too much memory. If you had picked one, Eikon is back in English.",
+            ],
             Fixed:
             [
-                "Memory use in Korean and Simplified Chinese. Eikon loaded every character of the script up front, which could use several gigabytes of memory and freeze the game. Characters now load as they appear, so a new one can take a moment to show.",
+                "Runaway memory use. With Korean or Simplified Chinese selected, Eikon could use several gigabytes of memory within minutes and freeze the game.",
             ]),
         new Release(
             new Version(3, 0, 0),

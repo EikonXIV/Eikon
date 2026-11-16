@@ -1148,7 +1148,7 @@ internal sealed class ChatScreen : IScreen
             ImGui.SameLine(0f, Ui.Px(9f));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-                Ui.TextUnformatted(Loc.T("chat.sendPhoto.nsfw"));
+                ImGui.TextUnformatted(Loc.T("chat.sendPhoto.nsfw"));
 
             ImGui.Dummy(new Vector2(0f, Ui.Px(12f)));
             this.kit.TextField("##img_caption", ref this.draft, Loc.T("chat.sendPhoto.caption"), width);

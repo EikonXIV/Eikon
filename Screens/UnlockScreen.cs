@@ -91,7 +91,7 @@ internal sealed class UnlockScreen : IScreen
             ImGui.SetCursorPosX(pad);
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.Danger))
-                Ui.TextUnformatted(Loc.T("unlock.error"));
+                ImGui.TextUnformatted(Loc.T("unlock.error"));
         }
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(14f)));

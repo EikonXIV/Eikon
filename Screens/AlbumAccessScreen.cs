@@ -86,7 +86,7 @@ internal sealed class AlbumAccessScreen : IScreen
                 if (grants.Count == 0)
                     using (this.fonts.Caption.Push())
                     using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                        Ui.TextUnformatted(Loc.T("albumAccess.grants.empty"));
+                        ImGui.TextUnformatted(Loc.T("albumAccess.grants.empty"));
                 else
                     foreach (var grantee in grants)
                         this.DrawGranteeRow(albumId.Value, grantee, contentWidth);

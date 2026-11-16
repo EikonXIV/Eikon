@@ -237,7 +237,7 @@ internal sealed class ProfileDetailScreen : IScreen
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.WithAlpha(Palette.TextPrimary, 0.9f)))
             {
                 ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + innerWidth);
-                Ui.TextUnformatted(this.current.Bio);
+                ImGui.TextUnformatted(this.current.Bio);
                 ImGui.PopTextWrapPos();
             }
             this.SectionBottom(fullWidth);
@@ -392,11 +392,11 @@ internal sealed class ProfileDetailScreen : IScreen
     {
         using (this.fonts.LabelSmall.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            Ui.TextUnformatted(label);
+            ImGui.TextUnformatted(label);
         ImGui.SameLine(Ui.Px(96f));
         using (this.fonts.LabelSmall.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            Ui.TextUnformatted(value);
+            ImGui.TextUnformatted(value);
         ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
     }
 
@@ -554,7 +554,7 @@ internal sealed class ProfileDetailScreen : IScreen
     {
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            Ui.TextUnformatted(Loc.Upper(text));
+            ImGui.TextUnformatted(Loc.Upper(text));
     }
 
     private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));

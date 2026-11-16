@@ -412,7 +412,7 @@ internal sealed class MyProfileScreen : IScreen
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.WithAlpha(Palette.TextPrimary, 0.9f)))
             {
                 ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + innerWidth);
-                Ui.TextUnformatted(dto.Bio);
+                ImGui.TextUnformatted(dto.Bio);
                 ImGui.PopTextWrapPos();
             }
             this.SectionBottom(fullWidth);
@@ -443,7 +443,7 @@ internal sealed class MyProfileScreen : IScreen
         {
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                Ui.TextUnformatted(Loc.T("myProfile.albums.empty"));
+                ImGui.TextUnformatted(Loc.T("myProfile.albums.empty"));
         }
         else
         {
@@ -579,11 +579,11 @@ internal sealed class MyProfileScreen : IScreen
     {
         using (this.fonts.LabelSmall.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            Ui.TextUnformatted(label);
+            ImGui.TextUnformatted(label);
         ImGui.SameLine(Ui.Px(96f));
         using (this.fonts.LabelSmall.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            Ui.TextUnformatted(value);
+            ImGui.TextUnformatted(value);
         ImGui.Dummy(new Vector2(0f, Ui.Px(4f)));
     }
 
@@ -659,7 +659,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         using (this.fonts.Eyebrow.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            Ui.TextUnformatted(Loc.Upper(text));
+            ImGui.TextUnformatted(Loc.Upper(text));
     }
 
     private void SectionTop() => ImGui.Dummy(new Vector2(0f, Ui.Px(22f)));
@@ -795,7 +795,6 @@ internal sealed class MyProfileScreen : IScreen
         using (ImRaii.PushStyle(ImGuiStyleVar.FramePadding, new Vector2(Ui.Px(12f), Ui.Px(10f))))
         using (this.fonts.Caption.Push())
             ImGui.InputTextMultiline("##f_bio", ref this.bio, Limits.BioMax, new Vector2(contentWidth, Ui.Px(110f)));
-            Ui.Typed(this.bio);
         this.bio = Limits.Clamp(this.bio, Limits.BioMax);
 
         ImGui.Dummy(new Vector2(0f, Ui.Px(16f)));
@@ -871,7 +870,7 @@ internal sealed class MyProfileScreen : IScreen
 
         using (this.fonts.Body.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            Ui.TextUnformatted(Loc.T("myProfile.afterDark.enable"));
+            ImGui.TextUnformatted(Loc.T("myProfile.afterDark.enable"));
         ImGui.SameLine(0f, Ui.Px(10f));
         this.nsfwEnabled = this.kit.Toggle("##f_nsfw", this.nsfwEnabled);
         if (!this.nsfwEnabled)
@@ -951,7 +950,7 @@ internal sealed class MyProfileScreen : IScreen
     {
         using (this.fonts.Label.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextSecondary))
-            Ui.TextUnformatted(text);
+            ImGui.TextUnformatted(text);
         ImGui.Dummy(new Vector2(0f, Ui.Px(6f)));
     }
 

@@ -133,7 +133,7 @@ internal sealed class DeleteAccountFlow
 
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            Ui.TextUnformatted(Loc.T("deleteAccount.feedback.prompt"));
+            ImGui.TextUnformatted(Loc.T("deleteAccount.feedback.prompt"));
         ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
 
         var clicked = this.kit.ChipFlow("##del_reason_", Array.ConvertAll(ReasonKeys, key => Loc.T(key)), i => this.selectedReasons.Contains(i), width);
@@ -200,7 +200,7 @@ internal sealed class DeleteAccountFlow
         ImGui.SameLine(0f, Ui.Px(9f));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextPrimary))
-            Ui.TextUnformatted(Loc.T("deleteAccount.acknowledge"));
+            ImGui.TextUnformatted(Loc.T("deleteAccount.acknowledge"));
         return next;
     }
 

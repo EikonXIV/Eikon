@@ -76,7 +76,7 @@ internal sealed class PhotoManager
             ImGui.Dummy(new Vector2(0f, Ui.Px(8f)));
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                Ui.TextUnformatted(Loc.T("photoManager.mainHint"));
+                ImGui.TextUnformatted(Loc.T("photoManager.mainHint"));
         }
     }
 
@@ -209,7 +209,7 @@ internal sealed class PhotoManager
         ImGui.SetCursorScreenPos(new Vector2(origin.X, framePos.Y + frameHeight + Ui.Px(12f)));
         using (this.fonts.Caption.Push())
         using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-            Ui.TextUnformatted(Loc.T("photoManager.crop.hint"));
+            ImGui.TextUnformatted(Loc.T("photoManager.crop.hint"));
 
         if (useClicked)
         {

@@ -6,8 +6,6 @@ internal enum Script
 {
     Latin,
     Japanese,
-    Korean,
-    SimplifiedChinese,
 }
 
 internal enum PluralRule
@@ -51,8 +49,6 @@ internal static class Locales
     {
         English,
         new Locale("ja", "日本語", "ja-JP", Script.Japanese, PluralRule.OtherOnly),
-        new Locale("ko", "한국어", "ko-KR", Script.Korean, PluralRule.OtherOnly),
-        new Locale("zh-Hans", "简体中文", "zh-CN", Script.SimplifiedChinese, PluralRule.OtherOnly),
         new Locale("fr", "Français", "fr-FR", Script.Latin, PluralRule.ZeroAndOneAreOne),
         new Locale("de", "Deutsch", "de-DE", Script.Latin, PluralRule.OneOther),
         new Locale("es-419", "Español", "es-419", Script.Latin, PluralRule.OneOther),

@@ -86,7 +86,7 @@ internal sealed class AlbumsScreen : IScreen
         {
             using (this.fonts.Caption.Push())
             using (ImRaii.PushColor(ImGuiCol.Text, Palette.TextMuted))
-                Ui.TextUnformatted(Loc.T("albums.empty"));
+                ImGui.TextUnformatted(Loc.T("albums.empty"));
         }
         else
         {
